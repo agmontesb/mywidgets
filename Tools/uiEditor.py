@@ -6,7 +6,7 @@ import xml.etree.ElementTree as ET
 
 import CollapsingFrame
 import SintaxEditor
-from basicViews import formFrame
+from basicViews import formFrame, formFrameGen
 from TreeExplorer import TreeForm
 
 class UIeditor(tk.Toplevel):
@@ -16,6 +16,8 @@ class UIeditor(tk.Toplevel):
         self.activeViewIndx.trace("w", self.setActiveView)
         self.rightPaneIndx = tk.IntVar(value=-1)
         self.fileHistory = []
+        self.treeFocusAct = None
+        self.treeSelectAct = None
 
         self.setGUI()
         self.newFile()
@@ -205,17 +207,48 @@ class UIeditor(tk.Toplevel):
         default_name = os.path.join(initial_path, 'LayoutDefault.xml')
         self.__openFile(name=default_name)
 
-    def treeChangeListener(self, prevNode, actualNode):
+    def doTreeviewSelect(self, event):
         ui_pane = self.testFrame.scndWidget
-        fframe = ui_pane.winfo_children()[0]
-        for nodeid, bgcolor in zip((prevNode, actualNode), ('#d9d9d9', 'yellow')):
+        wattr, fframe = ui_pane.winfo_children()
+        try:
+            prevNodeId, prevNodeColor = self.treeFocusAct
+            widget = getattr(fframe, prevNodeId)
+        except:
+            pass
+        else:
+            widget.config(bg=prevNodeColor)
+
+        treeview = event.widget
+        nodeid = treeview.focus()
+        try:
+            nodeid = nodeid.rsplit('/', 1)[-1]
+            widget = getattr(fframe, nodeid)
+        except:
+            self.treeFocusAct = None
+        else:
+            node_colour = widget.cget('bg') if self.treeFocusAct is None or self.treeFocusAct[0] != nodeid else 'light green'
+            widget.config(bg='black')
+            self.treeFocusAct = (nodeid, node_colour)
+        pass
+
+    def treeChangeListener(self, prevNode, actualNode, values):
+        ui_pane = self.testFrame.scndWidget
+        wattr, fframe = ui_pane.winfo_children()
+        colour = self.treeSelectAct[1] if self.treeSelectAct else '#d9d9d9'
+        for nodeid, bgcolor in zip((prevNode, actualNode), (colour, 'light green')):
             try:
-                nodeid = nodeid.rsplit('/', 1)
-                widget = getattr(fframe, nodeid[1])
+                nodeid = nodeid.rsplit('/', 1)[-1]
+                widget = getattr(fframe, nodeid)
             except:
-                pass
+                self.treeSelectAct = None
             else:
+                node_colour = widget.cget('bg') if nodeid != self.treeFocusAct[0] else self.treeFocusAct[1]
+                self.treeSelectAct = (nodeid, node_colour)
                 widget.config(bg=bgcolor)
+                getattr(wattr, 'widget_tag').setValue(values.pop('tag'))
+                value = '#'. join(['*'.join((x, str(y))) for x, y in sorted(values.items())])
+                getattr(wattr, 'widget_attrs').setValue(value, sep=('#', '*'))
+
 
     def saveFile(self):
         nameFile = self.currentFile
@@ -273,12 +306,20 @@ class UIeditor(tk.Toplevel):
         ui_pane = self.testFrame.scndWidget
         for child in ui_pane.winfo_children():
             child.destroy()
-        formFrame(ui_pane, {}, panel).pack(side=tk.TOP, fill=tk.Y, expand=tk.YES)
+        formFrameGen(
+            ui_pane,
+            filename=os.path.join(initial_path, 'WidgetParams.xml')
+        ).pack(side=tk.RIGHT, fill=tk.Y, expand=tk.YES)
+        formFrame(ui_pane, {}, panel).pack(side=tk.RIGHT, fill=tk.BOTH, expand=tk.YES)
+
         ui_pane = self.testFrame.frstWidget
         for child in ui_pane.winfo_children():
             child.destroy()
+        self.treeFocusAct = self.treeSelectAct = None
         tform = TreeForm(ui_pane, panel)
         tform.setChangeListener(self.treeChangeListener)
+        # Esto me parece una salvajada pero va como inicio de concepto
+        tform.treeview.bind('<<TreeviewSelect>>', self.doTreeviewSelect)
         tform.refreshPaneInfo()
         tform.pack(side=tk.TOP, fill=tk.Y, expand=tk.YES)
 

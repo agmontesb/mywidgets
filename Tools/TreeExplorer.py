@@ -133,7 +133,7 @@ class TreeForm(FilteredTree):
     def __init__(self, master, etreeRoot):
         FilteredTree.__init__(self, master)
         self.setExplorerParam(etreeRoot)
-        self.treeview.config(columns=('type', 'editable', 'source', 'inspos'), displaycolumns=())
+        # self.treeview.config(columns=('type', 'editable', 'source', 'inspos'), displaycolumns=())
         self.setOnTreeSelProc(self.onTreeSelection)
         self.setPopUpMenu(self.treeExpPopUpMenu)
         self.reportChange = True
@@ -189,7 +189,8 @@ class TreeForm(FilteredTree):
             return node.tag in ['container', 'fragment']
 
         seq = 1
-        pairs = [('', ('category1', 'category'))]
+        root = self.etreeRoot
+        pairs = [('', (root.tag + str(seq), root.tag, root.attrib))]
         parents = collections.deque()
         parents.append(('category1', self.etreeRoot))
         while parents:
@@ -201,7 +202,8 @@ class TreeForm(FilteredTree):
                     id = '%s%s' % (child.tag, seq)
                 else:
                     id = id.split('/')[-1]
-                pairs.append((parentid, (id, child.tag)))
+                    child.attrib.pop('name')
+                pairs.append((parentid, (id, child.tag, child.attrib)))
                 if isContainer(child):
                     parents.append((id, child))
         return pairs
@@ -209,9 +211,9 @@ class TreeForm(FilteredTree):
     def populateTree(self):
         tree = self.traverseTree()
         nodeIds = {}
-        for parent, (child, child_name) in tree:
+        for parent, (child, child_name, child_attrib) in tree:
             parentid = nodeIds.get(parent, '')
-            childid = self.insertTreeElem(parentid, child, child_name, [])
+            childid = self.insertTreeElem(parentid, child, child_name, child_attrib.items())
             nodeIds[child] = childid
         self.onTreeSelection('category1')
         pass
@@ -247,8 +249,11 @@ class TreeForm(FilteredTree):
     def onTreeSelection(self, node=None):
         nodeId = node or self.treeview.focus()
         prevActiveNode = self.setActiveNode(nodeId)
+        values = ''.join(self.treeview.item(nodeId, 'values')).replace('_items', '')
+        values = eval(values)
+        values['tag'] = self.treeview.item(nodeId, 'text')
         try:
-            self.changeListener(prevActiveNode, nodeId)
+            self.changeListener(prevActiveNode, nodeId, values)
         except:
             pass
 
@@ -307,7 +312,7 @@ class TreeForm(FilteredTree):
         self.treeview.see(nodeId)
         self.treeview.selection_set(nodeId)
         self.treeview.focus(nodeId)
-        itype = self.treeview.set(nodeId, 'type')
+        # itype = self.treeview.set(nodeId, 'type')
         activeNode = self.activeSel
         self.setActiveSel(nodeId)
         return activeNode or ''

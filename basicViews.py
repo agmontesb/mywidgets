@@ -14,6 +14,8 @@ import os
 import fnmatch
 import operator
 import importlib
+import xml.etree.ElementTree as ET
+
 
 
 def widgetFactory(master, settings, selPane, panelModule=None, k=-1):
@@ -105,7 +107,7 @@ def widgetFactory(master, settings, selPane, panelModule=None, k=-1):
     return k, enableEc
 
 
-def formFrameGen(master, settings, selPane):
+def formFrameGen(master, filename=None, selPane=None, settings=None):
     '''
     Identifica la librería que se utiliza para generar los widgets que conforman la form.
     :param master: tkinter Frame que actuara como padre de la forma.
@@ -113,6 +115,13 @@ def formFrameGen(master, settings, selPane):
     :param selPane: ElementTreee. Nodo raiz del element tree que traduce el layout.
     :return: formFrame or object define in user library.
     '''
+    if not any((filename, selPane)):
+        raise AttributeError('You must specify filename or selPane')
+    if filename:
+        with open(filename, 'rb') as f:
+            xmlstr = f.read()
+        selPane = ET.XML(xmlstr).find('category')
+
     formclass = formFrame
     formModule = None
     if selPane.get('lib'):
@@ -179,6 +188,7 @@ class formFrame(tk.Frame):
                 widget = widget.nametowidget(wdName)
             return widget
         raise AttributeError("The '%s' form doesn't have an attribute call '%s'" % (self, attr))
+
 
     def populateWithSettings(self, settings, selPane, formModule):
         '''
@@ -869,8 +879,12 @@ class settOptionList(baseWidget):
         self.tree.delete(*lista)
         if value == '': return
         maxCol = len(self.columnsId) - 1
-        if self.isTree: maxCol += 3
-        bDatos = [list(map(lambda x: x.strip(), record.split(sepcol, maxCol))) for record in value.split(seprow)]
+        if self.isTree:
+            maxCol += 3
+        bDatos = [
+            list(map(lambda x: x.strip(), record.split(sepcol, maxCol)))
+            for record in value.split(seprow)
+        ]
         parent, iid, text = '', None, ''
         for record in bDatos:
             if self.isTree:
