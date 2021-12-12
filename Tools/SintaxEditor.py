@@ -218,9 +218,8 @@ class SintaxEditor(tk.Frame):
     def setCursorAt(self, inspos, grabFocus=True):
         self.textw.mark_set(tk.INSERT, inspos)
         self.textw.see(tk.INSERT)
-        if grabFocus: self.textw.focus_force()
-
-    #         self.textw.focus_force()
+        if grabFocus:
+            self.textw.focus_force()
 
     def __setContent__(self, text, inspos):
         self.textw.delete('1.0', 'end')

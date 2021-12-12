@@ -17,21 +17,7 @@ import importlib
 import xml.etree.ElementTree as ET
 
 
-
-def widgetFactory(master, settings, selPane, panelModule=None, k=-1):
-    '''
-    Crea la jerarquia de widgets que conforman una tkinter form.
-    :param master:      tkinter Form. Padre de la Form a generar.
-    :param settings:    dict. Valores de las variables diferentes a los default definidos
-                        en el archivo de layout.
-    :param selPane:     element tree nade. Nodo raiz definido por el archivo de layout.
-    :param panelModule: modulo. Define los widgets definidos por el usuario.
-    :param k:           integer. Consecutivo utilizado por la función para crear el nombre
-                        interno de los widgets a crear.
-    :return:            2 members tuple. Posición 0: Valor consecutivo del últimmo widget agregado.
-                        Posición 1: Lista de tuples que muestra el id del widget y
-                        la ecuación que activa (enable) el widget.
-    '''
+def getWidgetClass(widgetName):
     widgetTypes = dict(sep=settSep, lsep=settSep,
                        text=settText,
                        label=settLabel,
@@ -47,6 +33,65 @@ def widgetFactory(master, settings, selPane, panelModule=None, k=-1):
                        action=settAction,
                        container=settContainer,
                        fragment=settFragment, )
+    return widgetTypes.get(widgetName, None)
+
+
+def getWidgetInstance(master, widgetname, attributes, panelModule=None):
+    '''
+
+    :param master: widget. De ser derivado de basicWidget.
+    :param widgetname: str. Nombre del widget que se quiere instanciar.
+    :param attributes: dict. Atributos del widget a instanciar.
+    :param panelModule: módulo. Contiene definiciones de widgets definidos por el usuario.
+    :return: widget.
+    '''
+    widgetClass = getWidgetClass(widgetname)  # Widget is one of the basicViews defined
+    if widgetClass is None:
+        # Se trata de un widget definido por el usuario?
+        try:
+            widgetClass = getattr(panelModule, widgetname)
+            # Todo widget definido por el usuario debe ser derivado de baseWidget
+            assert issubclass(widgetClass, baseWidget), 'All user defined widget must be inherited from baseWidget'
+        except AttributeError:
+            # ERROR: No se encontró definición del widget
+            err_str = '"%s" is not a basicViews widget or a user defined class. ' % widgetname
+            raise AttributeError(err_str)
+    wId = attributes.get('id')
+    try:
+        # El usuario puede definir un widget como derivado de widgetClass
+        # ya sea en basicViews o en panel module
+        idClass = getattr(panelModule, wId)
+        assert issubclass(idClass, widgetClass), \
+            'In module %s the class "%s" must be ' \
+            'inherited from %s' % (panelModule.__name__, wId, widgetClass.__name__)
+    except (TypeError, AttributeError):
+        pass
+    else:
+        setattr(idClass, 'me', master)
+        widgetClass = idClass
+
+    parent = master
+    if isinstance(parent, settContainer) and hasattr(parent, 'innerframe'):
+        parent = parent.innerframe
+
+    dummy = widgetClass(parent, **attributes)
+    return dummy
+
+
+def widgetFactory(master, settings, selPane, panelModule=None, k=-1):
+    '''
+    Crea la jerarquia de widgets que conforman una tkinter form.
+    :param master:      tkinter Form. Padre de la Form a generar.
+    :param settings:    dict. Valores de las variables diferentes a los default definidos
+                        en el archivo de layout.
+    :param selPane:     element tree nade. Nodo raiz definido por el archivo de layout.
+    :param panelModule: modulo. Define los widgets definidos por el usuario.
+    :param k:           integer. Consecutivo utilizado por la función para crear el nombre
+                        interno de los widgets a crear.
+    :return:            2 members tuple. Posición 0: Valor consecutivo del últimmo widget agregado.
+                        Posición 1: Lista de tuples que muestra el id del widget y
+                        la ecuación que activa (enable) el widget.
+    '''
 
     if not panelModule and selPane.get('lib'):
         panelModule = selPane.get('lib')
@@ -55,45 +100,19 @@ def widgetFactory(master, settings, selPane, panelModule=None, k=-1):
     for xmlwidget in selPane:
         k += 1
         options = xmlwidget.attrib
-        options['name'] = str(k)    # Se asigna el consecutivo como nombre del widget.
+        options.setdefault('name', str(k))    # Se asigna el consecutivo como nombre del widget.
         if options.get('enable', None):
             # Se almacena en enableEc la ecuación que habilita el widget.
-            enableEc.append((k, xmlwidget.attrib['enable']))
-        wType = xmlwidget.tag
-        if wType in widgetTypes:
-            widgetClass = widgetTypes.get(wType, None)
-        elif panelModule and hasattr(panelModule, wType):
-            # Widget definido por el usuario en panelModule.
-            widgetClass = getattr(panelModule, wType)
-            assert issubclass(widgetClass, baseWidget), 'All user defined widget must be inherited from baseWidget'
-        else:
-            # ERROR: No se encontró definición del widget
-            widgetClass = None
-            err_str = 'The setting type "%s" is not a define type. \n' \
-                      'It must me one of: %s ' % (wType, ', '.join(sorted(widgetTypes.keys())))
-            raise KeyError(err_str)
+            enableEc.append((k, options['enable']))
 
         if options.get('id'):
             # Se asigna como id del widget el último segmento del id definido.
             options['id'] = options['id'].split('/')[-1]
 
-        wId = options.get('id')
-        if wId and panelModule and hasattr(panelModule, wId):
-            # El usuarrio puede definir un widget derivándolo de una clase base, para lo cual
-            # debe tener en panelModule una clase con nombre del id
-            idClass = getattr(panelModule, wId)
-            assert issubclass(idClass, widgetClass), \
-                'In module %s the class "%s" must be ' \
-                'inherited from %s' % (panelModule.__name__, wId, widgetClass.__name__)
-            setattr(idClass, 'me', master)
-            widgetClass = idClass
-
-        dummy = widgetClass(master, **options)
+        wType = xmlwidget.tag
+        dummy = getWidgetInstance(master, wType, options, panelModule=panelModule)
         if isinstance(dummy, settContainer):
-            wcontainer = dummy
-            if hasattr(wcontainer, 'innerframe'):
-                wcontainer = wcontainer.innerframe
-            k, deltEnableEc = widgetFactory(wcontainer, settings, xmlwidget, panelModule=panelModule, k=k)
+            k, deltEnableEc = widgetFactory(dummy, settings, xmlwidget, panelModule=panelModule, k=k)
             enableEc += deltEnableEc
         if hasattr(dummy, 'id'):
             # Si se tiene un widget con id:

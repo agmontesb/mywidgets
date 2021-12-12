@@ -130,7 +130,7 @@ class FilteredTree(tk.Frame):
 
 
 class TreeForm(FilteredTree):
-    def __init__(self, master, etreeRoot):
+    def __init__(self, master, etreeRoot=None):
         FilteredTree.__init__(self, master)
         self.setExplorerParam(etreeRoot)
         # self.treeview.config(columns=('type', 'editable', 'source', 'inspos'), displaycolumns=())
@@ -249,11 +249,8 @@ class TreeForm(FilteredTree):
     def onTreeSelection(self, node=None):
         nodeId = node or self.treeview.focus()
         prevActiveNode = self.setActiveNode(nodeId)
-        values = ''.join(self.treeview.item(nodeId, 'values')).replace('_items', '')
-        values = eval(values)
-        values['tag'] = self.treeview.item(nodeId, 'text')
         try:
-            self.changeListener(prevActiveNode, nodeId, values)
+            self.changeListener(prevActiveNode, nodeId)
         except:
             pass
 

@@ -1,3 +1,4 @@
+import collections
 import os
 import tkinter as tk
 import tkinter.messagebox as tkMessageBox
@@ -6,7 +7,7 @@ import xml.etree.ElementTree as ET
 
 import CollapsingFrame
 import SintaxEditor
-from basicViews import formFrame, formFrameGen
+from basicViews import formFrame, formFrameGen, getWidgetInstance
 from TreeExplorer import TreeForm
 
 class UIeditor(tk.Toplevel):
@@ -82,31 +83,48 @@ class UIeditor(tk.Toplevel):
             menubutton = menuFrame.children[elem.lower()]
             menubutton.config(menu=self.menuBar[elem])
 
+    def onXmlTextModified(self, event):
+        if self.codeFrame.textw.edit_modified():
+            self.setSaveFlag(True)
+
     def setUpPaneCtrls(self):
         m1 = self.vPaneWindow
         self.testFrame = CollapsingFrame.collapsingFrame(m1, tk.VERTICAL, inisplit=0.2, buttConf='RM')
         self.codeFrame = SintaxEditor.SintaxEditor(m1, hrzSlider=True)
+        self.codeFrame.textw.bind(
+            '<<Modified>>',
+            self.onXmlTextModified
+        )
+
+        ui_pane = self.testFrame.frstWidget
+        tform = TreeForm(ui_pane)
+        tform.setChangeListener(self.treeChangeListener)
+        # Esto me parece una salvajada pero va como inicio de concepto
+        tform.treeview.bind('<<TreeviewSelect>>', self.doTreeviewSelect)
+        # tform.refreshPaneInfo()
+        tform.pack(side=tk.TOP, fill=tk.Y, expand=tk.YES)
+
+        ui_pane = self.testFrame.scndWidget
+        formFrameGen(
+            ui_pane,
+            filename=os.path.join('../data/', 'WidgetParams.xml')
+        ).pack(side=tk.RIGHT, fill=tk.Y, expand=tk.YES)
+        tk.Frame(ui_pane).pack()
+
         self.avRightPanes = [self.codeFrame, self.testFrame]
         self.viewPanes = [('XML', 0), ('UI', 1)]
 
     def setActiveView(self, *args, **kwargs):
-        activeView = self.activeViewIndx.get()
-        self.actViewPane = activeView
+        self.actViewPane = activeView = self.activeViewIndx.get()
         viewName, vwRightPane = self.viewPanes[activeView]
 
-        # leftPaneIndx = self.leftPaneIndx.get()
-        # if leftPaneIndx != vwLeftPane:
-        #     self.setLeftPane(vwLeftPane)
-        #
-        # refreshFlag = kwargs.get('refreshFlag', False)
-        # if refreshFlag or leftPaneIndx != vwLeftPane:
-        #     self.avLeftPanes[vwLeftPane].refreshPaneInfo()
-
         rightPaneIndx = self.rightPaneIndx.get()
-        if rightPaneIndx != vwRightPane:
-            self.setRightPane(vwRightPane)
-        # if refreshFlag or rightPaneIndx != vwRightPane:
-        #     self.avRightPanes[vwRightPane].initFrameExec()
+        if rightPaneIndx == vwRightPane:
+            return
+        self.setRightPane(vwRightPane)
+        if vwRightPane == 1 and self.codeFrame.textw.edit_modified():
+            xmlstr, _, _ = self.codeFrame.getContent()
+            self.init_UI_View(xmlstr)
 
     def setRightPane(self, rightPaneIndx):
         actRightPane = int(self.rightPaneIndx.get())
@@ -208,11 +226,12 @@ class UIeditor(tk.Toplevel):
         self.__openFile(name=default_name)
 
     def doTreeviewSelect(self, event):
+        top_widget = self.testFrame.scndWidget
         ui_pane = self.testFrame.scndWidget
         wattr, fframe = ui_pane.winfo_children()
         try:
             prevNodeId, prevNodeColor = self.treeFocusAct
-            widget = getattr(fframe, prevNodeId)
+            widget = top_widget.nametowidget(prevNodeId)
         except:
             pass
         else:
@@ -220,9 +239,10 @@ class UIeditor(tk.Toplevel):
 
         treeview = event.widget
         nodeid = treeview.focus()
+        values = treeview.item(nodeid, 'values')
         try:
-            nodeid = nodeid.rsplit('/', 1)[-1]
-            widget = getattr(fframe, nodeid)
+            nodeid = values[0]
+            widget = top_widget.nametowidget(nodeid)
         except:
             self.treeFocusAct = None
         else:
@@ -231,17 +251,21 @@ class UIeditor(tk.Toplevel):
             self.treeFocusAct = (nodeid, node_colour)
         pass
 
-    def treeChangeListener(self, prevNode, actualNode, values):
-        ui_pane = self.testFrame.scndWidget
-        wattr, fframe = ui_pane.winfo_children()
+    def treeChangeListener(self, prevNode, actualNode):
+        top_widget = self.testFrame.scndWidget
+        wattr = top_widget.winfo_children()[0]
+        tform = self.testFrame.frstWidget.winfo_children()[0]
+        # wattr, fframe = ui_pane.winfo_children()
         colour = self.treeSelectAct[1] if self.treeSelectAct else '#d9d9d9'
         for nodeid, bgcolor in zip((prevNode, actualNode), (colour, 'light green')):
             try:
-                nodeid = nodeid.rsplit('/', 1)[-1]
-                widget = getattr(fframe, nodeid)
+                path, values = tform.treeview.item(nodeid, 'values')
+                nodeid = path
+                widget = top_widget.nametowidget(nodeid)
             except:
                 self.treeSelectAct = None
             else:
+                values = eval(values)
                 node_colour = widget.cget('bg') if nodeid != self.treeFocusAct[0] else self.treeFocusAct[1]
                 self.treeSelectAct = (nodeid, node_colour)
                 widget.config(bg=bgcolor)
@@ -302,26 +326,69 @@ class UIeditor(tk.Toplevel):
         self.currentFile = name
         self.title(self.currentFile)
 
-        self.codeFrame.setContent((xmlstr, 'xml', self.currentFile), inspos=tk.END)
-        ui_pane = self.testFrame.scndWidget
-        for child in ui_pane.winfo_children():
-            child.destroy()
-        formFrameGen(
-            ui_pane,
-            filename=os.path.join(initial_path, 'WidgetParams.xml')
-        ).pack(side=tk.RIGHT, fill=tk.Y, expand=tk.YES)
-        formFrame(ui_pane, {}, panel).pack(side=tk.RIGHT, fill=tk.BOTH, expand=tk.YES)
+        self.init_XMl_View(xmlstr)
+        self.init_UI_View(xmlstr)
 
+    def init_XMl_View(self, xmlstr):
+        self.codeFrame.setContent(
+            (xmlstr, 'xml', self.currentFile),
+            inspos='1.0',
+            sintaxArray=SintaxEditor.XMLSINTAX
+        )
+        # self.codeFrame.setCursorAt('1.0')
+        self.codeFrame.textw.edit_modified(0)
+
+    def init_UI_View(self, xmlstr):
         ui_pane = self.testFrame.frstWidget
-        for child in ui_pane.winfo_children():
-            child.destroy()
+        tform = ui_pane.winfo_children()[0]
+        treeview = tform.treeview
+        treeview.delete(*treeview.get_children())
         self.treeFocusAct = self.treeSelectAct = None
-        tform = TreeForm(ui_pane, panel)
-        tform.setChangeListener(self.treeChangeListener)
-        # Esto me parece una salvajada pero va como inicio de concepto
-        tform.treeview.bind('<<TreeviewSelect>>', self.doTreeviewSelect)
-        tform.refreshPaneInfo()
-        tform.pack(side=tk.TOP, fill=tk.Y, expand=tk.YES)
+
+        ui_pane = self.testFrame.scndWidget
+        wattr, fframe = ui_pane.winfo_children()
+        fframe.destroy()
+        try:
+            panel = ET.XML(xmlstr).find('category')
+            self.setupForms(panel, tform, ui_pane)
+        except Exception as e:
+            tk.Label(ui_pane, text=str(e)).pack()
+        else:
+            self.codeFrame.textw.edit_modified(0)
+
+    def setupForms(self, panel, treeForm, formRoot):
+        def isContainer(node):
+            return node.tag in ['container', 'fragment']
+
+        root, master = panel, formRoot
+        panel_module = root.get('lib') if root.get('lib') else None
+
+        seq = 1
+        widget_name, widget_attribs = root.tag, root.attrib
+        widget_attribs['tag'] = widget_name
+        parents = collections.deque()
+        parents.append(('', root, master))
+        while parents:
+            parentid, parent_node, master_widget = parents.popleft()
+            for child in list(parent_node):
+                widget_name, widget_attribs = child.tag, child.attrib
+                seq += 1
+                widget_attribs['name'] = 'wdg%s' % seq
+                widget = getWidgetInstance(
+                    master_widget,
+                    widget_name,
+                    widget_attribs,
+                    panelModule=panel_module
+                )
+                widget_attribs['tag'] = widget_name
+                child_id = widget.winfo_name()
+                treeForm.insertTreeElem(
+                    parentid,
+                    child_id,
+                    widget_name,
+                    values=(widget.path, str(widget_attribs)))
+                if isContainer(child):
+                    parents.append((widget.winfo_name(), child, widget))
 
     def recFile(self, filename):
         try:

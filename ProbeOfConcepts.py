@@ -4,6 +4,7 @@ import os
 import tkinter as tk
 import xml.etree.ElementTree as ET
 from basicViews import formFrame
+from basicViews import getWidgetInstance
 
 
 def getLayout(layoutfile):
@@ -14,25 +15,36 @@ def getLayout(layoutfile):
     return ET.XML(xmlstr).find('category')
 
 
-def traverseTree(layoutfile):
+def traverseTree(master, layoutfile):
     def isContainer(node):
         return node.tag in ['container', 'fragment']
+
+    root = getLayout(layoutfile)
+    panel_module = root.get('lib') if root.get('lib') else None
+
     seq = 1
-    pairs = [('', ('category1', 'category'))]
+    widget_name, widget_attribs = root.tag, root.attrib
+    widget_attribs['tag'] = widget_name
+    pairs = [('', ('wdg0', '.', str(widget_attribs)))]
     parents = collections.deque()
-    parents.append(('category1', getLayout(layoutfile)))
+    parents.append(('wdg0', root, master))
     while parents:
-        parentid, parent = parents.popleft()
-        for child in list(parent):
-            id = child.attrib.get('id', '')
-            if not id:
-                seq += 1
-                id = '%s%s' % (child.tag, seq)
-            else:
-                id = id.split('/')[-1]
-            pairs.append((parentid, (id, child.tag)))
+        parentid, parent_node, master_widget = parents.popleft()
+        for child in list(parent_node):
+            widget_name, widget_attribs = child.tag, child.attrib
+            seq += 1
+            widget_attribs['name'] = 'wdg%s' % seq
+            widget = getWidgetInstance(
+                master_widget,
+                widget_name,
+                widget_attribs,
+                panelModule=panel_module
+            )
+            widget_attribs['tag'] = widget_name
+            child_id = widget.winfo_name()
+            pairs.append((parentid, (child_id, widget.path, str(widget_attribs))))
             if isContainer(child):
-                parents.append((id, child))
+                parents.append((widget.winfo_name(), child, widget))
     return pairs
 
 
@@ -78,23 +90,29 @@ class Example(tk.Frame):
         print("main widget binding")
 
 if __name__ == '__main__':
-    file_path = 'Data/ApplicationLayout.xml'
-    xmlObj = getLayout(file_path)
     top = tk.Tk()
-    settings = {}
-    fframe = formFrame(master=top, settings=settings, selPane=xmlObj)
-    dummy = fframe
-    fframe.pack(side=tk.TOP, fill=tk.BOTH, expand=tk.YES, anchor=tk.NE)
-    def motion(event):
-        widget, x, y = event.widget, event.x, event.y
-        try:
-            if widget.name.isdigit():
-                print('{}, {}, {}'.format(widget.name, x, y))
-                dummy = 2
-        except:
-            pass
-    fframe.bind_all("<Enter>", motion)
+    caso = 'traverse'
+    if caso == 'traverse':
+        file_path = 'Data/BasicViewsShowCase.xml'
+        pairs = traverseTree(top, file_path)
+
+    else:
+        file_path = 'Data/ApplicationLayout.xml'
+        xmlObj = getLayout(file_path)
+        settings = {}
+        fframe = formFrame(master=top, settings=settings, selPane=xmlObj)
+        dummy = fframe
+        fframe.pack(side=tk.TOP, fill=tk.BOTH, expand=tk.YES, anchor=tk.NE)
+        def motion(event):
+            widget, x, y = event.widget, event.x, event.y
+            try:
+                if widget.name.isdigit():
+                    print('{}, {}, {}'.format(widget.name, x, y))
+                    dummy = 2
+            except:
+                pass
+        fframe.bind_all("<Enter>", motion)
 
 
-    Example(fframe).pack(fill="both", expand=True)
+        Example(fframe).pack(fill="both", expand=True)
     top.mainloop()
