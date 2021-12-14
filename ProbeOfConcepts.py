@@ -12,7 +12,7 @@ def getLayout(layoutfile):
     # layoutfile = self._unpack_pointer(id, restype)
     with open(layoutfile, 'rb') as f:
         xmlstr = f.read()
-    return ET.XML(xmlstr).find('category')
+    return ET.XML(xmlstr)
 
 
 def traverseTree(master, layoutfile):
@@ -91,18 +91,26 @@ class Example(tk.Frame):
 
 if __name__ == '__main__':
     top = tk.Tk()
-    caso = 'traverse'
+    caso = 'test_newPaneFactory'
     if caso == 'traverse':
         file_path = 'Data/BasicViewsShowCase.xml'
         pairs = traverseTree(top, file_path)
-
-    else:
+    elif caso == 'test_newPaneFactory':
+        file_path = 'Data/MultiCategoryExample.xml'
+        xmlObj = getLayout(file_path)
+        settings = {}
+        fframe = formFrame(master=top, settings=settings, selPane=xmlObj)
+        dummy = fframe
+        fframe.pack(side=tk.TOP, fill=tk.BOTH, expand=tk.YES, anchor=tk.NE)
+        pass
+    elif caso == 'widgetFactory':
         file_path = 'Data/ApplicationLayout.xml'
         xmlObj = getLayout(file_path)
         settings = {}
         fframe = formFrame(master=top, settings=settings, selPane=xmlObj)
         dummy = fframe
         fframe.pack(side=tk.TOP, fill=tk.BOTH, expand=tk.YES, anchor=tk.NE)
+    else:
         def motion(event):
             widget, x, y = event.widget, event.x, event.y
             try:

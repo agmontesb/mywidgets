@@ -127,7 +127,7 @@ class FilteredTree(tk.Frame):
             tags.append('activeNode')
             self.treeview.item(iid, tags=tags)
             self.activeSel = iid
-
+            self.treeview.selection_set(iid)
 
 class TreeForm(FilteredTree):
     def __init__(self, master, etreeRoot=None):

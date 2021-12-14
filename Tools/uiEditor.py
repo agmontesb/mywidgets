@@ -171,8 +171,8 @@ class UIeditor(tk.Toplevel):
         self.makeMenu('File', menuOpt)
 
         def fileHist(frstIndx):
+            self.menuBar['File'].delete(frstIndx, tk.END)
             if self.fileHistory:
-                self.menuBar['File'].delete(frstIndx, tk.END)
                 for k, filename in enumerate(self.fileHistory):
                     flabel = os.path.basename(filename)
                     self.menuBar['File'].add(
@@ -222,19 +222,19 @@ class UIeditor(tk.Toplevel):
 
     def newFile(self, fileName='', xmlstr=None, panel=None):
         initial_path = os.path.abspath('../data/')
-        default_name = os.path.join(initial_path, 'LayoutDefault.xml')
+        # default_name = os.path.join(initial_path, 'LayoutDefault.xml')
+        default_name = os.path.join(initial_path, 'BasicViewsShowCase.xml')
         self.__openFile(name=default_name)
 
     def doTreeviewSelect(self, event):
         top_widget = self.testFrame.scndWidget
-        ui_pane = self.testFrame.scndWidget
-        wattr, fframe = ui_pane.winfo_children()
         try:
             prevNodeId, prevNodeColor = self.treeFocusAct
             widget = top_widget.nametowidget(prevNodeId)
         except:
-            pass
+            frame_old = None
         else:
+            frame_old = prevNodeId.split('.', 1)[0]
             widget.config(bg=prevNodeColor)
 
         treeview = event.widget
@@ -246,6 +246,10 @@ class UIeditor(tk.Toplevel):
         except:
             self.treeFocusAct = None
         else:
+            frame_new = nodeid.split('.', 1)[0]
+            if frame_old and frame_old != frame_new:
+                top_widget.nametowidget(frame_old).pack_forget()
+            top_widget.nametowidget(frame_new).pack()
             node_colour = widget.cget('bg') if self.treeFocusAct is None or self.treeFocusAct[0] != nodeid else 'light green'
             widget.config(bg='black')
             self.treeFocusAct = (nodeid, node_colour)
@@ -266,7 +270,8 @@ class UIeditor(tk.Toplevel):
                 self.treeSelectAct = None
             else:
                 values = eval(values)
-                node_colour = widget.cget('bg') if nodeid != self.treeFocusAct[0] else self.treeFocusAct[1]
+                bflag = self.treeFocusAct is None or nodeid != self.treeFocusAct[0]
+                node_colour = widget.cget('bg') if bflag else self.treeFocusAct[1]
                 self.treeSelectAct = (nodeid, node_colour)
                 widget.config(bg=bgcolor)
                 getattr(wattr, 'widget_tag').setValue(values.pop('tag'))
@@ -279,25 +284,27 @@ class UIeditor(tk.Toplevel):
         self.saveAsFile(nameFile)
 
     def saveAsFile(self, nameFile=None):
-        # if not nameFile:
-        #     D = os.path.abspath(self.ideSettings.getParam(srchSett='appdir_data'))
-        #     name = tkFileDialog.asksaveasfilename(initialdir=D, title='File Name to save', defaultextension='.pck',
-        #                                           filetypes=[('pck Files', '*.pck'), ('All Files', '*.*')])
-        #     if not name: return
-        # else:
-        #     name = nameFile
-        # try:
-        #     with open(name, 'wb') as f:
-        #         objetos = [self.xbmcThreads.getThreadData(), self.addonSettings.getNonDefaultParams(),
-        #                    self.coder.modSourceCode]
-        #         for objeto in objetos:
-        #             # objStr = json.dumps(objeto)
-        #             # f.write(objStr + '\n')
-        # except:
-        #     tkMessageBox.showerror('Error', 'An error was found saving the file')
-        # else:
-        #     self.currentFile = name if name.endswith('.pck') else name + '.pck'
-        #     self.setSaveFlag(False)
+        if not nameFile:
+            D = os.path.abspath('../Data/')
+            name = tkFileDialog.asksaveasfilename(
+                initialdir=D,
+                title='File Name to save',
+                defaultextension='.xml',
+                filetypes=[('xml Files', '*.xml'), ('All Files', '*.*')]
+            )
+            if not name:
+                return
+        else:
+            name = nameFile
+        try:
+            xmlstr, _, _ = self.codeFrame.getContent()
+            with open(name, 'wb') as f:
+                f.write(xmlstr.encode('utf-8'))
+        except Exception as e:
+            tkMessageBox.showerror('Error', str(e))
+        else:
+            self.currentFile = name if name.endswith('.xml') else name + '.xml'
+            self.setSaveFlag(False)
         pass
 
     def __openFile(self, name=None):
@@ -346,10 +353,10 @@ class UIeditor(tk.Toplevel):
         self.treeFocusAct = self.treeSelectAct = None
 
         ui_pane = self.testFrame.scndWidget
-        wattr, fframe = ui_pane.winfo_children()
-        fframe.destroy()
+        fframes = ui_pane.winfo_children()[1:]
+        [fframe.destroy() for fframe in fframes]
         try:
-            panel = ET.XML(xmlstr).find('category')
+            panel = ET.XML(xmlstr)
             self.setupForms(panel, tform, ui_pane)
         except Exception as e:
             tk.Label(ui_pane, text=str(e)).pack()
@@ -360,16 +367,35 @@ class UIeditor(tk.Toplevel):
         def isContainer(node):
             return node.tag in ['container', 'fragment']
 
-        root, master = panel, formRoot
-        panel_module = root.get('lib') if root.get('lib') else None
-
-        seq = 1
-        widget_name, widget_attribs = root.tag, root.attrib
-        widget_attribs['tag'] = widget_name
+        seq = -1
         parents = collections.deque()
-        parents.append(('', root, master))
+        for category_panel in panel.findall('category'):
+            root, master = category_panel, formRoot
+            panel_module = root.get('lib') if root.get('lib') else None
+
+            widget_name, widget_attribs = root.tag, root.attrib
+            widget_attribs['tag'] = widget_name
+            seq += 1
+            widget_attribs['name'] = 'wdg%s' % seq
+            widget = getWidgetInstance(
+                master,
+                'container',
+                widget_attribs,
+                panelModule=panel_module
+            )
+            widget_attribs['tag'] = widget_name
+            child_id = widget.winfo_name()
+            treeForm.insertTreeElem(
+                '',
+                child_id,
+                widget_name,
+                values=(widget.path, str(widget_attribs)))
+
+            parents.append((child_id, root, widget))
+            widget.pack_forget()
+
         while parents:
-            parentid, parent_node, master_widget = parents.popleft()
+            parent_id, parent_node, master_widget = parents.popleft()
             for child in list(parent_node):
                 widget_name, widget_attribs = child.tag, child.attrib
                 seq += 1
@@ -383,12 +409,18 @@ class UIeditor(tk.Toplevel):
                 widget_attribs['tag'] = widget_name
                 child_id = widget.winfo_name()
                 treeForm.insertTreeElem(
-                    parentid,
+                    parent_id,
                     child_id,
                     widget_name,
                     values=(widget.path, str(widget_attribs)))
                 if isContainer(child):
-                    parents.append((widget.winfo_name(), child, widget))
+                    parents.append((parent_id + '/' + child_id, child, widget))
+        treeForm.treeview.focus_set()
+        treeForm.treeview.focus('wdg0')
+        treeForm.treeview.event_generate(
+            '<<TreeviewSelect>>',
+            when='tail'
+        )
 
     def recFile(self, filename):
         try:

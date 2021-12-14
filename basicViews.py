@@ -122,8 +122,64 @@ def widgetFactory(master, settings, selPane, panelModule=None, k=-1):
                 dummy.setValue(settings[key])
             # Se establece la equivalencia del id asignado y el árbol que lleva a él.
             # Se registra en el formFrame padre, el id y el widget.
-            dummy.form.registerWidget(options['id'], dummy.path)
+            # if hasattr(dummy.form, 'form'):
+            try:
+                dummy.form.registerWidget(options['id'], str(dummy))
+            except Exception as e:
+                print(str(e))
     return k, enableEc
+
+
+def newPanelFactory(master, settings, selPane, genPanelModule=None, k=-1):
+    '''
+    Crea la jerarquia de widgets que conforman una tkinter form.
+    :param master:      tkinter Form. Padre de la Form a generar.
+    :param settings:    dict. Valores de las variables diferentes a los default definidos
+                        en el archivo de layout.
+    :param selPane:     element tree nade. Nodo raiz definido por el archivo de layout.
+    :param panelModule: modulo. Define los widgets definidos por el usuario.
+    :param k:           integer. Consecutivo utilizado por la función para crear el nombre
+                        interno de los widgets a crear.
+    :return:            2 members tuple. Posición 0: Valor consecutivo del últimmo widget agregado.
+                        Posición 1: Lista de tuples que muestra el id del widget y
+                        la ecuación que activa (enable) el widget.
+    '''
+
+    categories = selPane.findall('category')
+    n = -1
+    if len(categories) <= 1:
+        if selPane.tag != 'category':
+            selPane = selPane.find('category')
+        n, enableEc = widgetFactory(master, settings, selPane, panelModule=genPanelModule, k=n)
+    else:
+        def selectPane(id, panels):
+            for pane in panels:
+                pane.pack_forget()
+            panels[id].pack(side=tk.LEFT, fill=tk.BOTH, expand=tk.YES)
+            pass
+        paneArray = []
+        leftPane = tk.Frame(master, relief=tk.RIDGE, bd=5, bg='white', padx=3, pady=3)
+        leftPane.pack(side=tk.LEFT, fill=tk.Y)
+        frstboton = None
+        for k, elem in enumerate(categories):
+            boton = tk.Radiobutton(
+                leftPane,
+                text=elem.get('label'),
+                value=k,
+                command= lambda x=k, y=paneArray: selectPane(x, y),
+                indicatoron=0
+            )
+            boton.pack(side=tk.TOP, fill=tk.X)
+            frstboton = frstboton or boton
+            pane = tk.Frame(master, relief=tk.RIDGE, bd=5, bg='white', padx=3, pady=3)
+            pane.form = master
+            paneArray.append(pane)
+        frstboton.invoke()
+        enableEc = []
+        for root, selPane in zip(paneArray, categories):
+            n, deltEnableEc = widgetFactory(root, settings, selPane, panelModule=genPanelModule, k=n)
+            enableEc += deltEnableEc
+    return n, enableEc
 
 
 def formFrameGen(master, filename=None, selPane=None, settings=None):
@@ -140,6 +196,8 @@ def formFrameGen(master, filename=None, selPane=None, settings=None):
         with open(filename, 'rb') as f:
             xmlstr = f.read()
         selPane = ET.XML(xmlstr).find('category')
+    if isinstance(selPane, (bytes, str)):
+        selPane = ET.XML(selPane).find('category')
 
     formclass = formFrame
     formModule = None
@@ -201,10 +259,7 @@ class formFrame(tk.Frame):
         if attr in self.__dict__['widgetMapping']:
             widgetMapping = self.__dict__['widgetMapping']
             wpath = widgetMapping.get(attr)
-            widget = self
-            while wpath:
-                wdName, wpath = wpath.partition('.')[0:3:2]
-                widget = widget.nametowidget(wdName)
+            widget = self.nametowidget(wpath)
             return widget
         raise AttributeError("The '%s' form doesn't have an attribute call '%s'" % (self, attr))
 
@@ -219,7 +274,8 @@ class formFrame(tk.Frame):
                             por el usuario.
         :return: None.
         '''
-        enableEq = widgetFactory(self, settings, selPane, panelModule=formModule)[1]
+        # enableEq = widgetFactory(self, settings, selPane, panelModule=formModule)[1]
+        enableEq = newPanelFactory(self, settings, selPane, genPanelModule=formModule)[1]
         self.nameToId = {value.rsplit('.', 1)[-1]: key for key, value in self.widgetMapping.items()}
         self.category = selPane.get('label')
         self.registerEc(enableEq)
@@ -404,9 +460,9 @@ class formFrame(tk.Frame):
                 key, value = child.getSettingPair()
                 if not flag:
                     changedSettings[key] = value
-                elif key and settings.has_key(key):
+                elif key and key in settings:
                     changedSettings['reset'].append(key)
-        filterFlag = lambda key: (not settings.has_key(key) or settings[key] != changedSettings[key])
+        filterFlag = lambda key: (key not in settings or settings[key] != changedSettings[key])
         toProcess = dict([(key, value) for key, value in changedSettings.items() if filterFlag(key)])
         return toProcess
 
@@ -457,7 +513,7 @@ class baseWidget(tk.Frame, object):
             master.applyGeoManager(self)
         else:
             self.path = baseConf.get('name', '')
-            self.form = master
+            self.form = master.form if hasattr(master, 'form') else master
             self.pack(side=tk.TOP, fill=tk.BOTH, expand=tk.YES, ipadx=2, ipady=2, padx=1, pady=1)
 
     def setVarType(self, varType='string'):
@@ -720,12 +776,13 @@ class settEnum(baseWidget):
         return (id, self.getValue(tId))
 
 
-class TreeDialog(tkSimpleDialog.Dialog):
+class CustomDialog(tkSimpleDialog.Dialog):
     def __init__(self, master, title=None, xmlFile=None, isFile=False, settings=None):
-        import xmlFileWrapper
+        # import xmlFileWrapper
         self.allSettings = None
         self.settings = settings = settings or {}
-        self.ads = xmlFileWrapper.xmlFileWrapper(xmlFile, isFile=isFile, nonDefaultValues=settings)
+        # self.ads = xmlFileWrapper.xmlFileWrapper(xmlFile, isFile=isFile, nonDefaultValues=settings)
+        self.ads = xmlFile
         tkSimpleDialog.Dialog.__init__(self, master, title)
 
     def body(self, master):
@@ -735,8 +792,8 @@ class TreeDialog(tkSimpleDialog.Dialog):
         This method should be overridden, and is called
         by the __init__ method.
         '''
-        selPanel = self.ads.getActivePane()
-        self.form = form = formFrameGen(master, {}, selPanel)
+        # selPanel = self.ads.getActivePane()
+        self.form = form = formFrameGen(master, settings={}, selPane=self.ads)
         form.pack(side=tk.TOP, fill=tk.BOTH, expand=tk.YES)
         wdgId = sorted(form.nameToId.keys(), key=int)[0]
         wdgId = form.nameToId[wdgId]
@@ -840,15 +897,15 @@ class settOptionList(baseWidget):
 """
         outStr = header
         if not isEdit and isTree:
-            deltaStr = '<setting id="{0}" type="text" label="Parent Element" default="{1}" enable="false"/>\n'
+            deltaStr = '<text id="{0}" label="Parent Element" default="{1}" enable="false"/>\n'
             outStr += 8 * ' ' + deltaStr.format(*tupleSett[0])
-            deltaStr = '<setting id="{0}" type="text" label="Element Name" default="{1}" />\n'
+            deltaStr = '<text id="{0}" label="Element Name" default="{1}" />\n'
             outStr += 8 * ' ' + deltaStr.format(*tupleSett[1])
             tupleSett = tupleSett[2:]
 
-        templateStr = '<setting id="{0}" type="text" label="{0}" default=""/>\n'
+        templateStr = '<text id="{0}" label="{0}" default=""/>\n'
         if isEdit:
-            templateStr = '<setting id="{0}" type="text" label="{0}" default="{1}"/>\n'
+            templateStr = '<text id="{0}" label="{0}" default="{1}"/>\n'
         for x, y in tupleSett:
             deltaStr = templateStr.format(x, y)
             outStr += 8 * ' ' + deltaStr
@@ -861,7 +918,7 @@ class settOptionList(baseWidget):
         if self.isTree:
             pair = [('parent', self.tree.item(parent, 'text')), ('text', '')] + pair
         xmlDlg = self.xmlDlgWindow(pair, isEdit=False, isTree=self.isTree)
-        dlg = TreeDialog(self, title='Add', xmlFile=xmlDlg, isFile=False)
+        dlg = CustomDialog(self, title='Add', xmlFile=xmlDlg, isFile=False)
         if dlg.allSettings:
             result = dict(dlg.allSettings)
             columnsId = self.columnsId
@@ -876,17 +933,18 @@ class settOptionList(baseWidget):
 
     def onEdit(self):
         iid = self.tree.focus()
-        if iid:
-            value = self.tree.set
-            columnsId = self.columnsId
-            pair = [(col, value(iid, col)) for col in columnsId]
-            xmlDlg = self.xmlDlgWindow(pair, isEdit=True)
-            dlg = TreeDialog(self, title='Edit', xmlFile=xmlDlg, isFile=False)
-            if dlg.allSettings:
-                result = dict(dlg.allSettings)
-                record = [result[col].strip() for col in columnsId]
-                for k, col in enumerate(columnsId):
-                    self.tree.set(iid, col, record[k])
+        if not iid:
+            return
+        value = self.tree.set
+        columnsId = self.columnsId
+        pair = [(col, value(iid, col)) for col in columnsId]
+        xmlDlg = self.xmlDlgWindow(pair, isEdit=True)
+        dlg = CustomDialog(self, title='Edit', xmlFile=xmlDlg, isFile=False)
+        if dlg.allSettings:
+            result = dict(dlg.allSettings)
+            record = [result[col].strip() for col in columnsId]
+            for k, col in enumerate(columnsId):
+                self.tree.set(iid, col, record[k])
 
     def onDel(self):
         iid = self.tree.focus()
