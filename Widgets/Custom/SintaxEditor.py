@@ -40,15 +40,45 @@ XMLSINTAX = [
 
 class SintaxEditor(tk.Frame):
 
-    def __init__(self, master, hrzSlider=False, vrtSlider=True):
-        tk.Frame.__init__(self, master)
+    def __init__(self, master, hrzslider=False, vrtslider=True, **kwargs):
+        tk.Frame.__init__(self, master, **kwargs)
+        self.cnfParams = {"hrzslider": hrzslider, "vrtslider": vrtslider}
         self.stopFlag = False
         self.toColor = []
         self.activeCallBack = []
         self.queue = Queue.Queue(maxsize=0)
-        self.setGUI(hrzSlider, vrtSlider)
+        self.setGUI(hrzslider, vrtslider)
         self.editable = True
         self.contentType = self.contentSource = None
+
+    def configure(self, **genkwargs):
+        if not genkwargs:
+            cnfParams = super().configure()
+            indx = 1*self.cnfParams["hrzslider"]
+            cnfParams["hrzslider"] = ("hrzslider", "hrzslider", None, "false", ("false", "true")[indx])
+            indx = 1*self.cnfParams["vrtslider"]
+            cnfParams["vrtslider"] = ("vrtslider", "vrtslider", None, "true", ("false", "true")[indx])
+            return cnfParams
+        #Se filtran los parametros
+        kwargs = {
+            key: genkwargs.pop(key)
+            for key in ('hrzslider', 'vrtslider')
+            if key in genkwargs
+        }
+        super().configure(**genkwargs)
+
+        for key, value in kwargs.items():
+            self.cnfParams[key] = bool(["false", "true"].index(value))
+            if self.cnfParams[key]:
+                options = dict(before=self.textw, side=tk.BOTTOM, fill=tk.X) if key == 'hrzslider' else dict(before=self.textw, side=tk.RIGHT, fill=tk.Y)
+                self.children[key].pack(**options)
+                if key == 'hrzslider':
+                    self.textw['wrap'] = tk.NONE
+            else:
+                self.children[key].pack_forget()
+                if key == 'hrzslider':
+                    self.textw['wrap'] = tk.CHAR
+
 
     def pasteFromClipboard(self, event=None):
         textw = self.textw
@@ -68,24 +98,24 @@ class SintaxEditor(tk.Frame):
 
         self.customFont = tkFont.Font(family='Consolas', size=18)
 
+        scrollbar = tk.Scrollbar(self, name="vrtslider")
         if vrtSlider:
-            scrollbar = tk.Scrollbar(self)
             scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
         wrapt = tk.CHAR
+        hscrollbar = tk.Scrollbar(self, orient=tk.HORIZONTAL, name="hrzslider")
         if hrzSlider:
-            hscrollbar = tk.Scrollbar(self, orient=tk.HORIZONTAL)
             hscrollbar.pack(side=tk.BOTTOM, fill=tk.X)
             wrapt = tk.NONE
 
         textw = tk.Text(self, wrap=wrapt, font=self.customFont, tabs=('1.5c'))
         textw.pack(side=tk.LEFT, fill=tk.BOTH, expand=1)
-        if vrtSlider:
-            textw.config(yscrollcommand=scrollbar.set)
-            scrollbar.config(command=textw.yview)
-        if hrzSlider:
-            textw.config(xscrollcommand=hscrollbar.set)
-            hscrollbar.config(command=textw.xview)
+
+        textw.config(yscrollcommand=scrollbar.set)
+        scrollbar.config(command=textw.yview)
+
+        textw.config(xscrollcommand=hscrollbar.set)
+        hscrollbar.config(command=textw.xview)
 
         self.textw = textw
         textw.see('end')
@@ -189,7 +219,7 @@ class SintaxEditor(tk.Frame):
         self.queue.queue.clear()
         if self.stopFlag:
             self.stopFlag = False
-            if self.t.isAlive(): self.t.join(10)
+            if self.t.is_alive(): self.t.join(10)
         textw = self.textw
         content = textw.get(index1, index2)
 
@@ -327,7 +357,7 @@ class SintaxEditor(tk.Frame):
 
 class loggerWindow(SintaxEditor):
     def __init__(self, master):
-        SintaxEditor.__init__(self, master, hrzSlider=True)
+        SintaxEditor.__init__(self, master, hrzslider=True)
 
     def processLog(self, stringIn):
         self.__setContent__(stringIn, 'end')

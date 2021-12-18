@@ -2,9 +2,10 @@
 import collections
 import os
 import tkinter as tk
+import tkinter.ttk as ttk
 import xml.etree.ElementTree as ET
-from basicViews import formFrame
-from basicViews import getWidgetInstance
+from userinterface import formFrame, formFrameGen
+from userinterface import newPanelFactory, getWidgetInstance
 
 
 def getLayout(layoutfile):
@@ -91,12 +92,48 @@ class Example(tk.Frame):
 
 if __name__ == '__main__':
     top = tk.Tk()
-    caso = 'test_newPaneFactory'
-    if caso == 'traverse':
-        file_path = 'Data/BasicViewsShowCase.xml'
+    caso = 'tkinter'
+    if caso == 'tkinter':
+        layoutfile = os.path.join('./data/tkinter/', 'tkUiEditor.xml')
+        selPane = getLayout(layoutfile)
+        fframe = newPanelFactory(
+            top,
+            {},
+            selPane
+        )
+        # fframe.pack(side=tk.TOP, fill=tk.BOTH, expand=tk.YES)
+    elif caso == 'configure_widget':
+        def configWidget(event):
+            widget = event.widget
+            ifocus = widget.tree.focus()
+            kwargs = dict([widget.tree.item(ifocus, 'values')])
+            boton.config(**kwargs)
+            pass
+        fframe = formFrameGen(
+            top,
+            filename=os.path.join('./data/', 'WidgetParams.xml')
+        )
+        fframe.pack(side=tk.RIGHT, fill=tk.Y, expand=tk.YES)
+        fframe.widget_attrs.bind('<<OL_Edit>>', configWidget)
+        boton = ttk.Button(top, text='Boton de Prueba')
+        boton.pack(side=tk.RIGHT, fill=tk.BOTH, expand=tk.YES)
+
+        params = boton.config()
+        # Se eliminan los alias que pudieran existir de algunas claves
+        keys = sorted(key for key in params if len(params[key]) == 5)
+        # Se establece el tipo de widget
+        getattr(fframe, 'widget_tag').setValue(str(type(boton)))
+        # Se calculan los pares (attribute, value)
+        values = '$'.join(['&'.join((x, str(boton.cget(x)))) for x in keys])
+        # Se transfieren los atributos al fframe.
+        getattr(fframe, 'widget_attrs').setValue(values, sep=('$', '&'))
+        pass
+
+    elif caso == 'traverse':
+        file_path = 'Data/kodi/BasicViewsShowCase.xml'
         pairs = traverseTree(top, file_path)
     elif caso == 'test_newPaneFactory':
-        file_path = 'Data/MultiCategoryExample.xml'
+        file_path = 'Data/kodi/MultiCategoryExample.xml'
         xmlObj = getLayout(file_path)
         settings = {}
         fframe = formFrame(master=top, settings=settings, selPane=xmlObj)
@@ -104,7 +141,7 @@ if __name__ == '__main__':
         fframe.pack(side=tk.TOP, fill=tk.BOTH, expand=tk.YES, anchor=tk.NE)
         pass
     elif caso == 'widgetFactory':
-        file_path = 'Data/ApplicationLayout.xml'
+        file_path = 'Data/kodi/ApplicationLayout.xml'
         xmlObj = getLayout(file_path)
         settings = {}
         fframe = formFrame(master=top, settings=settings, selPane=xmlObj)

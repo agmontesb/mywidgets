@@ -1,13 +1,13 @@
 import collections
+import importlib
 import os
 import tkinter as tk
 import tkinter.messagebox as tkMessageBox
 import tkinter.filedialog as tkFileDialog
 import xml.etree.ElementTree as ET
 
-import CollapsingFrame
-import SintaxEditor
-from basicViews import formFrame, formFrameGen, getWidgetInstance
+from Widgets.Custom import CollapsingFrame, SintaxEditor
+from userinterface import formFrameGen, getWidgetInstance
 from TreeExplorer import TreeForm
 
 class UIeditor(tk.Toplevel):
@@ -89,8 +89,8 @@ class UIeditor(tk.Toplevel):
 
     def setUpPaneCtrls(self):
         m1 = self.vPaneWindow
-        self.testFrame = CollapsingFrame.collapsingFrame(m1, tk.VERTICAL, inisplit=0.2, buttConf='RM')
-        self.codeFrame = SintaxEditor.SintaxEditor(m1, hrzSlider=True)
+        self.testFrame = CollapsingFrame.collapsingFrame(m1, tk.VERTICAL, inisplit=0.2, buttconf='RM')
+        self.codeFrame = SintaxEditor.SintaxEditor(m1, hrzslider=True)
         self.codeFrame.textw.bind(
             '<<Modified>>',
             self.onXmlTextModified
@@ -107,7 +107,7 @@ class UIeditor(tk.Toplevel):
         ui_pane = self.testFrame.scndWidget
         formFrameGen(
             ui_pane,
-            filename=os.path.join('../data/', 'WidgetParams.xml')
+            filename=os.path.join('../data/kodi/', 'WidgetParams.xml')
         ).pack(side=tk.RIGHT, fill=tk.Y, expand=tk.YES)
         tk.Frame(ui_pane).pack()
 
@@ -134,6 +134,7 @@ class UIeditor(tk.Toplevel):
         self.rightPaneIndx.set(rightPaneIndx)
         pane = self.avRightPanes[rightPaneIndx]
         pane.pack(fill=tk.BOTH, expand=1)
+        pass
 
     def menuBuilder(self):
         self.menuBar['popup'] = tk.Menu(self, tearoff=False)
@@ -221,9 +222,9 @@ class UIeditor(tk.Toplevel):
         tkMessageBox.showerror('Not implemented', 'Not yet available')
 
     def newFile(self, fileName='', xmlstr=None, panel=None):
-        initial_path = os.path.abspath('../data/')
+        initial_path = os.path.abspath('../data/tkinter')
         # default_name = os.path.join(initial_path, 'LayoutDefault.xml')
-        default_name = os.path.join(initial_path, 'BasicViewsShowCase.xml')
+        default_name = os.path.join(initial_path, 'tkUiEditor.xml')
         self.__openFile(name=default_name)
 
     def doTreeviewSelect(self, event):
@@ -309,7 +310,7 @@ class UIeditor(tk.Toplevel):
 
     def __openFile(self, name=None):
         self.checkSaveFlag()
-        initial_path = os.path.abspath('../data/')
+        initial_path = os.path.abspath('../data/tkinter/')
         name = name or tkFileDialog.askopenfilename(
                 initialdir=initial_path,
                 filetypes=[('xml Files', '*.xml'), ('All Files', '*.*')]
@@ -365,62 +366,84 @@ class UIeditor(tk.Toplevel):
 
     def setupForms(self, panel, treeForm, formRoot):
         def isContainer(node):
-            return node.tag in ['container', 'fragment']
+            return len(list(node)) > 0
 
         seq = -1
         parents = collections.deque()
         for category_panel in panel.findall('category'):
             root, master = category_panel, formRoot
             panel_module = root.get('lib') if root.get('lib') else None
+            if panel_module:
+                panel_module = importlib.import_module(panel_module, __package__)
 
             widget_name, widget_attribs = root.tag, root.attrib
             widget_attribs['tag'] = widget_name
             seq += 1
             widget_attribs['name'] = 'wdg%s' % seq
+            attributes = {
+                'text': widget_attribs['label'],
+                'name': widget_attribs['name'],
+                'side': 'top',
+                'fill': 'both',
+                'expand': 'yes'
+            }
             widget = getWidgetInstance(
                 master,
-                'container',
-                widget_attribs,
+                'labelframe',
+                attributes,
                 panelModule=panel_module
             )
             widget_attribs['tag'] = widget_name
+            widget_attribs.pop('name')
             child_id = widget.winfo_name()
             treeForm.insertTreeElem(
                 '',
                 child_id,
-                widget_name,
-                values=(widget.path, str(widget_attribs)))
+                '%s: %s' % (widget_name, widget_attribs['label']),
+                values=(str(widget), str(widget_attribs)))
 
             parents.append((child_id, root, widget))
             widget.pack_forget()
-
+        parents[0][2].pack(fill=tk.BOTH, expand=tk.YES)
         while parents:
             parent_id, parent_node, master_widget = parents.popleft()
             for child in list(parent_node):
                 widget_name, widget_attribs = child.tag, child.attrib
                 seq += 1
                 widget_attribs['name'] = 'wdg%s' % seq
+                visible = True
+                if 'visible' in widget_attribs:
+                    visible = widget_attribs.pop('visible') == 'true'
                 widget = getWidgetInstance(
                     master_widget,
                     widget_name,
                     widget_attribs,
                     panelModule=panel_module
                 )
+                if not visible:
+                    widget.pack_forget()
+                    widget_attribs['visible'] = 'false'
                 widget_attribs['tag'] = widget_name
+                widget_attribs.pop('name')
                 child_id = widget.winfo_name()
                 treeForm.insertTreeElem(
                     parent_id,
                     child_id,
                     widget_name,
-                    values=(widget.path, str(widget_attribs)))
+                    values=(str(widget), str(widget_attribs)))
                 if isContainer(child):
                     parents.append((parent_id + '/' + child_id, child, widget))
+
+        # Nos aseguramos que el treeview tenga el foco.
         treeForm.treeview.focus_set()
+        # Nos aseguramos que la primera categoría obtenga el foco
         treeForm.treeview.focus('wdg0')
-        treeForm.treeview.event_generate(
-            '<<TreeviewSelect>>',
-            when='tail'
-        )
+        treeForm.treeview.selection_set('wdg0')
+        # # Se genera el evento <<TreeviewSelect>> para que se llame al método pack_forget
+        # treeForm.treeview.event_generate(
+        #     '<<TreeviewSelect>>',
+        #     when='tail'
+        # )
 
     def recFile(self, filename):
         try:

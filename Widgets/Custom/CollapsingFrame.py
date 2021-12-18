@@ -1,30 +1,58 @@
 import tkinter as tk
-import ImageProcessor
+
+if __name__ == '__main__':
+    import ImageProcessor
+else:
+    from . import ImageProcessor
 
 BAND_WIDTH = 16
 
 class collapsingFrame(tk.Frame):
-    def __init__(self, master, orientation = tk.HORIZONTAL, inisplit = 0.8, buttConf = 'RMm'):
-        tk.Frame.__init__(self, master)
+    def __init__(self, master, orientation=tk.HORIZONTAL, inisplit=0.8, buttconf='RMm', **kwargs):
+        tk.Frame.__init__(self, master, **kwargs)
         self.buttIcon = {}
         self.buttIcon['M'] = ImageProcessor.getIconImageTk(ImageProcessor.WINDOW_MAX)
         self.buttIcon['m'] = ImageProcessor.getIconImageTk(ImageProcessor.WINDOW_MIN)
         self.buttIcon['R'] = ImageProcessor.getIconImageTk(ImageProcessor.WINDOW_RESTORE)
+
+        self.bind('<Configure>', self.cframe_configure, add='+')
+        self.bandRelDim = 0
+        self.frstWidget = tk.Frame(self, name='frstwidget', width=200, height=200)
+        self.scndWidget = tk.Frame(self, name='scndwidget', width=200, height=200)
+        self.band = None
+
+        self.configure(orientation=orientation, inisplit=inisplit, buttconf=buttconf)
+
+
+    def configure(self, **genkwargs):
+        if not genkwargs:
+            cnfParams = super().configure()
+            cnfParams["orientation"] = ("orientation", "orientation", None, "horizontal", self.orientation)
+            cnfParams["inisplit"] = ("inisplit", "inisplit", None, "0.8", str(self.split))
+            cnfParams["buttconf"] = ("buttconf", "buttconf", None, "RMm", self.buttConf)
+            return cnfParams
+        #Se filtran los parametros
+        kwargs = {
+            key: genkwargs.pop(key)
+            for key in ('orientation', 'inisplit', 'buttconf')
+            if key in genkwargs
+        }
+        super().configure(**genkwargs)
+        orientation = kwargs.get("orientation", 'horizontal')
         if orientation in [tk.VERTICAL, tk.HORIZONTAL]:
             self.orientation = orientation
         else:
             raise AttributeError('%s is not a valid orientation' % orientation)
-        self.buttConf = buttConf
         self.cursor = 'sb_v_double_arrow' if orientation == tk.HORIZONTAL else 'sb_h_double_arrow'
         self.dim = 'height' if orientation == tk.HORIZONTAL else 'width'
-        self.bind('<Configure>', self.configure, add = '+')
-        self.split = inisplit
-        self.bandRelDim = 0
-        self.frstWidget = tk.Frame(self)
-        self.scndWidget = tk.Frame(self)
+        self.buttConf = kwargs.get('buttconf', 'RMm')
+        self.split = float(kwargs.get('inisplit', '0.8'))
         self.setGUI()
-        self.setWidgetLayout(buttConf[0])
-        
+        self.setWidgetLayout(self.buttConf[0])
+        pass
+
+    config = configure
+
     def clickButton(self, nButt=1):
         nButt = max(1, min(len(self.buttConf) - 1, nButt))
         boton = getattr(self, 'b' + str(nButt))
@@ -36,7 +64,7 @@ class collapsingFrame(tk.Frame):
         if btnTxt == 'm': return self.wmin()
         self.wdef()
         
-    def configure(self, event):
+    def cframe_configure(self, event):
         totDim = event.height if self.orientation == tk.HORIZONTAL else event.width
         self.bandRelDim = float((1.0*BAND_WIDTH)/totDim)
         btnTxt = self.nxtButton()
@@ -48,14 +76,23 @@ class collapsingFrame(tk.Frame):
         
     def setGUI(self):
         master = self
-        self.band = tk.Frame(master, bg = 'red', cursor = self.cursor)
+        if self.band:
+            self.band.destroy()
+            for k in range(3):
+                try:
+                    btn = getattr(self, 'b' + str(k + 1))
+                    btn.destroy()
+                    del btn
+                except AttributeError:
+                    pass
+        self.band = tk.Frame(master, bg='red', cursor=self.cursor)
         self.band[self.dim] = BAND_WIDTH
         self.band.bind('<ButtonPress-1>', self.b1pressh)
         self.band.bind('<Button1-Motion>', self.b1motion)
         self.band.bind('<ButtonRelease-1>', self.b1releaseh)
         for k, btnTxt in enumerate(self.buttConf[1:]):
             buttLabel = str(k+1) + btnTxt
-            setattr(self, 'b' + str(k+1), tk.Button(master, bg = 'red', text = buttLabel, image = self.buttIcon[btnTxt], command = lambda x = buttLabel:self.comButton(x)))
+            setattr(self, 'b' + str(k+1), tk.Button(master, bg ='red', text=buttLabel, image=self.buttIcon[btnTxt], command = lambda x = buttLabel:self.comButton(x)))
         
     def comButton(self, btTxt):
         nBtn, btId = btTxt
@@ -81,9 +118,13 @@ class collapsingFrame(tk.Frame):
     def wdef(self):
         splitComp = 1 - self.split - self.bandRelDim
         trn = self.trn
-        self.frstWidget.place(**trn(relheight = self.split, relwidth = 1.0))
+        self.frstWidget.place(
+            **trn(relheight=self.split, relwidth=1.0)
+        )
         self.placeSepBand()
-        self.scndWidget.place(**trn(rely = self.split, y = BAND_WIDTH, relheight =  splitComp, relwidth = 1.0))
+        self.scndWidget.place(
+            **trn(rely=self.split, y=BAND_WIDTH, relheight= splitComp, relwidth=1.0)
+        )
         self.band['cursor'] = self.cursor
         
     def placeSepBand(self, kwargs = None):
@@ -141,7 +182,7 @@ class collapsingFrame(tk.Frame):
             mwidth = self.master.winfo_width()
             pos = event.x
         split = (float(self.split * mwidth) + pos)/float(mwidth)
-        self.split = max(0.0,min(1.0 - float(BAND_WIDTH)/float(mwidth), split))
+        self.split = max(0.0, min(1.0 - float(BAND_WIDTH)/float(mwidth), split))
         self.mband.place_forget()
         self.wdef()
         pass
@@ -154,8 +195,8 @@ if __name__ == '__main__':
         labels[pane - 1].pack(side = tk.TOP, fill = tk.BOTH, expand = tk.YES)
         leftPane = pane
     root = tk.Tk()
-    motherFrame = collapsingFrame(root, tk.VERTICAL, inisplit = 0.3,buttConf = 'RM')
-    motherFrame.config(height = 200, width = 200)
+    motherFrame = collapsingFrame(root, tk.VERTICAL, inisplit = 0.3,buttconf = 'RM')
+    motherFrame.config(height=200, width=200)
     motherFrame.pack(side = tk.TOP, fill = tk.BOTH, expand = tk.YES)
     labels = []
     for k in range(5):

@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<settings>
+    <category label="Category uno" lib="Widgets.Custom">
+        <frame side="top" fill="x">
+            <menubutton text="File" name="file" side="left" />
+            <menubutton text="Get" name="get" side="left" />
+            <menubutton text="Set" name="set" side="left" />
+            <menubutton text="View" name="view" side="left" />
+            <frame side="right">
+                <label text="Views: " side="left" />
+                <radiobutton name="btn0" text="panel1" value="0" width="10" indicatoron="0" side="left"/>
+                <radiobutton name="btn1" text="panel2" value="1" width="10" indicatoron="0" side="left"/>
+            </frame>
+        </frame>
+        <frame side="top" fill="both" expand="yes">
+            <sintaxeditor hrzslider="true" vrtslider="true" visible="false" side="top" fill="both" expand="yes"/>
+            <collapsingframe orientation="vertical" inisplit="0.2" buttconf="RM" visible="true" side="top" fill="both" expand="yes">
+                <label text="Left panel" side="left" fill="both" expand="yes" in=".frstwidget"/>
+                <label text="Right panel" side="right" fill="both" expand="yes" in=".scndwidget"/>
+            </collapsingframe>
+        </frame>
+    </category>
+</settings>
