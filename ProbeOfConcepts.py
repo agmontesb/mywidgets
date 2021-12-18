@@ -134,6 +134,7 @@ if __name__ == '__main__':
         pairs = traverseTree(top, file_path)
     elif caso == 'test_newPaneFactory':
         file_path = 'Data/kodi/MultiCategoryExample.xml'
+        file_path = 'Data/mixing/mxShowcase.xml'
         xmlObj = getLayout(file_path)
         settings = {}
         fframe = formFrame(master=top, settings=settings, selPane=xmlObj)

@@ -25,15 +25,18 @@ def getWidgetInstance(master, widgetname, attributes, panelModule=None):
 
     # Si no se tiene panelModule se asume que es tkinter
     # panelModule = panelModule or tk
-    getTkinterClass = lambda x: getattr(tk, x.title() if x != 'labelframe' else 'LabelFrame')
-    getUdfClass = getattr(panelModule, 'getWidgetClass', lambda x: getattr(panelModule, x))
-    try:
-        widgetClass = getTkinterClass(widgetname)
-    except AttributeError:
-        widgetClass = getUdfClass(widgetname)
-        if widgetClass is None:
-            # ERROR: No se encontró definición del widget
-            raise AttributeError(f'{widgetname} is not a tkinter widget or a user defined class. ')
+    panelModule = panelModule or [(-1, tk)]
+    for indx in range(len(panelModule) - 1, -1, -1):
+        _, module = panelModule[indx]
+        getWdgClass = getattr(module, 'getWidgetClass', lambda x: getattr(module, x, None))
+        widgetname = widgetname if module.__name__ != 'tkinter' else (widgetname.title() if widgetname != 'labelframe' else 'LabelFrame')
+        widgetClass = getWdgClass(widgetname)
+        if widgetClass:
+            break
+
+    if widgetClass is None:
+        # ERROR: No se encontró definición del widget
+        raise AttributeError(f'{widgetname} is not a tkinter widget or a user defined class. ')
 
     pack_keys = attributes.keys() & pack_params
     pack_opt = {key: attributes.pop(key) for key in pack_keys}
@@ -68,15 +71,24 @@ def widgetFactory(master, settings, selPane, panelModule=None, k=-1):
                         la ecuación que activa (enable) el widget.
     '''
 
-    if not panelModule and selPane.get('lib'):
-        panelModule = selPane.get('lib')
-        panelModule = importlib.import_module(panelModule, __package__)
+    panelModule = panelModule or []
+    kini = k
+    if selPane.get('lib'):
+        # El contenedor declara que sus widgets están definidos en "lib" por lo cual se agrega
+        # al camino de definiciones de los widgets.
+        module_path = selPane.get('lib')
+        module = importlib.import_module(module_path, __package__)
+        panelModule.append((kini, module))
+    elif not panelModule:
+        # Nos aseguramos que tkinter es la librería por defecto por lo cual lo agregamos
+        # en la raiz del camino de búsqueda de los widgets.
+        panelModule.append((kini, tk))
     enableEc = []
     visibleEc = []
     for xmlwidget in selPane:
         k += 1
         isContainer = bool(len(xmlwidget.getchildren()))
-        options = xmlwidget.attrib
+        options = dict.copy(xmlwidget.attrib)
         options.setdefault('name', str(k))    # Se asigna el consecutivo como nombre del widget.
 
         try:
@@ -100,7 +112,18 @@ def widgetFactory(master, settings, selPane, panelModule=None, k=-1):
             visible = None
 
         wType = xmlwidget.tag
+        bflag = 'lib' in options
+
+        if bflag:
+            module_path = options.pop('lib')
+            module = importlib.import_module(module_path, __package__)
+            panelModule.append((kini, module))
+
         dummy = getWidgetInstance(master, wType, options, panelModule=panelModule)
+
+        if bflag:
+            panelModule.pop()
+
         if visible and visible != 'true':
             dummy.pack_forget()
         if isContainer:
@@ -120,6 +143,8 @@ def widgetFactory(master, settings, selPane, panelModule=None, k=-1):
                 dummy.form.registerWidget(id, str(dummy))
             except Exception as e:
                 print(str(e))
+    if kini == panelModule[-1][0]:
+        panelModule.pop()
     return k, enableEc, visibleEc
 
 
