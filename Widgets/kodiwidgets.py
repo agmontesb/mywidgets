@@ -18,21 +18,30 @@ from userinterface import formFrameGen
 
 
 def getWidgetClass(widgetName):
-    widgetTypes = dict(sep=settSep, lsep=settSep,
-                       text=settText,
-                       label=settLabel,
-                       optionlst=settOptionList,
-                       number=settNumber, ipaddress=settNumber,
-                       slider=settSlider,
-                       bool=settBool,
-                       enum=settEnum, labelenum=settEnum,
-                       drpdwnlst=settDDList,
-                       file=settFile, audio=settFile, video=settFile, image=settFile, executable=settFile,
-                       folder=settFolder,
-                       fileenum=settFileenum,
-                       action=settAction,
-                       container=settContainer,
-                       fragment=settFragment, )
+    widgetTypes = dict(
+        kaction=settAction,
+        kaudio=settFile,
+        kbool=settBool,
+        kcontainer=settContainer,
+        kdrpdwnlst=settDDList,
+        kenum=settEnum,
+        kexecutable=settFile,
+        kfile=settFile,
+        kfileenum=settFileenum,
+        kfolder=settFolder,
+        kfragment=settFragment,
+        kimage=settFile,
+        kipaddress=settNumber,
+        klabel=settLabel,
+        klabelenum=settEnum,
+        klsep=settSep,
+        knumber=settNumber,
+        koptionlst=settOptionList,
+        ksep=settSep,
+        kslider=settSlider,
+        ktext=settText,
+        kvideo=settFile,
+    )
     return widgetTypes.get(widgetName, None)
 
 
@@ -54,7 +63,7 @@ class baseWidget(tk.Frame, object):
         '''
         wdgName = options.get('name', '').lower()
         self._id = options.pop('id', wdgName)       # Atributo _id = 'id' propio.
-        # self.id = options.get('id').lower() if options.get('id') else None # Atributo id definido por el usuario
+        self.id = options.get('id').lower() if options.get('id') else None # Atributo id definido por el usuario
 
         if 'varType' in options:                    # Atributo: value.
             self.setVarType(options.pop('varType'))

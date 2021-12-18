@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <settings>
-    <category label="Basic Widgets Showcase">
-        <container label="BasicWidgets" scrolled="true">
-        </container>
-    </category>
+    <kcategory label="Basic Widgets Showcase">
+        <kcontainer label="BasicWidgets" scrolled="true">
+        </kcontainer>
+    </kcategory>
 </settings>

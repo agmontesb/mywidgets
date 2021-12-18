@@ -92,7 +92,7 @@ class Example(tk.Frame):
 
 if __name__ == '__main__':
     top = tk.Tk()
-    caso = 'tkinter'
+    caso = 'test_newPaneFactory'
     if caso == 'tkinter':
         layoutfile = os.path.join('./data/tkinter/', 'tkUiEditor.xml')
         selPane = getLayout(layoutfile)

@@ -159,7 +159,6 @@ def newPanelFactory(master, settings, selPane, genPanelModule=None, k=-1):
                 leftPane,
                 text=elem.get('label'),
                 value=k,
-                command= lambda x=k, y=tuple(paneArray): selectPane(x, y),
                 indicatoron=0
             )
             boton.pack(side=tk.TOP, fill=tk.X)
@@ -167,6 +166,9 @@ def newPanelFactory(master, settings, selPane, genPanelModule=None, k=-1):
             pane = tk.Frame(master, relief=tk.RIDGE, bd=5, bg='white', padx=3, pady=3)
             pane.form = master
             paneArray.append(pane)
+        for child in leftPane.winfo_children():
+            child.config(command= lambda x=child['value'], y=tuple(paneArray): selectPane(x, y))
+
         frstboton.invoke()
         enableEc = []
         visibleEc = []

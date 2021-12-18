@@ -235,7 +235,7 @@ class UIeditor(tk.Toplevel):
         except:
             frame_old = None
         else:
-            frame_old = prevNodeId.split('.', 1)[0]
+            frame_old = prevNodeId.split('scndwidget.', 1)[1].split('.', 1)[0]
             widget.config(bg=prevNodeColor)
 
         treeview = event.widget
@@ -247,11 +247,13 @@ class UIeditor(tk.Toplevel):
         except:
             self.treeFocusAct = None
         else:
-            frame_new = nodeid.split('.', 1)[0]
+            frame_new = nodeid.split('scndwidget.', 1)[1].split('.', 1)[0]
             if frame_old and frame_old != frame_new:
                 top_widget.nametowidget(frame_old).pack_forget()
             top_widget.nametowidget(frame_new).pack()
-            node_colour = widget.cget('bg') if self.treeFocusAct is None or self.treeFocusAct[0] != nodeid else 'light green'
+            bflag = self.treeFocusAct is None or self.treeSelectAct is None
+            bflag = bflag or self.treeSelectAct[0] != nodeid
+            node_colour = widget.cget('bg') if bflag else 'light green'
             widget.config(bg='black')
             self.treeFocusAct = (nodeid, node_colour)
         pass

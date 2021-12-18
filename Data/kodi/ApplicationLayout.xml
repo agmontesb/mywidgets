@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <settings>
-    <category label="Application Layout">
-        <container id="container" label="Form Render" side="left">
-            <container id="form" label="BasicWidgets" scrolled="true">
-            </container>
-            <container id="atrrib" label="Widget Attributes" scrolled="true">
-                <text id="widget_tag" label="Tag:   " default="Container"/>
-                <optionlst id="widget_attrs" default="" columnsheadings = "Attribute, Value" />
-            </container>
-        </container>
-    </category>
+    <kcategory label="Application Layout">
+        <kcontainer id="container" label="Form Render" side="left">
+            <kcontainer id="form" label="BasicWidgets" scrolled="true">
+            </kcontainer>
+            <kcontainer id="atrrib" label="Widget Attributes" scrolled="true">
+                <ktext id="widget_tag" label="Tag:   " default="Container"/>
+                <koptionlst id="widget_attrs" default="" columnsheadings = "Attribute, Value" />
+            </kcontainer>
+        </kcontainer>
+    </kcategory>
 </settings>

@@ -1,36 +1,36 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <settings>
-  <category label="Addon" scrolled="true">
-    <text id="addon_id"  label="ID:   " default="plugin.video.xbmcide"/>
-    <text id="addon_name"  label="Name:   " default="xbmcIDEdefault"/>
-    <text id="addon_version"  label="Version:   " default="1.0.0.0.0"/>
-    <text id="addon_provider"  label="Provider's Name:   " default="xbmcAddonIDE"/>
-    <text id="addon_module"  label="Initial script:   " default="default.py"/>
-    <lsep  label ="Provides:    "/>
-    <bool id="addon_video"  label ="Video" default="true"/>
-    <bool id="addon_music"  label ="Audio" default="false"/>
-    <bool id="addon_picture"  label ="Image" default="false"/>
-    <bool id="addon_program"  label ="Executable" default="false"/>
-    <optionlst id="addon_requires"  default="xbmc.python,2.1.0,|script.module.urlresolver,2.4.0," label="Requires" columnsheadings = "Description, Version, Optional" />  
+  <category label="Addon" scrolled="true" lib="Widgets.kodiwidgets">
+    <ktext id="addon_id"  label="ID:   " default="plugin.video.xbmcide"/>
+    <ktext id="addon_name"  label="Name:   " default="xbmcIDEdefault"/>
+    <ktext id="addon_version"  label="Version:   " default="1.0.0.0.0"/>
+    <ktext id="addon_provider"  label="Provider's Name:   " default="xbmcAddonIDE"/>
+    <ktext id="addon_module"  label="Initial script:   " default="default.py"/>
+    <klsep  label ="Provides:    "/>
+    <kbool id="addon_video"  label ="Video" default="true"/>
+    <kbool id="addon_music"  label ="Audio" default="false"/>
+    <kbool id="addon_picture"  label ="Image" default="false"/>
+    <kbool id="addon_program"  label ="Executable" default="false"/>
+    <koptionlst id="addon_requires"  default="xbmc.python,2.1.0,|script.module.urlresolver,2.4.0," label="Requires" columnsheadings = "Description, Version, Optional" />  
   </category>
-  <category label="Metadata">
-    <text id="addon_summary"  label="Summary:   " default="Your summary here"/>
-    <text id="addon_description"  label="Description:   " default="Your description here"/>
-    <text id="addon_disclaimer"  label="Disclaimer:   " default=""/>
-    <text id="addon_language"  label="Language:   " default=""/>
-    <text id="addon_platform"  label="platform:   " default=""/>
-    <text id="addon_license"  label="License:   " default=""/>
-    <lsep  label ="Contact Data:    "/>
-    <text id="addon_forum"  label="Forum:   " default=""/>
-    <text id="addon_website"  label="Website:   " default=""/>
-    <text id="addon_email"  label="Email:   " default=""/>
-    <text id="addon_source"  label="Source:   " default=""/>
+  <category label="Metadata" lib="Widgets.kodiwidgets">
+    <ktext id="addon_summary"  label="Summary:   " default="Your summary here"/>
+    <ktext id="addon_description"  label="Description:   " default="Your description here"/>
+    <ktext id="addon_disclaimer"  label="Disclaimer:   " default=""/>
+    <ktext id="addon_language"  label="Language:   " default=""/>
+    <ktext id="addon_platform"  label="platform:   " default=""/>
+    <ktext id="addon_license"  label="License:   " default=""/>
+    <klsep  label ="Contact Data:    "/>
+    <ktext id="addon_forum"  label="Forum:   " default=""/>
+    <ktext id="addon_website"  label="Website:   " default=""/>
+    <ktext id="addon_email"  label="Email:   " default=""/>
+    <ktext id="addon_source"  label="Source:   " default=""/>
   </category>
-  <category label="resources">
-    <file id="addon_icon"  label="Icon:   " default=""/>
-    <file id="addon_fanart"  label="Fanart:   " default=""/>
-    <file id="addon_license"  label="License:   " default=""/>
-    <file id="addon_changelog"  label="Changelog" default="" />
-    <optionlst id="addon_resources"  default="basicFunc.py,resources/lib,True,basicFunc.py" label="Addon aditional resources" columnsheadings = "File, Location, Editable, Source" />
+  <category label="resources" lib="Widgets.kodiwidgets">
+    <kfile id="addon_icon"  label="Icon:   " default=""/>
+    <kfile id="addon_fanart"  label="Fanart:   " default=""/>
+    <kfile id="addon_license"  label="License:   " default=""/>
+    <kfile id="addon_changelog"  label="Changelog" default="" />
+    <koptionlst id="addon_resources"  default="basicFunc.py,resources/lib,True,basicFunc.py" label="Addon aditional resources" columnsheadings = "File, Location, Editable, Source" />
   </category>
 </settings>
