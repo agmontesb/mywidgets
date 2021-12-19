@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <settings>
-    <kcategory label="Basic Widgets Showcase">
+    <kcategory label="Basic Widgets Showcase" lib="Widgets.codiwidgets">
         <kcontainer label="BasicWidgets" scrolled="true">
         </kcontainer>
     </kcategory>

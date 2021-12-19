@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <settings>
-    <category label="Category uno" lib="Widgets.Custom">
+    <category label="Category uno">
         <frame side="top" fill="x">
             <menubutton text="File" name="file" side="left" />
             <menubutton text="Get" name="get" side="left" />
@@ -13,8 +13,8 @@
             </frame>
         </frame>
         <frame side="top" fill="both" expand="yes">
-            <sintaxeditor hrzslider="true" vrtslider="true" visible="false" side="top" fill="both" expand="yes"/>
-            <collapsingframe orientation="vertical" inisplit="0.2" buttconf="RM" visible="true" side="top" fill="both" expand="yes">
+            <sintaxeditor lib="Widgets.Custom" hrzslider="true" vrtslider="true" visible="false" side="top" fill="both" expand="yes"/>
+            <collapsingframe lib="Widgets.Custom" orientation="vertical" inisplit="0.2" buttconf="RM" visible="true" side="top" fill="both" expand="yes">
                 <label text="Left panel" side="left" fill="both" expand="yes" in=".frstwidget"/>
                 <label text="Right panel" side="right" fill="both" expand="yes" in=".scndwidget"/>
             </collapsingframe>

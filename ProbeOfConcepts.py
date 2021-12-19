@@ -4,8 +4,8 @@ import os
 import tkinter as tk
 import tkinter.ttk as ttk
 import xml.etree.ElementTree as ET
-from userinterface import formFrame, formFrameGen
-from userinterface import newPanelFactory, getWidgetInstance
+from userinterface import formFrameGen, newPanelFactory, getWidgetInstance
+from Widgets.kodiwidgets import formFrame
 
 
 def getLayout(layoutfile):
@@ -96,11 +96,7 @@ if __name__ == '__main__':
     if caso == 'tkinter':
         layoutfile = os.path.join('./data/tkinter/', 'tkUiEditor.xml')
         selPane = getLayout(layoutfile)
-        fframe = newPanelFactory(
-            top,
-            {},
-            selPane
-        )
+        fframe = newPanelFactory(top, selPane)
         # fframe.pack(side=tk.TOP, fill=tk.BOTH, expand=tk.YES)
     elif caso == 'configure_widget':
         def configWidget(event):

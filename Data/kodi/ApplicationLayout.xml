@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <settings>
-    <kcategory label="Application Layout">
+    <kcategory label="Application Layout" lib="Widgets.kodiwidgets">
         <kcontainer id="container" label="Form Render" side="left">
             <kcontainer id="form" label="BasicWidgets" scrolled="true">
             </kcontainer>

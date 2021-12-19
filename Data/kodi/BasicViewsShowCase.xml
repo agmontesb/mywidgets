@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <settings>
-	<category label="Basic Widgets Showcase">
+	<category label="Basic Widgets Showcase" lib="Widgets.kodiwidgets">
         <kcontainer label="BasicWidgets" scrolled="true">
             <kaction id="@+id/addon_action" label="Type action:   " default=""/>
             <kaudio id="@+id/addon_audio" label="Type audio:   " default=""/>

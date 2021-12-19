@@ -7,7 +7,8 @@ import tkinter.filedialog as tkFileDialog
 import xml.etree.ElementTree as ET
 
 from Widgets.Custom import CollapsingFrame, SintaxEditor
-from userinterface import formFrameGen, getWidgetInstance
+from userinterface import getWidgetInstance, widgetFactory
+from Widgets.kodiwidgets import formFrameGen
 from TreeExplorer import TreeForm
 
 class UIeditor(tk.Toplevel):
@@ -250,7 +251,7 @@ class UIeditor(tk.Toplevel):
             frame_new = nodeid.split('scndwidget.', 1)[1].split('.', 1)[0]
             if frame_old and frame_old != frame_new:
                 top_widget.nametowidget(frame_old).pack_forget()
-            top_widget.nametowidget(frame_new).pack()
+            top_widget.nametowidget(frame_new).pack(side='top', fill='y', expand='yes')
             bflag = self.treeFocusAct is None or self.treeSelectAct is None
             bflag = bflag or self.treeSelectAct[0] != nodeid
             node_colour = widget.cget('bg') if bflag else 'light green'
@@ -280,7 +281,6 @@ class UIeditor(tk.Toplevel):
                 getattr(wattr, 'widget_tag').setValue(values.pop('tag'))
                 value = '#'. join(['*'.join((x, str(y))) for x, y in sorted(values.items())])
                 getattr(wattr, 'widget_attrs').setValue(value, sep=('#', '*'))
-
 
     def saveFile(self):
         nameFile = self.currentFile
@@ -360,11 +360,65 @@ class UIeditor(tk.Toplevel):
         [fframe.destroy() for fframe in fframes]
         try:
             panel = ET.XML(xmlstr)
-            self.setupForms(panel, tform, ui_pane)
+            self.newSetupForms(panel, tform, ui_pane)
         except Exception as e:
             tk.Label(ui_pane, text=str(e)).pack()
         else:
             self.codeFrame.textw.edit_modified(0)
+
+    def newSetupForms(self, panel, treeForm, formRoot):
+        def mapWidgetToTree(xmlwidget, widget):
+            widget_attribs = xmlwidget.attrib
+            widget_attribs['tag'] = xmlwidget.tag
+            widget_attribs.pop('name', None)
+            if xmlwidget.tag == 'category':
+                parent_id = ''
+                caption = '%s: %s' % (xmlwidget.tag, widget_attribs['label'])
+            else:
+                parent_id = widget.master.winfo_name()
+                caption = xmlwidget.tag
+            child_id = widget.winfo_name()
+            child_id = treeForm.treeview.insert(
+                parent_id,
+                'end',
+                iid=child_id,
+                text=caption,
+                values=(str(widget), str(widget_attribs))
+            )
+        seq = -1
+        for category_panel in panel.findall('category'):
+            root, master = category_panel, formRoot
+            widget_name, widget_attribs = root.tag, root.attrib
+            seq += 1
+            widget_attribs['name'] = str(seq)
+            attributes = {
+                'text': widget_attribs['label'],
+                'name': '%s' % seq,
+            }
+            widget = getWidgetInstance(
+                master,
+                'labelframe',
+                attributes,
+            )
+            # En este punto se debería hacer pack sobre cada nodo de categoría con la
+            #siguiente expresión:
+            # widget.pack(side='top', fill='both', expand='yes')
+            # Pero como todos los paneles de las categorías deben estaar ocultos, no lo hacemos.
+            # Cuando se defina el foco inicial se activará (Se hara pack) sobre el nodo escogido.
+
+            mapWidgetToTree(category_panel, widget)
+            seq = widgetFactory(widget, category_panel, registerWidget=mapWidgetToTree, k=seq)[0]
+
+        # Nos aseguramos que el treeview tenga el foco.
+        treeForm.treeview.focus_set()
+        # Nos aseguramos que la primera categoría obtenga el foco
+        treeForm.treeview.focus('0')
+        treeForm.treeview.selection_set('0')
+        # # Se genera el evento <<TreeviewSelect>> para que se llame al método pack_forget
+        # treeForm.treeview.event_generate(
+        #     '<<TreeviewSelect>>',
+        #     when='tail'
+        # )
 
     def setupForms(self, panel, treeForm, formRoot):
         def isContainer(node):

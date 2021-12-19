@@ -5,16 +5,18 @@ Created on 18/09/2014
 @author: Alex Montes Barrios
 '''
 
-import tkinter as tk
+import os
 import re
+import tkinter as tk
 import tkinter.simpledialog as tkSimpleDialog
 import tkinter.filedialog as tkFileDialog
 from tkinter import ttk
-import os
+import xml.etree.ElementTree as ET
+import importlib
 import fnmatch
 import operator
 
-from userinterface import formFrameGen
+from userinterface import newPanelFactory
 
 
 def getWidgetClass(widgetName):
@@ -468,22 +470,23 @@ class settOptionList(baseWidget):
     def xmlDlgWindow(self, tupleSett, isEdit=False, isTree=False):
         header = """<?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <settings>
-    <category label="TCombobox">
+    <category label="TCombobox" lib="%s">
 """
         footer = """    </category>
 </settings>
 """
+        header = header % __name__
         outStr = header
         if not isEdit and isTree:
-            deltaStr = '<text id="{0}" label="Parent Element" default="{1}" enable="false"/>\n'
+            deltaStr = '<ktext id="{0}" label="Parent Element" default="{1}" enable="false"/>\n'
             outStr += 8 * ' ' + deltaStr.format(*tupleSett[0])
-            deltaStr = '<text id="{0}" label="Element Name" default="{1}" />\n'
+            deltaStr = '<ktext id="{0}" label="Element Name" default="{1}" />\n'
             outStr += 8 * ' ' + deltaStr.format(*tupleSett[1])
             tupleSett = tupleSett[2:]
 
-        templateStr = '<text id="{0}" label="{0}" default=""/>\n'
+        templateStr = '<ktext id="{0}" label="{0}" default=""/>\n'
         if isEdit:
-            templateStr = '<text id="{0}" label="{0}" default="{1}"/>\n'
+            templateStr = '<ktext id="{0}" label="{0}" default="{1}"/>\n'
         for x, y in tupleSett:
             deltaStr = templateStr.format(x, y)
             outStr += 8 * ' ' + deltaStr
@@ -881,3 +884,312 @@ class settFragment(baseWidget):
         if options.get('id'):
             self.id = options.get('id').lower()
         tk.Frame(self, name=self.id).pack(side=tk.TOP, fill=tk.BOTH, expand=tk.YES)
+
+
+class formFrame(tk.Frame):
+    '''
+    Clase que entrega un Frame lleno con los widgets definicos en un archivo layout definido.
+    '''
+
+    def __init__(self, master, settings, selPane, formModule=None):
+        '''
+        :param master:      tkinter Form. Padre de la forma a generar.
+        :param settings:    dict. Valores de las variables cuyo valor es difernte
+                            al defaul definido en el layout.
+        :param selPane:     elementtree. Nodo raiz del element tree que define el layout.
+        :param formModule:  module. Modulo que contiene la definición de los widgets.
+                            definidos por el usuario.
+        '''
+        tk.Frame.__init__(self, master)
+        self.settings = settings or {}
+        self.enEquations = {}
+        self.dependents = {}
+        self.widgetMapping = {}
+        self.nameToId = {}
+        self.radioGroups = {}
+
+        self.populateWithSettings(settings, selPane, formModule)
+        pass
+
+    def __getattr__(self, attr):
+        '''
+        Todos los widgets en este container pueden ser referenciados como atributos
+        de la forma "self.widgetname"
+        :param attr: st. Nombre del widget
+        :return: basicWidget instance o None. Widget referenciado o None si no existe.
+        '''
+        if attr in self.__dict__['widgetMapping']:
+            widgetMapping = self.__dict__['widgetMapping']
+            wpath = widgetMapping.get(attr)
+            widget = self.nametowidget(wpath)
+            return widget
+        raise AttributeError("The '%s' form doesn't have an attribute call '%s'" % (self, attr))
+
+    def populateWithSettings(self, settings, selPane, formModule):
+        '''
+        Construye todos los widgets que dependen de este formFrame.
+        :param settings: dict. Valores de los widgets diferentes a los defaults.
+        :param selPane: element tree node. Nodo raiz del cual se desprenden la estructura
+                        del formFrame.
+        :param formModule: module. Contiene las definiciones de todos los widgets deffinidos
+                            por el usuario.
+        :return: None.
+        '''
+        # En este punto se debe incluir la lógica para la visibleEc
+        enableEq = newPanelFactory(self, selPane, genPanelModule=formModule, registerWidget=self.regWidget)[1]
+        self.nameToId = {value.rsplit('.', 1)[-1]: key for key, value in self.widgetMapping.items()}
+        self.category = selPane.get('label')
+        self.registerEc(enableEq)
+        self.setDependantWdgState()
+        self.registerChangeListeners()
+
+    def regWidget(self, xmlwidget, widget):
+        '''
+        Crea un acceso directo al widget procesado por newPanelFactory.
+        :param xmlwidget: element tree node. Representación base para la generación de widget.
+        :param widget: tkinter object. Último widget generado a través de newPanelFactory.
+        :return: None
+        '''
+        if not isinstance(widget, baseWidget):
+            return
+        #Solo se procesan los kodiwidgets.
+        try:
+            key = xmlwidget.attrib.pop('id')
+        except:
+            return
+        try:
+            # Se establece la equivalencia del id asignado y el árbol que lleva a él.
+            # Se registra en el formFrame padre, el id y el widget.
+            # if hasattr(dummy.form, 'form'):
+            widget.form.registerWidget(key, str(widget))
+        except Exception as e:
+            print(str(e))
+        if key in self.settings:
+            # Se actualiza el valor asociado con el widget para los que tengan id.
+            # Se asigna como valor del widget el valor definido en settings.
+            widget.setValue(self.settings[key])
+
+    def setChangeSettings(self, settings):
+        '''
+        Establece el valor asociado a los widgets cuyo valor difiere del default y
+        establece a default el valor de los widgets que no aparecen en settings.
+        :param settings:
+        :return: None.
+        '''
+        form = self
+        mapping = [key for key in self.widgetMapping.keys()
+                   if hasattr(getattr(form, key), 'setValue')]
+        toModify = set(settings.keys()).intersection(mapping)
+        list(map(lambda w: w.setValue(settings[w.id]), self.getWidgets(toModify)))
+        toReset = set(mapping).difference(toModify)
+        list(map(lambda w: w.setValue(w.default), self.getWidgets(toReset)))
+
+    def registerEc(self, enableEquations):
+        '''
+        Preprocesa las enable equations: obtiene forma absoluta, las variables asociadas,
+        y mapea al widget con su correspondiente ecuación absoluta la cual es posible evaluar
+        como una expresión de python.
+        :param enableEquations: str. Equación que establece cuando se habilita un widget
+                                con base al valor o estado de otros en la  forma.
+        :return: None.
+        '''
+        for posWidget, enableEc in enableEquations:
+            enableEc = self.getAbsEcuation(posWidget, enableEc)
+            wVars = list(map(str, self.findVars(enableEc)))
+            assert set(wVars).issubset(self.nameToId), 'The enable equation for "%s" widget' \
+                                                       ' reference a non id widget' \
+                                                       % (self.nameToId[str(posWidget)])
+            for elem in wVars:
+                self.dependents[elem] = self.dependents.get(elem, []) + [str(posWidget)]
+            self.enEquations[str(posWidget)] = enableEc.replace('+', ' and ')
+
+    def getAbsEcuation(self, pos, enableEc):
+        '''
+
+        :param pos: int. Id absoluto del widget al que se quiere asociar la enableEc.
+        :param enableEc: str. Equación que establece cuando se habilita un widget
+                         con base al valor o estado de otros en la  forma.
+        :return: str. Ecuación absoluta porque en la enableEc se integra la "pos" en los
+                 tos en que queda implicita esta.
+        '''
+        for tag in ['eq(', 'lt(', 'gt(']:
+            enableEc = enableEc.replace(tag, tag + '+')
+        enableEc = enableEc.replace('+-', '-').replace('!', 'not ')
+        enableEc = enableEc.replace('true', 'True').replace('false', 'False').replace(',)', ',None)')
+        for tag in ['eq(', 'lt(', 'gt(']:
+            enableEc = enableEc.replace(tag, tag + str(pos))
+        return enableEc
+
+    def findVars(self, enableEc):
+        '''
+
+        :param enableEc: str. Equación que establece cuando se habilita un widget
+                         con base al valor o estado de otros en la  forma.
+        :return: list. Lista widgets ids (enteros) de los cuales depende el estado que a los
+                 que la enableEc se refiere.
+        '''
+        enableEc = enableEc.replace('not ', '').replace('*', '+')
+        eq = lt = gt = lambda x, a: [x]
+        vars = eval(enableEc)
+        try:
+            retval = set(vars)
+        except:
+            retval = []
+        else:
+            retval = list(retval)
+        return retval
+        # return [elem for k, elem in enumerate(vars) if elem not in vars[0:k]]
+
+    def findWidgetState(self, enableEq):
+        '''
+        Evalúa la enableEq para encontrar el widget state.
+        :param enableEq: str. Expresión válida en python.
+        :return: tk.NORMAL o tk.DISABLE.
+        '''
+        eq = lambda x, a: getattr(self, self.nameToId[str(x)]).getValue() == a
+        lt = lambda x, a: getattr(self, self.nameToId[str(x)]).getValue() < a
+        gt = lambda x, a: getattr(self, self.nameToId[str(x)]).getValue() > a
+        state = eval(enableEq) >= 1
+        return tk.NORMAL if state else tk.DISABLED
+
+    def setDependantWdgState(self):
+        '''
+        Establece el estado de los widgets que componen la forma.
+        :return: None.
+        '''
+        for key in sorted(self.enEquations.keys(), key=int):
+            enableEq = self.enEquations[key]
+            calcState = self.findWidgetState(enableEq)
+            widget = getattr(self, self.nameToId[key])
+            try:
+                idKey = widget.id
+                widget.children[idKey].configure(state=calcState)
+            except:
+                pass
+
+    def registerChangeListeners(self):
+        '''
+        Establece como callbak function a self.varChange en todos aquellos widgets que puedan
+        afectar el estado de otros en la forma.
+        :return: None
+        '''
+        for key in self.dependents.keys():
+            widget = getattr(self, self.nameToId[key])
+            widget.setListener(self.varChange)
+
+    def varChange(self, widgetName):
+        '''
+        Callback function que actualiza el estado de los widgets que dependen de widgetName
+        cuando este cambia de valor/estado.
+        :param widgetName: str. Nombre del widget cuyo valor/estado ha cambiado.
+        :return: None.
+        '''
+        for depname in self.dependents[widgetName]:
+            enableEq = self.enEquations[depname]
+            calcState = self.findWidgetState(enableEq)
+            widget = getattr(self, self.nameToId[depname])
+            try:
+                idKey = widget.id
+                widget.children[idKey].configure(state=calcState)
+            except:
+                pass
+
+    def registerWidget(self, wdId, wdPath):
+        '''
+        Mapea el wdId y el camino absoluto del widget.
+        :param wdId: str. Nombre del widget.
+        :param wdPath: str. Camino del widget desde la raiz.
+        :return: None
+        '''
+        self.widgetMapping[wdId.lower()] = wdPath
+
+    def getWidgets(self, widgetsIds=None):
+        '''
+        Lista los todos o algunos de los widgets que componen la forma.
+        :param widgetsIds: list o None. Id de los widgets que se quieren listar o
+                           None si se quieren todos los widgets.
+        :return: list. basicWidgets
+        '''
+        widgetsIds = widgetsIds or self.widgetMapping.keys()
+        return [self.__getattr__(key) for key in widgetsIds]
+
+    def getGroupVar(self, groupName):
+        '''
+        Obtiene la tk.StringVar asociada a un radio grupo determinado.
+        :param groupName: str. Nombre del radio grupo cuya variable se quiere referenciar.
+        :return: tk.StringVar. Variable que tiene el valor asociado cen el groupName.
+        '''
+        return self.radioGroups.setdefault(groupName, tk.StringVar())
+
+    def getGroupValue(self, groupName):
+        '''
+        Obtiene el valor asociado con un radio grupo determinado.
+        :param groupName: str. Nombre del radio grupo cuyo valor se requiere.
+        :return:
+        '''
+        return self.radioGroups[groupName].get()
+
+    def getChangeSettings(self, settings):
+        '''
+        Actualiza los valores que han cambiado en la forma.
+        :param settings: dict. Valores que se quieren actualizar con los valores cambiados.
+        :return: dict. Valores que estando en settings han cambiado en la forma.
+                 Bajo la clave 'reset' entrega los valores que estando en settings han vuelto a
+                 su valro de default.
+        '''
+        changedSettings = dict(reset=[])
+        for child in self.getWidgets():
+            try:
+                flag = child.isValueSetToDefault()
+            except:
+                pass
+            else:
+                key, value = child.getSettingPair()
+                if not flag:
+                    changedSettings[key] = value
+                elif key and key in settings:
+                    changedSettings['reset'].append(key)
+        filterFlag = lambda key: (key not in settings or settings[key] != changedSettings[key])
+        toProcess = dict([(key, value) for key, value in changedSettings.items() if filterFlag(key)])
+        return toProcess
+
+
+def formFrameGen(master, filename=None, selPane=None, settings=None):
+    '''
+    Identifica la librería que se utiliza para generar los widgets que conforman la form.
+    :param master: tkinter Frame que actuara como padre de la forma.
+    :param settings: dict. Valores diferentes a default para las variables de la forma.
+    :param selPane: ElementTreee. Nodo raiz del element tree que traduce el layout.
+    :return: formFrame or object define in user library.
+    '''
+    if not any((filename, selPane)):
+        raise AttributeError('You must specify filename or selPane')
+    if filename:
+        with open(filename, 'rb') as f:
+            xmlstr = f.read()
+        selPane = ET.XML(xmlstr).find('category')
+    if isinstance(selPane, (bytes, str)):
+        selPane = ET.XML(selPane).find('category')
+
+    formclass = formFrame
+    formModule = None
+    if selPane.get('lib'):
+        libname = selPane.get('lib')
+        try:
+            parentname = re.match(r'(\.0x[0-9a-f]+)\.?', str(master))
+            baseframe = master.nametowidget(parentname.group(1))
+        except:
+            pckname = master.__module__.rsplit('.', 1)[0]
+        else:
+            pckname = baseframe.droidInstance.__module__.rsplit('.', 1)[0]
+        formModule = importlib.import_module(libname, pckname)
+        classname = selPane.get('label').title().replace(' ', '')
+        try:
+            formClass = getattr(formModule, classname)
+        except:
+            pass
+        else:
+            if issubclass(formClass, formFrame):
+                formclass = formClass
+
+    return formclass(master, settings, selPane, None)
