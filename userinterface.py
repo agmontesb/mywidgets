@@ -9,8 +9,16 @@ import xml.etree.ElementTree as ET
 
 
 pack_params = ["after", "anchor", "before", "expand", "fill", "in", "ipadx", "ipady", "padx", "pady", "side"]
-grid_paprams = ["column", "columnspan", "in_", "ipadx", "ipady", "padx", "pady", "row", "rowspan", "sticky"]
-place_params = ["anchor", "bordermode", "height", "in", "relheight", "relx", "rely", "width", "x", "y"]
+grid_params = ["column", "columnspan", "in_", "ipadx", "ipady", "padx", "pady", "row", "rowspan", "sticky"]
+place_params = ["anchor", "bordermode", "height", "in", "relheight", "relwidth", "relx", "rely", "width", "x", "y"]
+
+def findGeometricManager(tag):
+    if tag == 'grid':
+        return grid_params
+    if tag == 'place':
+        return place_params
+    return pack_params
+
 
 
 def getWidgetInstance(master, widgetname, attributes, panelModule=None):
@@ -38,20 +46,14 @@ def getWidgetInstance(master, widgetname, attributes, panelModule=None):
         # ERROR: No se encontró definición del widget
         raise AttributeError(f'{widgetname} is not a tkinter widget or a user defined class. ')
 
-    pack_keys = attributes.keys() & pack_params
-    pack_opt = {key: attributes.pop(key) for key in pack_keys}
+    # pack_keys = attributes.keys() & pack_params
+    # pack_opt = {key: attributes.pop(key) for key in pack_keys}
 
-    # config_opt = {key: attributes.pop(key) for key in ('name', ) if key in attributes}
-    # widget = widgetClass(master, **config_opt)
-    # widget_attr = widget.configure()
-    # config_keys = attributes.keys() & widget_attr.keys()
-    # config_opt = {key: attributes.pop(key) for key in config_keys}
-    # widget.configure(**config_opt)
     widget = widgetClass(master, **attributes)
 
-    if 'in' in pack_opt and isinstance(pack_opt['in'], (bytes, str)):
-        pack_opt['in_'] = widget.winfo_parent() + pack_opt.pop('in')
-    widget.pack(**pack_opt)
+    # if 'in' in pack_opt and isinstance(pack_opt['in'], (bytes, str)):
+    #     pack_opt['in_'] = widget.winfo_parent() + pack_opt.pop('in')
+    # widget.pack(**pack_opt)
 
     return widget
 
@@ -85,6 +87,7 @@ def widgetFactory(master, settings, selPane, panelModule=None, k=-1):
         panelModule.append((kini, tk))
     enableEc = []
     visibleEc = []
+    geometric_manager = selPane.get('geomanager', 'pack')
     for xmlwidget in selPane:
         k += 1
         isContainer = bool(len(xmlwidget.getchildren()))
@@ -96,6 +99,8 @@ def widgetFactory(master, settings, selPane, panelModule=None, k=-1):
             id = options.pop('id').split('/')[-1]
         except KeyError:
             id = None
+
+        options.pop('geomanager', None)
 
         # Se almacena en enableEc la ecuación que habilita el widget.
         try:
@@ -119,7 +124,15 @@ def widgetFactory(master, settings, selPane, panelModule=None, k=-1):
             module = importlib.import_module(module_path, __package__)
             panelModule.append((kini, module))
 
+        geomngr_params = findGeometricManager(geometric_manager)
+        geomngr_keys = options.keys() & geomngr_params
+        geomngr_opt = {key: options.pop(key) for key in geomngr_keys}
+
         dummy = getWidgetInstance(master, wType, options, panelModule=panelModule)
+
+        if 'in' in geomngr_opt and isinstance(geomngr_opt['in'], (bytes, str)):
+            geomngr_opt['in_'] = dummy.winfo_parent() + geomngr_opt.pop('in')
+        getattr(dummy, geometric_manager)(**geomngr_opt)
 
         if bflag:
             panelModule.pop()

@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<settings>
+    <category label="Grid Manager">
+        <labelframe text="Grid" geomanager="grid" side="top" fill="both" expand="yes">
+            <label text="Username" column="0" row="0" sticky="w" padx="5" pady="5" />
+            <entry column="1" row="0" sticky="e" padx="5" pady="5" />
+            <label text="Password" column="0" row="1" sticky="w" padx="5" pady="5" />
+            <entry show="*"  column="1" row="1" sticky="e" padx="5" pady="5" />
+            <button text="Login"  column="1" row="3" sticky="e" padx="5" pady="5" />
+        </labelframe>
+    </category>
+    <category label="Place Manager" geomanager="grid">
+        <labelframe text="Relative Position" bg="navy" height="200" width="200" geomanager="place" row="0" column="0">
+            <label text="relx=0, rely=0" relx="0" rely="0" />
+            <label text="relx=0.4, rely=0.6" relx="0.4" rely="0.6" />
+            <label text="relx=1, rely=1" relx="1" rely="1" />
+        </labelframe>
+        <labelframe text="Centering" bg="navy" height="200" width="200" geomanager="place" row="1" column="0">
+            <label text="I am centered.. Omm" relx="0.5" rely="0.5" anchor="center"/>
+        </labelframe>
+        <labelframe text="Size" bg="navy" height="200" width="200" geomanager="place" row="0" column="1">
+            <label text="height=100\nwidth=100\n\nframe is\n200x200" relx="0.5" rely="0.5" anchor="center"/>
+        </labelframe>
+        <labelframe text="Relative Sizing" bg="navy" height="200" width="200" geomanager="place" row="1" column="1">
+            <label text="relheight=0.4\nrelwidth=0.7\n\nframe is\n200x200" relheight="0.4" relwidth="0.7" relx="0.5" rely="0.5" anchor="center"/>
+        </labelframe>
+    </category>
+</settings>
