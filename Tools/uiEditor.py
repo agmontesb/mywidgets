@@ -1,6 +1,7 @@
 import collections
 import importlib
 import os
+import re
 import tkinter as tk
 import tkinter.messagebox as tkMessageBox
 import tkinter.filedialog as tkFileDialog
@@ -8,8 +9,12 @@ import xml.etree.ElementTree as ET
 
 from Widgets.Custom import CollapsingFrame, SintaxEditor
 from userinterface import getWidgetInstance, widgetFactory
-from Widgets.kodiwidgets import formFrameGen
+from Widgets.kodiwidgets import formFrameGen, CustomDialog
 from TreeExplorer import TreeForm
+
+# Este es una especie de manejador de recursos que quiero implementar
+R = type('Erre', (object, ), {})
+
 
 class UIeditor(tk.Toplevel):
     def __init__(self):
@@ -90,13 +95,28 @@ class UIeditor(tk.Toplevel):
 
     def setUpPaneCtrls(self):
         m1 = self.vPaneWindow
-        self.testFrame = CollapsingFrame.collapsingFrame(m1, tk.VERTICAL, inisplit=0.2, buttconf='RM')
+        self.ui_view = tk.Frame(m1, name='ui_view', bg='grey')
         self.codeFrame = SintaxEditor.SintaxEditor(m1, hrzslider=True)
         self.codeFrame.textw.bind(
             '<<Modified>>',
             self.onXmlTextModified
         )
 
+        widgetParams = formFrameGen(
+            self.ui_view,
+            filename=os.path.join('../data/kodi/', 'WidgetParams.xml')
+        )
+        widgetParams.pack(side=tk.RIGHT, fill=tk.Y, expand=tk.YES, anchor=tk.E)
+        widgetParams.widget_attrs.bind('<<OptionList_Edit>>', self.doOptionListEdit)
+
+        self.testFrame = CollapsingFrame.collapsingFrame(
+            self.ui_view,
+            tk.VERTICAL,
+            inisplit=0.2,
+            buttconf='RM',
+            bg='yellow'
+        )
+        self.testFrame.pack(side=tk.LEFT, fill=tk.BOTH, expand=tk.YES)
         ui_pane = self.testFrame.frstWidget
         tform = TreeForm(ui_pane)
         tform.setChangeListener(self.treeChangeListener)
@@ -106,14 +126,75 @@ class UIeditor(tk.Toplevel):
         tform.pack(side=tk.TOP, fill=tk.Y, expand=tk.YES)
 
         ui_pane = self.testFrame.scndWidget
-        formFrameGen(
-            ui_pane,
-            filename=os.path.join('../data/kodi/', 'WidgetParams.xml')
-        ).pack(side=tk.RIGHT, fill=tk.Y, expand=tk.YES)
         tk.Frame(ui_pane).pack()
 
-        self.avRightPanes = [self.codeFrame, self.testFrame]
+        # Para saber en que punto hizo click el mouse:
+        self.bind_all('<1>', self.monitorMouseClick)
+
+        self.avRightPanes = [self.codeFrame, self.ui_view]
         self.viewPanes = [('XML', 0), ('UI', 1)]
+
+    def doOptionListEdit(self, event):
+        widget = event.widget
+        event_data = widget.virtualEventData
+        # Se actualiza el widget Seleccionado segú la modificación dada
+        name = self.treeSelectAct[0]
+        obj = self.nametowidget(name)
+        if event_data[0] == 'config':
+            kwargs = {event_data[1]: event_data[2][0]}
+            obj.config(**kwargs)
+        # Se actualiza la información en el file tree que describe el formato.
+        nodeid = obj.winfo_name()
+        tform = self.testFrame.frstWidget.winfo_children()[0]
+        values = eval(tform.treeview.item(nodeid, 'values')[1])
+        values[event_data[1]] = event_data[2][0]
+        tform.treeview.item(nodeid, values=(name, str(values)))
+        self.setSaveFlag(True)
+
+    def xmlTreeRep(self):
+        xml_str = '<?xml version="1.0" encoding="utf-8" standalone="yes"?>\n<setting>\n'
+        tform = self.testFrame.frstWidget.winfo_children()[0]
+        treeview = tform.treeview
+        to_process = collections.deque()
+        indent_stack = [('', 'setting')]
+        to_process.extend(treeview.get_children())
+        while to_process:
+            nodeid = to_process.popleft()
+            attribs = eval(treeview.item(nodeid, 'values')[1])
+            tag = attribs.pop('tag')
+            attribs = ' '.join(f'{key}="{value}"' for key, value in attribs.items())
+            parentid = treeview.parent(nodeid)
+            children = treeview.get_children(nodeid)
+            if children:
+                to_process.extendleft(reversed(children))
+                end_str = '>'
+            else:
+                end_str = '/>'
+            while parentid != indent_stack[-1][0]:
+                _, end_tag = indent_stack.pop()
+                xml_str += f'{len(indent_stack) * "    "}</{end_tag}>\n'
+            xml_str += f'{len(indent_stack) * "    "}<{tag} {attribs}{end_str}\n'
+            if end_str == '>':
+                indent_stack.append((nodeid, tag))
+        while indent_stack:
+            _, end_tag = indent_stack.pop()
+            xml_str += f'{len(indent_stack) * "    "}</{end_tag}>\n'
+        return xml_str
+
+    def monitorMouseClick(self, event):
+        widget = event.widget
+        if 'collapsingframe.scndwidget' in str(widget):
+            tform = self.testFrame.frstWidget.winfo_children()[0]
+            while True:
+                name = widget.winfo_name()
+                if tform.treeview.exists(name):
+                    break
+                widget = widget.master
+            # Nos aseguramos que el widget seleccionado obtenga el foco
+            tform.treeview.focus(name)
+            tform.treeview.selection_set(name)
+            pass
+        pass
 
     def setActiveView(self, *args, **kwargs):
         self.actViewPane = activeView = self.activeViewIndx.get()
@@ -184,7 +265,7 @@ class UIeditor(tk.Toplevel):
                     )
                 self.menuBar['File'].add('separator')
             self.menuBar['File'].add('command', label='Settings', accelerator='Ctrl+S',
-                                             underline=0, command=self.dummyCommand)
+                                             underline=0, command=self.programSettingDialog)
             self.menuBar['File'].add('command', label='Close', accelerator='Alt+Q',
                                              underline=0, command=self.Close)
 
@@ -224,11 +305,28 @@ class UIeditor(tk.Toplevel):
 
     def newFile(self, fileName='', xmlstr=None, panel=None):
         initial_path = os.path.abspath('../data/tkinter')
-        # default_name = os.path.join(initial_path, 'LayoutDefault.xml')
-        default_name = os.path.join(initial_path, 'tkUiEditor.xml')
+        default_name = os.path.join(initial_path, 'LayoutDefault.xml')
+        # default_name = os.path.join(initial_path, 'tkUiEditor.xml')
         self.__openFile(name=default_name)
 
-    def doTreeviewSelect(self, event):
+    def programSettingDialog(self):
+        file_name = '/mnt/c/Users/Alex Montes/PycharmProjects/mywidgets/Data/kodi/uiEditorSettings.xml'
+        with open(file_name, 'rb') as f:
+            file_content = f.read()
+        settingObj = CustomDialog(self, title='Application Settings', xmlFile=file_content, isFile=True, settings={})
+        all_settings = settingObj.allSettings
+        for key, value in all_settings:
+            setattr(R, key, value)
+        R.__dict__.update(all_settings)
+
+        print(R.initial_path)
+        # settingObj = AppSettingDialog(self, 'IDE_Settings.xml', settings = nonDefParam, title = 'IDE General Settings')
+        # self.ideSettings.setNonDefaultParams(settingObj.result)
+        # if settingObj.applySelected:
+        #     self.ideSettings.save()
+        #     self.processModIdeSettings(settingObj.applySelected)
+
+    def doTreeviewSelect(self, event=None):
         top_widget = self.testFrame.scndWidget
         try:
             prevNodeId, prevNodeColor = self.treeFocusAct
@@ -239,7 +337,8 @@ class UIeditor(tk.Toplevel):
             frame_old = prevNodeId.split('scndwidget.', 1)[1].split('.', 1)[0]
             widget.config(bg=prevNodeColor)
 
-        treeview = event.widget
+        tform = self.testFrame.frstWidget.winfo_children()[0]
+        treeview = tform.treeview
         nodeid = treeview.focus()
         values = treeview.item(nodeid, 'values')
         try:
@@ -261,11 +360,12 @@ class UIeditor(tk.Toplevel):
 
     def treeChangeListener(self, prevNode, actualNode):
         top_widget = self.testFrame.scndWidget
-        wattr = top_widget.winfo_children()[0]
         tform = self.testFrame.frstWidget.winfo_children()[0]
-        # wattr, fframe = ui_pane.winfo_children()
         colour = self.treeSelectAct[1] if self.treeSelectAct else '#d9d9d9'
-        for nodeid, bgcolor in zip((prevNode, actualNode), (colour, 'light green')):
+        pairs = [(prevNode, colour), (actualNode, 'light green')]
+        # if self.treeSelectAct and self.treeSelectAct[0] == self.treeFocusAct[0]:
+        #     pairs = pairs[:1]
+        for nodeid, bgcolor in pairs:
             try:
                 path, values = tform.treeview.item(nodeid, 'values')
                 nodeid = path
@@ -278,9 +378,56 @@ class UIeditor(tk.Toplevel):
                 node_colour = widget.cget('bg') if bflag else self.treeFocusAct[1]
                 self.treeSelectAct = (nodeid, node_colour)
                 widget.config(bg=bgcolor)
-                getattr(wattr, 'widget_tag').setValue(values.pop('tag'))
-                value = '#'. join(['*'.join((x, str(y))) for x, y in sorted(values.items())])
-                getattr(wattr, 'widget_attrs').setValue(value, sep=('#', '*'))
+
+        parameters = self.getWidgetParams(widget)
+        wattr = self.ui_view.winfo_children()[0]
+        getattr(wattr, 'widget_attrs').setValue(parameters, sep=('|', '*'))
+        # wattr = self.ui_view.winfo_children()[0]
+        # getattr(wattr, 'widget_tag').setValue(values.pop('tag'))
+        # value = '#'. join(['*'.join((x, str(y))) for x, y in sorted(values.items())])
+        # getattr(wattr, 'widget_attrs').setValue(value, sep=('#', '*'))
+
+    def getWidgetParams(self, widget):
+        '''
+        Obtiene los parámetros de configuración y geomanager del widget "name"
+        :param widget: tkinter obj. Widget a procesar
+        :return: dict. Diccionario con dos keys, una configure y la otra geomanager.
+        '''
+        master = widget.master
+        tform = self.testFrame.frstWidget.winfo_children()[0]
+        path, values = tform.treeview.item(master.winfo_name(), 'values')
+        m = re.search("'geomanager': '([a-z]+?)'", values)
+        if m:
+            geo_info = f'{m.group(1)}_info'
+        else:
+            geo_info = 'pack_info'
+        geomanager = getattr(widget,geo_info)()
+        config = {}
+        for param, values in widget.configure().items():
+            try:
+                _, _, _, _, value = values
+            except:
+                continue
+            config[param] = value
+        parameters = {}
+        parameters['config'] = config
+        parameters[geo_info] = geomanager
+
+        seq = -1
+        bdParams = []
+        for key, params in parameters.items():
+            seq += 1
+            node_id = f'ND{seq}'
+            bdParams.append(('', node_id, key))
+            for param, value in params.items():
+                seq += 1
+                bdParams.append((node_id, f'ND{seq}', param, value))
+        value = '|'. join(['*'.join(str(y) for y in x) for x in bdParams])
+        return value
+
+
+
+
 
     def saveFile(self):
         nameFile = self.currentFile
@@ -361,6 +508,7 @@ class UIeditor(tk.Toplevel):
         try:
             panel = ET.XML(xmlstr)
             self.newSetupForms(panel, tform, ui_pane)
+            self.xmlTreeRep()
         except Exception as e:
             tk.Label(ui_pane, text=str(e)).pack()
         else:

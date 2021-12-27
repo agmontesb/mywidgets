@@ -428,6 +428,7 @@ class settOptionList(baseWidget):
         baseWidget.__init__(self, master, varType='string', name=wdgName, id=options.get('id', ''))
         self.setGUI(options)
         self.name = wdgName
+        self.virtualEventData = None
 
     def setGUI(self, options):
         settSep(self, name='label', type='lsep', label=options.get('label'))
@@ -465,7 +466,8 @@ class settOptionList(baseWidget):
         boton = ttk.Button(bFrame, text='Del', width=15, command=self.onDel)
         boton.pack(side=tk.RIGHT)
 
-        self.setValue(self.default)
+        separator = tuple(options.get('separator', '|,'))
+        self.setValue(self.default, sep=separator)
 
     def xmlDlgWindow(self, tupleSett, isEdit=False, isTree=False):
         header = """<?xml version="1.0" encoding="utf-8" standalone="yes"?>
@@ -526,7 +528,9 @@ class settOptionList(baseWidget):
             record = [result[col].strip() for col in columnsId]
             for k, col in enumerate(columnsId):
                 self.tree.set(iid, col, record[k])
-                self.event_generate('<<OL_Edit>>', when='tail', data=f"{iid} {col} {record[k]}")
+            piid = self.tree.parent(iid)
+            self.virtualEventData = (self.tree.item(piid, 'text'), self.tree.item(iid, 'text'), record)
+            self.event_generate('<<OptionList_Edit>>', when='tail')
 
     def onDel(self):
         iid = self.tree.focus()

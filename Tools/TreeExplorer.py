@@ -80,7 +80,8 @@ class FilteredTree(tk.Frame):
             self.treeview.move(node, parent, index)
         srchTxt = self.srchVar.get()
         allNodes = self.getAllNodes()
-        for nodeId, nodeText in allNodes: self.treeview.item(nodeId, open=False)
+        for nodeId, nodeText in allNodes:
+            self.treeview.item(nodeId, open=False)
         for nodeId, nodeText in allNodes:
             fltrTest = self.treeview.item(nodeId, 'open') or nodeText.find(srchTxt) != -1
             self.treeview.item(nodeId, open=fltrTest)

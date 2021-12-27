@@ -44,14 +44,11 @@ def getWidgetInstance(master, widgetname, attributes, panelModule=None):
         # ERROR: No se encontró definición del widget
         raise AttributeError(f'{widgetname} is not a tkinter widget or a user defined class. ')
 
-    # pack_keys = attributes.keys() & pack_params
-    # pack_opt = {key: attributes.pop(key) for key in pack_keys}
-
+    # En este punto se tiene un parche para no romper con los Kodiwidgets que utilizan
+    # el attributo 'id' y que desactivan algunas características dependiendo si tienen id o no.
+    if module.__name__ == 'Widgets.kodiwidgets':
+        attributes.pop(id, None)
     widget = widgetClass(master, **attributes)
-
-    # if 'in' in pack_opt and isinstance(pack_opt['in'], (bytes, str)):
-    #     pack_opt['in_'] = widget.winfo_parent() + pack_opt.pop('in')
-    # widget.pack(**pack_opt)
 
     return widget
 
@@ -94,27 +91,20 @@ def widgetFactory(master, selPane, panelModule=None, registerWidget=None, k=-1):
         options = dict.copy(xmlwidget.attrib)
         options.setdefault('name', str(k))    # Se asigna el consecutivo como nombre del widget.
 
-        try:
-            # Se asigna como id del widget el último segmento del id definido.
-            id = options.pop('id').split('/')[-1]
-        except KeyError:
-            id = None
+        # Se asigna como id del widget el último segmento del id definido.
+        id = options.get('id', '').rsplit('/')[-1]
 
         options.pop('geomanager', None)
 
         # Se almacena en enableEc la ecuación que habilita el widget.
-        try:
-            enable = options.pop('enable')
+        enable = options.pop('enable', None)
+        if enable:
             enableEc.append((k, enable))
-        except KeyError:
-            enable = None
 
         # Se almacena en visibleEc la ecuación que hace visible el widget.
-        try:
-            visible = options.pop('visible')
+        visible = options.pop('visible', None)
+        if visible:
             visibleEc.append((k, visible))
-        except KeyError:
-            visible = None
 
         wType = xmlwidget.tag
         bflag = 'lib' in options

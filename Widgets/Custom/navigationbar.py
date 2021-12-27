@@ -47,6 +47,7 @@ class NavigationBar(tk.Canvas):
             except:
                 pfocus = None
             self.set_active_index(pfocus)
+            self.do_popup(event)
 
     def setGui(self):
         # self = canvas = tk.Canvas(self)

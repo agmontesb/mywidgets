@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <settings>
     <category label="Category uno">
-        <labelframe text="Widgets Parameters" labelanchor="ne" geometry="pack" fill="both" expand="true">
-            <button text="Boton" geometry="pack" side="left" />
-            <label text="Label" geometry="pack" side="left" />
+        <labelframe text="Widgets Parameters" labelanchor="ne" fill="both" expand="true">
+            <button text="Boton" side="top" />
+            <label text="Label"  side="top" />
         </labelframe>
     </category>
 </settings>

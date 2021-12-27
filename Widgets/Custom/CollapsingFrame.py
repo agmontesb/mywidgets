@@ -17,12 +17,11 @@ class collapsingFrame(tk.Frame):
 
         self.bind('<Configure>', self.cframe_configure, add='+')
         self.bandRelDim = 0
-        self.frstWidget = tk.Frame(self, name='frstwidget', width=200, height=200)
-        self.scndWidget = tk.Frame(self, name='scndwidget', width=200, height=200)
+        self.frstWidget = tk.Frame(self, name='frstwidget')
+        self.scndWidget = tk.Frame(self, name='scndwidget')
         self.band = None
 
         self.configure(orientation=orientation, inisplit=inisplit, buttconf=buttconf)
-
 
     def configure(self, **genkwargs):
         if not genkwargs:

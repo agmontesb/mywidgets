@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<settings>
+    <category label="TCombobox" lib="Widgets.kodiwidgets">
+        <ktext id="Attribute" label="Attribute" default="text"/>
+        <ktext id="Value" label="Value" default="Username"/>
+    </category>
+</settings>
