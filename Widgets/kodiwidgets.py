@@ -361,7 +361,9 @@ class CustomDialog(tkSimpleDialog.Dialog):
         # import xmlFileWrapper
         self.allSettings = None
         self.settings = settings = settings or {}
-        # self.ads = xmlFileWrapper.xmlFileWrapper(xmlFile, isFile=isFile, nonDefaultValues=settings)
+        if isFile:
+            with open(xmlFile, 'rb') as f:
+                xmlFile = f.read()
         self.ads = xmlFile
         tkSimpleDialog.Dialog.__init__(self, master, title)
 

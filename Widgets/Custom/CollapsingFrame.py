@@ -17,11 +17,12 @@ class collapsingFrame(tk.Frame):
 
         self.bind('<Configure>', self.cframe_configure, add='+')
         self.bandRelDim = 0
-        self.frstWidget = tk.Frame(self, name='frstwidget')
-        self.scndWidget = tk.Frame(self, name='scndwidget')
+        self.frstWidget = tk.Frame(self, name='frstwidget', bg='blue')
+        self.scndWidget = tk.Frame(self, name='scndwidget', bg='green')
         self.band = None
 
         self.configure(orientation=orientation, inisplit=inisplit, buttconf=buttconf)
+        pass
 
     def configure(self, **genkwargs):
         if not genkwargs:
@@ -102,14 +103,19 @@ class collapsingFrame(tk.Frame):
         boton['image'] = self.buttIcon[btnTxt]
         boton['command'] = lambda:self.comButton(boton['text'])
 
-    def trn(self,**kwargs):
-        if self.orientation == tk.HORIZONTAL: return kwargs
+    def trn(self, **kwargs):
+        if self.orientation == tk.HORIZONTAL:
+            return kwargs
         answer = {}
         for k in kwargs:
-            if k.endswith('x'): newK = k[:-1] + 'y'
-            elif k.endswith('y'): newK = k[:-1] + 'x'
-            elif k.endswith('width'): newK = k.replace('width', 'height')
-            elif k.endswith('height'): newK = k.replace('height', 'width')
+            if k.endswith('x'):
+                newK = k[:-1] + 'y'
+            elif k.endswith('y'):
+                newK = k[:-1] + 'x'
+            elif k.endswith('width'):
+                newK = k.replace('width', 'height')
+            elif k.endswith('height'):
+                newK = k.replace('height', 'width')
             else: newK = k
             answer[newK] = kwargs[k]
         return answer

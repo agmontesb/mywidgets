@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<settings>
+    <category label="Insert Widget Dialog" lib="Widgets.kodiwidgets">
+        <ktext id="lib" label="Library: " default=""/>
+        <ktext id="widget" label="Widget Class" default="label"/>
+        <ktext id="parameters" label="Parameters: " default=""/>
+    </category>
+</settings>

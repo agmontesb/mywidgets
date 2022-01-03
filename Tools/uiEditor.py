@@ -1,16 +1,15 @@
 import collections
 import importlib
 import os
-import re
 import tkinter as tk
 import tkinter.messagebox as tkMessageBox
 import tkinter.filedialog as tkFileDialog
 import xml.etree.ElementTree as ET
 
 from Widgets.Custom import CollapsingFrame, SintaxEditor
-from userinterface import getWidgetInstance, widgetFactory
+from userinterface import getWidgetInstance, widgetFactory, findGeometricManager
 from Widgets.kodiwidgets import formFrameGen, CustomDialog
-from TreeExplorer import TreeForm
+from Tools.WidgetsExplorer import WidgetExplorer
 
 # Este es una especie de manejador de recursos que quiero implementar
 R = type('Erre', (object, ), {})
@@ -25,6 +24,7 @@ class UIeditor(tk.Toplevel):
         self.fileHistory = []
         self.treeFocusAct = None
         self.treeSelectAct = None
+        self.seg = -1
 
         self.setGUI()
         self.newFile()
@@ -90,12 +90,12 @@ class UIeditor(tk.Toplevel):
             menubutton.config(menu=self.menuBar[elem])
 
     def onXmlTextModified(self, event):
-        if self.codeFrame.textw.edit_modified():
+        if event.widget.edit_modified():
             self.setSaveFlag(True)
 
     def setUpPaneCtrls(self):
         m1 = self.vPaneWindow
-        self.ui_view = tk.Frame(m1, name='ui_view', bg='grey')
+        self.ui_view = tk.Frame(m1, name='ui_view')
         self.codeFrame = SintaxEditor.SintaxEditor(m1, hrzslider=True)
         self.codeFrame.textw.bind(
             '<<Modified>>',
@@ -114,85 +114,106 @@ class UIeditor(tk.Toplevel):
             tk.VERTICAL,
             inisplit=0.2,
             buttconf='RM',
-            bg='yellow'
+            bg='yellow',
         )
-        self.testFrame.pack(side=tk.LEFT, fill=tk.BOTH, expand=tk.YES)
+        self.testFrame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=tk.YES)
+        self.testFrame.pack_propagate(0)
         ui_pane = self.testFrame.frstWidget
-        tform = TreeForm(ui_pane)
-        tform.setChangeListener(self.treeChangeListener)
-        # Esto me parece una salvajada pero va como inicio de concepto
-        tform.treeview.bind('<<TreeviewSelect>>', self.doTreeviewSelect)
-        # tform.refreshPaneInfo()
-        tform.pack(side=tk.TOP, fill=tk.Y, expand=tk.YES)
+        self.treeview = treeview = WidgetExplorer(ui_pane)
+        treeview.bind('<<ActiveSelection>>', self.onTreeActiveSelection)
+        treeview.bind('<<TreeviewSelect>>', self.doTreeviewSelect)
+        treeview.bind(
+            '<<Modified>>',
+            self.onXmlTextModified
+        )
+        treeview.bind('<Button-3>', self.do_popup)
+        treeview.bind("<ButtonRelease-1>", lambda event: self.modifyTree(event, 'Move'), add='+')
+        treeview.pack(side=tk.TOP, fill=tk.BOTH, expand=tk.YES)
 
-        ui_pane = self.testFrame.scndWidget
+        self.parent_frame = ui_pane = self.testFrame.scndWidget
         tk.Frame(ui_pane).pack()
 
         # Para saber en que punto hizo click el mouse:
-        self.bind_all('<1>', self.monitorMouseClick)
+        self.bind_all('<Button-1>', self.monitorMouseClick)
 
         self.avRightPanes = [self.codeFrame, self.ui_view]
         self.viewPanes = [('XML', 0), ('UI', 1)]
 
     def doOptionListEdit(self, event):
         widget = event.widget
-        event_data = widget.virtualEventData
+        str_command, attr_key, (attr_value, ) = widget.virtualEventData
         # Se actualiza el widget Seleccionado segú la modificación dada
+        if self.treeSelectAct is None:
+            return
         name = self.treeSelectAct[0]
-        obj = self.nametowidget(name)
-        if event_data[0] == 'config':
-            kwargs = {event_data[1]: event_data[2][0]}
-            obj.config(**kwargs)
+        active_widget = self.nametowidget(name)
+        treeview = self.treeview
+        if str_command == 'config':
+            kwargs = {attr_key: attr_value}
+            active_widget.config(**kwargs)
+        elif str_command == widget.winfo_manager():
+            geo_info = getattr(active_widget, f'{str_command}_info')()
+            geo_info[attr_key] = attr_value
+            if str_command == 'pack':
+                # Averiguamos la posición del widget en la configuración original
+                next_widget = treeview.next(active_widget.winfo_name())
+                if next_widget:   # El widget a tratar no es el último de los hijos a re geolocalizar
+                    next_widget = treeview.item(next_widget, 'values')[0]
+                    geo_info['before'] = next_widget
+                    pass
+            getattr(active_widget, str_command)(**geo_info)
+            pass
+
         # Se actualiza la información en el file tree que describe el formato.
-        nodeid = obj.winfo_name()
-        tform = self.testFrame.frstWidget.winfo_children()[0]
-        values = eval(tform.treeview.item(nodeid, 'values')[1])
-        values[event_data[1]] = event_data[2][0]
-        tform.treeview.item(nodeid, values=(name, str(values)))
+        nodeid = active_widget.winfo_name()
+        values = eval(treeview.item(nodeid, 'values')[1])
+        values[attr_key] = attr_value
+        treeview.item(nodeid, values=(name, str(values)))
         self.setSaveFlag(True)
 
-    def xmlTreeRep(self):
-        xml_str = '<?xml version="1.0" encoding="utf-8" standalone="yes"?>\n<setting>\n'
-        tform = self.testFrame.frstWidget.winfo_children()[0]
-        treeview = tform.treeview
-        to_process = collections.deque()
-        indent_stack = [('', 'setting')]
-        to_process.extend(treeview.get_children())
-        while to_process:
-            nodeid = to_process.popleft()
-            attribs = eval(treeview.item(nodeid, 'values')[1])
-            tag = attribs.pop('tag')
-            attribs = ' '.join(f'{key}="{value}"' for key, value in attribs.items())
-            parentid = treeview.parent(nodeid)
-            children = treeview.get_children(nodeid)
-            if children:
-                to_process.extendleft(reversed(children))
-                end_str = '>'
-            else:
-                end_str = '/>'
-            while parentid != indent_stack[-1][0]:
-                _, end_tag = indent_stack.pop()
-                xml_str += f'{len(indent_stack) * "    "}</{end_tag}>\n'
-            xml_str += f'{len(indent_stack) * "    "}<{tag} {attribs}{end_str}\n'
-            if end_str == '>':
-                indent_stack.append((nodeid, tag))
-        while indent_stack:
-            _, end_tag = indent_stack.pop()
-            xml_str += f'{len(indent_stack) * "    "}</{end_tag}>\n'
-        return xml_str
+    # def xmlTreeRep(self):
+    #     xml_str = '<?xml version="1.0" encoding="utf-8" standalone="yes"?>\n<setting>\n'
+    #     treeview = self.treeview
+    #     to_process = collections.deque()
+    #     indent_stack = [('', 'setting')]
+    #     to_process.extend(treeview.get_children())
+    #     while to_process:
+    #         nodeid = to_process.popleft()
+    #         attribs = eval(treeview.item(nodeid, 'values')[1])
+    #         tag = attribs.pop('tag')
+    #         attribs = ' '.join(f'{key}="{value}"' for key, value in attribs.items())
+    #         parentid = treeview.parent(nodeid)
+    #         children = treeview.get_children(nodeid)
+    #         if children:
+    #             to_process.extendleft(reversed(children))
+    #             end_str = '>'
+    #         else:
+    #             end_str = '/>'
+    #         while parentid != indent_stack[-1][0]:
+    #             _, end_tag = indent_stack.pop()
+    #             xml_str += f'{len(indent_stack) * "    "}</{end_tag}>\n'
+    #         xml_str += f'{len(indent_stack) * "    "}<{tag} {attribs}{end_str}\n'
+    #         if end_str == '>':
+    #             indent_stack.append((nodeid, tag))
+    #     while indent_stack:
+    #         _, end_tag = indent_stack.pop()
+    #         xml_str += f'{len(indent_stack) * "    "}</{end_tag}>\n'
+    #     return xml_str
 
     def monitorMouseClick(self, event):
         widget = event.widget
         if 'collapsingframe.scndwidget' in str(widget):
-            tform = self.testFrame.frstWidget.winfo_children()[0]
+            treeview = self.treeview
             while True:
                 name = widget.winfo_name()
-                if tform.treeview.exists(name):
+                if treeview.exists(name):
                     break
                 widget = widget.master
             # Nos aseguramos que el widget seleccionado obtenga el foco
-            tform.treeview.focus(name)
-            tform.treeview.selection_set(name)
+            # treeview.focus_set()
+            treeview.focus(name)
+            treeview.selection_set(name)
+            treeview.see(name)
             pass
         pass
 
@@ -204,9 +225,14 @@ class UIeditor(tk.Toplevel):
         if rightPaneIndx == vwRightPane:
             return
         self.setRightPane(vwRightPane)
-        if vwRightPane == 1 and self.codeFrame.textw.edit_modified():
+        if vwRightPane == 0 and self.treeview.edit_modified():
+            xmlstr = self.treeview.dump()
+            self.init_XMl_View(xmlstr)
+            self.treeview.edit_modified(0)
+        elif vwRightPane == 1 and self.codeFrame.textw.edit_modified():
             xmlstr, _, _ = self.codeFrame.getContent()
             self.init_UI_View(xmlstr)
+            self.codeFrame.textw.edit_modified(0)
 
     def setRightPane(self, rightPaneIndx):
         actRightPane = int(self.rightPaneIndx.get())
@@ -326,20 +352,45 @@ class UIeditor(tk.Toplevel):
         #     self.ideSettings.save()
         #     self.processModIdeSettings(settingObj.applySelected)
 
+    def checkCategoryChange(self, wbefore, wafter):
+        '''
+        Chequea si dos categorías de widget son diferentes, hace que la categoría asociada
+        con wafter se muestre en pantalla.
+        :param wbefore: str or tkinter widget. Widget or widget name que esta sociado a la
+                        primera categoría.
+        :param wafter: str or tkinter widget. Widget or widget name que esta sociado a la
+                        segunda categoría.
+        :return: None.
+        '''
+        # Es posible que wbefore sea None, lo convertimos en el string nulo
+        wbefore = wbefore or ''
+        # Con str(x) hacemos que si wbefore o wafter es un tkinter widget, lo convertimos en
+        # el equivalente a su camino y se identifica el widgete id en el treeview como el
+        # último componente de esta cadena.
+        wbefore, wafter = tuple(map(lambda x: str(x).rsplit('.', 1)[-1], (wbefore, wafter)))
+        # Se convierte el widget id en widget path.
+        frame1, frame2 = tuple(map(lambda x: self.treeview.item(x, 'path'), (wbefore, wafter)))
+        # Se entiende que la categoría es el primer segmento del path.
+        frame1, frame2 = tuple(map(lambda x: x.lstrip('.').split('.', 1)[0], (frame1, frame2)))
+        if frame1 != frame2:
+            top_widget = self.parent_frame
+            if frame1:
+                top_widget.nametowidget(frame1).pack_forget()
+            top_widget.nametowidget(frame2).pack(side='top', fill='y', expand='yes')
+
     def doTreeviewSelect(self, event=None):
-        top_widget = self.testFrame.scndWidget
+        top_widget = self.parent_frame
         try:
             prevNodeId, prevNodeColor = self.treeFocusAct
             widget = top_widget.nametowidget(prevNodeId)
         except:
             frame_old = None
         else:
-            frame_old = prevNodeId.split('scndwidget.', 1)[1].split('.', 1)[0]
             widget.config(bg=prevNodeColor)
+            frame_old = prevNodeId
 
-        tform = self.testFrame.frstWidget.winfo_children()[0]
-        treeview = tform.treeview
-        nodeid = treeview.focus()
+        treeview = self.treeview
+        nodeid = frame_new = treeview.focus()
         values = treeview.item(nodeid, 'values')
         try:
             nodeid = values[0]
@@ -347,10 +398,7 @@ class UIeditor(tk.Toplevel):
         except:
             self.treeFocusAct = None
         else:
-            frame_new = nodeid.split('scndwidget.', 1)[1].split('.', 1)[0]
-            if frame_old and frame_old != frame_new:
-                top_widget.nametowidget(frame_old).pack_forget()
-            top_widget.nametowidget(frame_new).pack(side='top', fill='y', expand='yes')
+            self.checkCategoryChange(frame_old, frame_new)
             bflag = self.treeFocusAct is None or self.treeSelectAct is None
             bflag = bflag or self.treeSelectAct[0] != nodeid
             node_colour = widget.cget('bg') if bflag else 'light green'
@@ -358,16 +406,24 @@ class UIeditor(tk.Toplevel):
             self.treeFocusAct = (nodeid, node_colour)
         pass
 
-    def treeChangeListener(self, prevNode, actualNode):
-        top_widget = self.testFrame.scndWidget
-        tform = self.testFrame.frstWidget.winfo_children()[0]
+    def onTreeActiveSelection(self, event):
+        treeview = event.widget
+        actualNode = treeview.focus()
+        prevNode = treeview.tag_has('activenode')
+        if prevNode:
+            prevNode = prevNode[0]
+            treeview.item(prevNode, tags=[])
+        treeview.item(actualNode, tags=('activenode',))
+        treeview.selection_set(actualNode)
+
+        top_widget = self.parent_frame
         colour = self.treeSelectAct[1] if self.treeSelectAct else '#d9d9d9'
         pairs = [(prevNode, colour), (actualNode, 'light green')]
         # if self.treeSelectAct and self.treeSelectAct[0] == self.treeFocusAct[0]:
         #     pairs = pairs[:1]
         for nodeid, bgcolor in pairs:
             try:
-                path, values = tform.treeview.item(nodeid, 'values')
+                path, values = treeview.item(nodeid, 'values')
                 nodeid = path
                 widget = top_widget.nametowidget(nodeid)
             except:
@@ -379,29 +435,34 @@ class UIeditor(tk.Toplevel):
                 self.treeSelectAct = (nodeid, node_colour)
                 widget.config(bg=bgcolor)
 
-        parameters = self.getWidgetParams(widget)
         wattr = self.ui_view.winfo_children()[0]
+        getattr(wattr, 'widget_tag').setValue(values.pop('tag'))
+        parameters = self.getWidgetParams(widget, values)
         getattr(wattr, 'widget_attrs').setValue(parameters, sep=('|', '*'))
-        # wattr = self.ui_view.winfo_children()[0]
-        # getattr(wattr, 'widget_tag').setValue(values.pop('tag'))
-        # value = '#'. join(['*'.join((x, str(y))) for x, y in sorted(values.items())])
-        # getattr(wattr, 'widget_attrs').setValue(value, sep=('#', '*'))
 
-    def getWidgetParams(self, widget):
+    def getWidgetParams(self, widget, xml_config):
         '''
         Obtiene los parámetros de configuración y geomanager del widget "name"
         :param widget: tkinter obj. Widget a procesar
         :return: dict. Diccionario con dos keys, una configure y la otra geomanager.
         '''
-        master = widget.master
-        tform = self.testFrame.frstWidget.winfo_children()[0]
-        path, values = tform.treeview.item(master.winfo_name(), 'values')
-        m = re.search("'geomanager': '([a-z]+?)'", values)
-        if m:
-            geo_info = f'{m.group(1)}_info'
-        else:
-            geo_info = 'pack_info'
-        geomanager = getattr(widget,geo_info)()
+        treeview = self.treeview
+        geo_info = widget.winfo_manager()
+        bflag = bool(geo_info)
+        if not bflag:
+            # Si el widget no es visible en pantalla, averiguamos por el geomanager
+            # en el padre.
+            master_id = treeview.parent(widget.winfo_name())
+            values = eval(treeview.item(master_id, 'values')[1])
+            geo_info = values.get('geomanager', 'pack')
+        # Se filtran los valores de configuración en el xml (xml_config) correspondientes
+        # al geomanager.
+        geomngr_params = findGeometricManager(geo_info)
+        geomngr_keys = xml_config.keys() & geomngr_params
+        dummy = {key: xml_config.pop(key) for key in geomngr_keys}
+        # Los valores filtrados se utilizan cuando el widget no es visible en pantalla.
+        geomanager = getattr(widget, geo_info + '_info')() if bflag else dummy
+
         config = {}
         for param, values in widget.configure().items():
             try:
@@ -409,9 +470,8 @@ class UIeditor(tk.Toplevel):
             except:
                 continue
             config[param] = value
-        parameters = {}
-        parameters['config'] = config
-        parameters[geo_info] = geomanager
+        config.update(xml_config)
+        parameters = {'config': config, geo_info: geomanager}
 
         seq = -1
         bdParams = []
@@ -419,15 +479,11 @@ class UIeditor(tk.Toplevel):
             seq += 1
             node_id = f'ND{seq}'
             bdParams.append(('', node_id, key))
-            for param, value in params.items():
+            for param, value in sorted(params.items()):
                 seq += 1
                 bdParams.append((node_id, f'ND{seq}', param, value))
         value = '|'. join(['*'.join(str(y) for y in x) for x in bdParams])
         return value
-
-
-
-
 
     def saveFile(self):
         nameFile = self.currentFile
@@ -492,47 +548,45 @@ class UIeditor(tk.Toplevel):
             inspos='1.0',
             sintaxArray=SintaxEditor.XMLSINTAX
         )
-        # self.codeFrame.setCursorAt('1.0')
         self.codeFrame.textw.edit_modified(0)
 
     def init_UI_View(self, xmlstr):
-        ui_pane = self.testFrame.frstWidget
-        tform = ui_pane.winfo_children()[0]
-        treeview = tform.treeview
+        treeview = self.treeview
         treeview.delete(*treeview.get_children())
         self.treeFocusAct = self.treeSelectAct = None
 
-        ui_pane = self.testFrame.scndWidget
+        ui_pane = self.parent_frame
         fframes = ui_pane.winfo_children()[1:]
         [fframe.destroy() for fframe in fframes]
         try:
             panel = ET.XML(xmlstr)
-            self.newSetupForms(panel, tform, ui_pane)
-            self.xmlTreeRep()
+            self.setupForms(panel, treeview, ui_pane)
         except Exception as e:
             tk.Label(ui_pane, text=str(e)).pack()
-        else:
-            self.codeFrame.textw.edit_modified(0)
+        self.treeview.edit_modified(0)
 
-    def newSetupForms(self, panel, treeForm, formRoot):
-        def mapWidgetToTree(xmlwidget, widget):
-            widget_attribs = xmlwidget.attrib
-            widget_attribs['tag'] = xmlwidget.tag
-            widget_attribs.pop('name', None)
-            if xmlwidget.tag == 'category':
-                parent_id = ''
-                caption = '%s: %s' % (xmlwidget.tag, widget_attribs['label'])
-            else:
-                parent_id = widget.master.winfo_name()
-                caption = xmlwidget.tag
-            child_id = widget.winfo_name()
-            child_id = treeForm.treeview.insert(
-                parent_id,
-                'end',
-                iid=child_id,
-                text=caption,
-                values=(str(widget), str(widget_attribs))
-            )
+    def mapWidgetToTree(self, xmlwidget, widget, tree, indx='end'):
+        widget_attribs = xmlwidget.attrib
+        widget_attribs['tag'] = xmlwidget.tag
+        widget_attribs.pop('name', None)
+        if xmlwidget.tag == 'category':
+            parent_id = ''
+            caption = '%s: %s' % (xmlwidget.tag, widget_attribs['label'])
+        else:
+            geomanager = widget.winfo_manager()
+            parent = getattr(widget, geomanager + '_info')()['in']
+            parent_id = parent.winfo_name()
+            caption = xmlwidget.tag
+        child_id = widget.winfo_name()
+        child_id = tree.insert(
+            parent_id,
+            indx,
+            iid=child_id,
+            text=caption,
+            values=(str(widget), str(widget_attribs))
+        )
+
+    def setupForms(self, panel, treeview, formRoot):
         seq = -1
         for category_panel in panel.findall('category'):
             root, master = category_panel, formRoot
@@ -554,100 +608,20 @@ class UIeditor(tk.Toplevel):
             # Pero como todos los paneles de las categorías deben estaar ocultos, no lo hacemos.
             # Cuando se defina el foco inicial se activará (Se hara pack) sobre el nodo escogido.
 
-            mapWidgetToTree(category_panel, widget)
-            seq = widgetFactory(widget, category_panel, registerWidget=mapWidgetToTree, k=seq)[0]
-
+            self.mapWidgetToTree(category_panel, widget, tree=treeview)
+            seq = widgetFactory(
+                widget,
+                category_panel,
+                setParentTo='root',
+                registerWidget=lambda category, widget: self.mapWidgetToTree(category, widget, tree=treeview),
+                k=seq
+            )[0]
+        self.seq = seq
         # Nos aseguramos que el treeview tenga el foco.
-        treeForm.treeview.focus_set()
+        treeview.focus_set()
         # Nos aseguramos que la primera categoría obtenga el foco
-        treeForm.treeview.focus('0')
-        treeForm.treeview.selection_set('0')
-        # # Se genera el evento <<TreeviewSelect>> para que se llame al método pack_forget
-        # treeForm.treeview.event_generate(
-        #     '<<TreeviewSelect>>',
-        #     when='tail'
-        # )
-
-    def setupForms(self, panel, treeForm, formRoot):
-        def isContainer(node):
-            return len(list(node)) > 0
-
-        seq = -1
-        parents = collections.deque()
-        for category_panel in panel.findall('category'):
-            root, master = category_panel, formRoot
-            panel_module = root.get('lib') if root.get('lib') else None
-            if panel_module:
-                panel_module = importlib.import_module(panel_module, __package__)
-
-            widget_name, widget_attribs = root.tag, root.attrib
-            widget_attribs['tag'] = widget_name
-            seq += 1
-            widget_attribs['name'] = 'wdg%s' % seq
-            attributes = {
-                'text': widget_attribs['label'],
-                'name': widget_attribs['name'],
-                'side': 'top',
-                'fill': 'both',
-                'expand': 'yes'
-            }
-            widget = getWidgetInstance(
-                master,
-                'labelframe',
-                attributes,
-                panelModule=panel_module
-            )
-            widget_attribs['tag'] = widget_name
-            widget_attribs.pop('name')
-            child_id = widget.winfo_name()
-            treeForm.insertTreeElem(
-                '',
-                child_id,
-                '%s: %s' % (widget_name, widget_attribs['label']),
-                values=(str(widget), str(widget_attribs)))
-
-            parents.append((child_id, root, widget))
-            widget.pack_forget()
-        parents[0][2].pack(fill=tk.BOTH, expand=tk.YES)
-        while parents:
-            parent_id, parent_node, master_widget = parents.popleft()
-            for child in list(parent_node):
-                widget_name, widget_attribs = child.tag, child.attrib
-                seq += 1
-                widget_attribs['name'] = 'wdg%s' % seq
-                visible = True
-                if 'visible' in widget_attribs:
-                    visible = widget_attribs.pop('visible') == 'true'
-                widget = getWidgetInstance(
-                    master_widget,
-                    widget_name,
-                    widget_attribs,
-                    panelModule=panel_module
-                )
-                if not visible:
-                    widget.pack_forget()
-                    widget_attribs['visible'] = 'false'
-                widget_attribs['tag'] = widget_name
-                widget_attribs.pop('name')
-                child_id = widget.winfo_name()
-                treeForm.insertTreeElem(
-                    parent_id,
-                    child_id,
-                    widget_name,
-                    values=(str(widget), str(widget_attribs)))
-                if isContainer(child):
-                    parents.append((parent_id + '/' + child_id, child, widget))
-
-        # Nos aseguramos que el treeview tenga el foco.
-        treeForm.treeview.focus_set()
-        # Nos aseguramos que la primera categoría obtenga el foco
-        treeForm.treeview.focus('wdg0')
-        treeForm.treeview.selection_set('wdg0')
-        # # Se genera el evento <<TreeviewSelect>> para que se llame al método pack_forget
-        # treeForm.treeview.event_generate(
-        #     '<<TreeviewSelect>>',
-        #     when='tail'
-        # )
+        treeview.focus('0')
+        treeview.selection_set('0')
 
     def recFile(self, filename):
         try:
@@ -683,6 +657,100 @@ class UIeditor(tk.Toplevel):
         # if lstChanged:
         #     self.parseTree.refreshTreeInfo(lstChanged = lstChanged)
         #     self.addonId.set(self.addonSettings.getParam('addon_id'))
+
+    def do_popup(self, event=None):
+        iid = event.widget.identify_row(event.y)
+        if iid:
+            popup_menu = tk.Menu(self, tearoff=0)
+            [
+                popup_menu.add_command(
+                    label=item,
+                    command=lambda x=item: self.modifyTree(event, x)
+                ) for item in ['Insert', 'Delete', 'Move']
+            ]
+
+            x, y = event.x_root, event.y_root
+            try:
+                popup_menu.tk_popup(x, y)
+            finally:
+                popup_menu.grab_release()
+                pass
+
+    def modifyTree(self, event, event_type):
+        treeview = event.widget
+        iid = treeview.identify_row(event.y)
+        if event_type == 'Insert':
+            xmlDlg = '/mnt/c/Users/Alex Montes/PycharmProjects/mywidgets/Data/kodi/InsertWidgetDialog.xml'
+            dlg = CustomDialog(self, title='Insert Widget', xmlFile=xmlDlg, isFile=True)
+            if dlg.allSettings:
+                # treeview = self.treeview
+                parent = treeview.focus()
+                values = eval(treeview.item(parent, 'values')[1])
+                tag = values.pop('tag')
+                selPane = ET.Element(tag, values)
+
+                allSettings = dict(dlg.allSettings)
+                tag = allSettings['widget']
+                attribs = allSettings['parameters']
+                if allSettings['lib']:
+                    attribs += f' lib="{allSettings["lib"]}"'
+                nodo = ET.XML(f'<{tag} {attribs} />')
+
+                selPane.append(nodo)
+
+                master = self.parent_frame
+                master = master.children[parent]
+                self.seq = widgetFactory(
+                    master,
+                    selPane,
+                    setParentTo='root',
+                    registerWidget=lambda category, widget: self.mapWidgetToTree(category, widget, tree=treeview),
+                    k=self.seq
+                )[0]
+        elif event_type == 'Delete':
+            answ = tkMessageBox.askquestion(
+                'Delete widget',
+                'Do you relly wants to delete the %s widget' % iid,
+                icon=tkMessageBox.QUESTION
+            )
+            if answ == 'yes':
+                widget = self.parent_frame[iid]
+                widget.destroy()
+                treeview.delete(iid)
+        elif event_type == 'Move':
+            widget_name = treeview.focus()
+            # A través del treeview.parent se tiene la ubicación donde va a quedar el widget.
+            parent_name = treeview.parent(widget_name)
+            widget = self.parent_frame.children[widget_name]
+            geo_manager = widget.winfo_manager()
+            geo_info = getattr(widget, geo_manager + '_info')()
+            # A través de la geo_info['in'] se tiene de donde se movió el widget.
+            geo_master = geo_info['in'].winfo_name()
+            if geo_master != parent_name:
+                parent_widget = self.parent_frame.children[parent_name]
+                parent_attrs = eval(treeview.item(parent_name, 'values')[1])
+                new_geo_manager = parent_attrs.get('geomanager', 'pack')
+                if geo_manager != new_geo_manager:
+                    # Se tienen diferentes geo_manager
+                    # Priemro eliminamos de values la información relativa al
+                    # viejo geo_manager
+                    wpath, values = treeview.item(widget_name, 'values')
+                    values = eval(values)
+                    geo_params = findGeometricManager(geo_manager)
+                    [values.pop(x) for x in values.keys() & geo_params]
+                    treeview.item(widget_name, values=(wpath, str(values)))
+                    # Actualizamos al nuevo geo_manager
+                    geo_manager = new_geo_manager
+                    # Como no se conoce los parámetros que el usuario quiera en el
+                    # nuevo geo_manager, comenzamos con lo mínimo.
+                    geo_info = {}
+                geo_info['in'] = parent_widget
+            if geo_manager == 'pack' and treeview.next(widget_name):
+                next_name = treeview.next(widget_name)
+                geo_info['before'] = self.parent_frame.children[next_name]
+            self.checkCategoryChange(geo_master, parent_name)
+            getattr(widget, geo_manager)(**geo_info)
+            pass
 
     def Close(self):
         self.checkSaveFlag()
