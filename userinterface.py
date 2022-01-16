@@ -1,11 +1,14 @@
 # -*- coding: utf-8 -*-
-from contextlib import contextmanager
-import importlib
-import tkinter as tk
 
 # tkinter reference: https://anzeljg.github.io/rin2/book2/2405/docs/tkinter/index.html
 # Tcl8.5.19/Tk8.5.19 Documentation: http://tcl.tk/man/tcl8.5/contents.htm
 
+
+import importlib
+import tkinter as tk
+
+from equations import equations_manager
+import cbwidgetstate
 
 pack_params = ["after", "anchor", "before", "expand", "fill", "in", "ipadx", "ipady", "padx", "pady", "side"]
 grid_params = ["column", "columnspan", "in", "ipadx", "ipady", "padx", "pady", "row", "rowspan", "sticky"]
@@ -30,6 +33,13 @@ def getWidgetInstance(master, widgetname, attributes, panelModule=None):
     :return: widget.
     '''
 
+    # Tratamiento de las variables
+    if widgetname == 'var':
+        _type = f"{attributes.pop('type', 'string').title()}Var"
+        parent = equations_manager.default_root()
+        tk_var = getattr(tk, _type)(master=parent, **attributes)
+        equations_manager.var_values[str(tk_var)] = tk_var.get()
+        return tk_var
     # Si no se tiene panelModule se asume que es tkinter
     # panelModule = panelModule or tk
     panelModule = panelModule or [(-1, tk)]
@@ -54,57 +64,6 @@ def getWidgetInstance(master, widgetname, attributes, panelModule=None):
     return widget
 
 
-def newGetWidgetInstance(master, widgetname, attributes, geometric_manager='pack', panelModule=None, visible='true'):
-    @contextmanager
-    def customPanelModule(attributes, panelModule):
-        bflag = 'lib' in attributes
-        if bflag:
-            panelModule = panelModule or []
-            module_path = attributes.pop('lib')
-            module = importlib.import_module(module_path, __package__)
-            panelModule.append((100, module))
-        # Si no se tiene panelModule se asume que es tkinter
-        # panelModule = panelModule or tk
-        bflag = bflag or not panelModule
-        panelModule = panelModule or [(-1, tk)]
-        try:
-            yield panelModule
-        finally:
-            if bflag:
-                panelModule.pop()
-
-    geomngr_params = findGeometricManager(geometric_manager)
-    geomngr_keys = attributes.keys() & geomngr_params
-    geomngr_opt = {key: attributes.pop(key) for key in geomngr_keys}
-
-    with customPanelModule(attributes, panelModule) as panelModule:
-        for indx in range(len(panelModule) - 1, -1, -1):
-            _, module = panelModule[indx]
-            getWdgClass = getattr(module, 'getWidgetClass', lambda x: getattr(module, x, None))
-            widgetname = widgetname if module.__name__ != 'tkinter' else (widgetname.title() if widgetname != 'labelframe' else 'LabelFrame')
-            widgetClass = getWdgClass(widgetname)
-            if widgetClass:
-                break
-
-        if widgetClass is None:
-            # ERROR: No se encontró definición del widget
-            raise AttributeError(f'{widgetname} is not a tkinter widget or a user defined class. ')
-
-        # En este punto se tiene un parche para no romper con los Kodiwidgets que utilizan
-        # el attributo 'id' y que desactivan algunas características dependiendo si tienen id o no.
-        if module.__name__ == 'Widgets.kodiwidgets':
-            attributes.pop(id, None)
-        widget = widgetClass(master, **attributes)
-
-        if 'in' in geomngr_opt and isinstance(geomngr_opt['in'], (bytes, str)):
-            geomngr_opt['in_'] = widget.winfo_parent() + geomngr_opt.pop('in')
-
-        if not visible or visible == 'true':
-            getattr(widget, geometric_manager)(**geomngr_opt)
-
-    return widget
-
-
 def widgetFactory(master, selPane, panelModule=None, setParentTo='master', registerWidget=None, k=-1):
     '''
     Crea la jerarquia de widgets que conforman una tkinter form.
@@ -123,9 +82,6 @@ def widgetFactory(master, selPane, panelModule=None, setParentTo='master', regis
                         Posición 1: Lista de tuples que muestra el id del widget y
                         la ecuación que activa (enable) el widget.
     '''
-
-
-
     panelModule = panelModule or []
     kini = k
     if selPane.get('lib'):
@@ -138,17 +94,17 @@ def widgetFactory(master, selPane, panelModule=None, setParentTo='master', regis
         # Nos aseguramos que tkinter es la librería por defecto por lo cual lo agregamos
         # en la raiz del camino de búsqueda de los widgets.
         panelModule.append((kini, tk))
-    enableEc = []
-    visibleEc = []
     geometric_manager = selPane.get('geomanager', 'pack')
     for xmlwidget in selPane:
         k += 1
         has_children = bool(len(xmlwidget.getchildren()))
+        is_widget = xmlwidget.tag != 'var'
         options = dict.copy(xmlwidget.attrib)
         options.setdefault('name', str(k))    # Se asigna el consecutivo como nombre del widget.
 
         parent = master
-        if (setParentTo == 'category' and selPane.tag != 'category') or setParentTo == 'root':
+        bparent = is_widget and ((setParentTo == 'category' and selPane.tag != 'category') or setParentTo == 'root')
+        if bparent:
             # Cuando se elige la opción sameParent=True significa que todos los widgets que están
             # bajo una misma categoría serán creados como hijos del frame correspondiente a
             # la categoría pero puestos bajo el widget master
@@ -160,15 +116,10 @@ def widgetFactory(master, selPane, panelModule=None, setParentTo='master', regis
 
         options.pop('geomanager', None)
 
-        # Se almacena en enableEc la ecuación que habilita el widget.
-        enable = options.pop('enable', None)
-        if enable:
-            enableEc.append((k, enable))
-
-        # Se almacena en visibleEc la ecuación que hace visible el widget.
-        visible = options.pop('visible', None)
-        if visible:
-            visibleEc.append((k, visible))
+        states_eq = dict([
+            (key, options.pop(key)) for key in cbwidgetstate.STATES
+            if key in options
+        ])
 
         wType = xmlwidget.tag
 
@@ -206,18 +157,23 @@ def widgetFactory(master, selPane, panelModule=None, setParentTo='master', regis
                     raise Exception(f"Can't pack {dummy.winfo_name()} inside {parent_name}")
             geomngr_opt['in_'] = '.'.join((parent_path, parent_name))
 
-        getattr(dummy, geometric_manager)(**geomngr_opt)
-
+        if is_widget and 'visible' not in states_eq:
+            getattr(dummy, geometric_manager)(**geomngr_opt)
 
         if registerWidget:
-            registerWidget(xmlwidget, dummy)
+            registerWidget(master, xmlwidget, dummy)
 
-        # Se hace verifica ahora si el widget es visible.
-        if visible and visible != 'true':
-            getattr(dummy, geometric_manager + '_forget')()
+        for state, eq in states_eq.items():
+            callback_closure = cbwidgetstate.STATES[state]
+            if state == 'visible':
+                kwargs = geomngr_opt
+            elif state == 'enable':
+                kwargs = {}
+            cb = callback_closure(dummy, **kwargs)
+            equations_manager.add_equation(eq, cb)
 
         if has_children:
-            k, deltEnableEc, deltVisibleEc = widgetFactory(
+            k = widgetFactory(
                 dummy,
                 xmlwidget,
                 panelModule=panelModule,
@@ -225,11 +181,9 @@ def widgetFactory(master, selPane, panelModule=None, setParentTo='master', regis
                 registerWidget=registerWidget,
                 k=k
             )
-            enableEc += deltEnableEc
-            visibleEc += deltVisibleEc
     if kini == panelModule[-1][0]:
         panelModule.pop()
-    return k, enableEc, visibleEc
+    return k
 
 
 def newPanelFactory(master, selPane, genPanelModule=None, registerWidget=None):
@@ -296,6 +250,5 @@ def newPanelFactory(master, selPane, genPanelModule=None, registerWidget=None):
             enableEc += deltEnableEc
             visibleEc += deltVisibleEc
     return n, enableEc, visibleEc
-
 
 

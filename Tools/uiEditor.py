@@ -10,9 +10,10 @@ from Widgets.Custom import CollapsingFrame, SintaxEditor
 from userinterface import getWidgetInstance, widgetFactory, findGeometricManager
 from Widgets.kodiwidgets import formFrameGen, CustomDialog
 from Tools.WidgetsExplorer import WidgetExplorer
+from equations import equations_manager
 
 # Este es una especie de manejador de recursos que quiero implementar
-R = type('Erre', (object, ), {})
+R = type('Erre', (object,), {})
 
 
 class UIeditor(tk.Toplevel):
@@ -102,12 +103,12 @@ class UIeditor(tk.Toplevel):
             self.onXmlTextModified
         )
 
-        widgetParams = formFrameGen(
-            self.ui_view,
-            filename=os.path.join('../data/kodi/', 'WidgetParams.xml')
-        )
-        widgetParams.pack(side=tk.RIGHT, fill=tk.Y, expand=tk.YES, anchor=tk.E)
-        widgetParams.widget_attrs.bind('<<OptionList_Edit>>', self.doOptionListEdit)
+        # widgetParams = formFrameGen(
+        #     self.ui_view,
+        #     filename=os.path.join('../data/kodi/', 'WidgetParams.xml')
+        # )
+        # widgetParams.pack(side=tk.RIGHT, fill=tk.Y, expand=tk.YES, anchor=tk.E)
+        # widgetParams.widget_attrs.bind('<<OptionList_Edit>>', self.doOptionListEdit)
 
         self.testFrame = CollapsingFrame.collapsingFrame(
             self.ui_view,
@@ -141,7 +142,7 @@ class UIeditor(tk.Toplevel):
 
     def doOptionListEdit(self, event):
         widget = event.widget
-        str_command, attr_key, (attr_value, ) = widget.virtualEventData
+        str_command, attr_key, (attr_value,) = widget.virtualEventData
         # Se actualiza el widget Seleccionado segú la modificación dada
         if self.treeSelectAct is None:
             return
@@ -157,7 +158,7 @@ class UIeditor(tk.Toplevel):
             if str_command == 'pack':
                 # Averiguamos la posición del widget en la configuración original
                 next_widget = treeview.next(active_widget.winfo_name())
-                if next_widget:   # El widget a tratar no es el último de los hijos a re geolocalizar
+                if next_widget:  # El widget a tratar no es el último de los hijos a re geolocalizar
                     next_widget = treeview.item(next_widget, 'values')[0]
                     geo_info['before'] = next_widget
                     pass
@@ -286,14 +287,14 @@ class UIeditor(tk.Toplevel):
                     flabel = os.path.basename(filename)
                     self.menuBar['File'].add(
                         'command',
-                        label='{} {:30s}'.format(k+1, flabel),
+                        label='{} {:30s}'.format(k + 1, flabel),
                         command=lambda x=filename: self.__openFile(x)
                     )
                 self.menuBar['File'].add('separator')
             self.menuBar['File'].add('command', label='Settings', accelerator='Ctrl+S',
-                                             underline=0, command=self.programSettingDialog)
+                                     underline=0, command=self.programSettingDialog)
             self.menuBar['File'].add('command', label='Close', accelerator='Alt+Q',
-                                             underline=0, command=self.Close)
+                                     underline=0, command=self.Close)
 
         self.menuBar['File'].config(postcommand=lambda x=len(menuOpt): fileHist(x))
 
@@ -302,24 +303,24 @@ class UIeditor(tk.Toplevel):
         for menuDesc in menuArrDesc:
             menuType = menuDesc[0]
             if menuType == 'command':
-                menuType, mLabel, mAccelKey, mUnderline, mCommand =  menuDesc
+                menuType, mLabel, mAccelKey, mUnderline, mCommand = menuDesc
                 master.add(menuType,
                            label='{:30s}'.format(mLabel),
-                            accelerator=mAccelKey,
-                            underline=mUnderline,
-                            command=mCommand)
+                           accelerator=mAccelKey,
+                           underline=mUnderline,
+                           command=mCommand)
             elif menuType == 'cascade':
-                menuType, mLabel, mUnderline =  menuDesc
+                menuType, mLabel, mUnderline = menuDesc
                 menuLabel = masterID + '.' + mLabel.replace(' ', '_')
-                self.menuBar[menuLabel] = tk.Menu(master, tearoff = False)
+                self.menuBar[menuLabel] = tk.Menu(master, tearoff=False)
                 master.add('cascade',
-                           label = '{:30s}'.format(mLabel),
-                           underline = mUnderline,
-                           menu = self.menuBar[menuLabel])
+                           label='{:30s}'.format(mLabel),
+                           underline=mUnderline,
+                           menu=self.menuBar[menuLabel])
             elif menuType == 'radiobutton':
                 menuType, radioVar, radioOps = menuDesc
                 for k, elem in enumerate(radioOps):
-                    master.add_radiobutton(label = elem, variable = radioVar, value = k)
+                    master.add_radiobutton(label=elem, variable=radioVar, value=k)
             elif menuType == 'checkbutton':
                 menuType, checkLabel, checkVar, checkVals = menuDesc
                 master.add_checkbutton(label=checkLabel, variable=checkVar, onvalue=checkVals[1], offvalue=checkVals[0])
@@ -482,7 +483,7 @@ class UIeditor(tk.Toplevel):
             for param, value in sorted(params.items()):
                 seq += 1
                 bdParams.append((node_id, f'ND{seq}', param, value))
-        value = '|'. join(['*'.join(str(y) for y in x) for x in bdParams])
+        value = '|'.join(['*'.join(str(y) for y in x) for x in bdParams])
         return value
 
     def saveFile(self):
@@ -517,9 +518,9 @@ class UIeditor(tk.Toplevel):
         self.checkSaveFlag()
         initial_path = os.path.abspath('../data/tkinter/')
         name = name or tkFileDialog.askopenfilename(
-                initialdir=initial_path,
-                filetypes=[('xml Files', '*.xml'), ('All Files', '*.*')]
-            )
+            initialdir=initial_path,
+            filetypes=[('xml Files', '*.xml'), ('All Files', '*.*')]
+        )
         if name is None:
             return
         with open(name, 'rb') as f:
@@ -565,7 +566,10 @@ class UIeditor(tk.Toplevel):
             tk.Label(ui_pane, text=str(e)).pack()
         self.treeview.edit_modified(0)
 
-    def mapWidgetToTree(self, xmlwidget, widget, tree, indx='end'):
+    def mapWidgetToTree(self, master, xmlwidget, widget, tree, indx='end'):
+        # En este momento no se hace nada con las variables
+        if xmlwidget.tag == 'var':
+            return
         widget_attribs = xmlwidget.attrib
         widget_attribs['tag'] = xmlwidget.tag
         widget_attribs.pop('name', None)
@@ -573,9 +577,9 @@ class UIeditor(tk.Toplevel):
             parent_id = ''
             caption = '%s: %s' % (xmlwidget.tag, widget_attribs['label'])
         else:
-            geomanager = widget.winfo_manager()
-            parent = getattr(widget, geomanager + '_info')()['in']
-            parent_id = parent.winfo_name()
+            # geomanager = widget.winfo_manager()
+            # parent = getattr(widget, geomanager + '_info')()['in']
+            parent_id = master.winfo_name()
             caption = xmlwidget.tag
         child_id = widget.winfo_name()
         child_id = tree.insert(
@@ -603,19 +607,20 @@ class UIeditor(tk.Toplevel):
                 attributes,
             )
             # En este punto se debería hacer pack sobre cada nodo de categoría con la
-            #siguiente expresión:
+            # siguiente expresión:
             # widget.pack(side='top', fill='both', expand='yes')
             # Pero como todos los paneles de las categorías deben estaar ocultos, no lo hacemos.
             # Cuando se defina el foco inicial se activará (Se hara pack) sobre el nodo escogido.
 
-            self.mapWidgetToTree(category_panel, widget, tree=treeview)
+            self.mapWidgetToTree(master, category_panel, widget, tree=treeview)
             seq = widgetFactory(
                 widget,
                 category_panel,
                 setParentTo='root',
-                registerWidget=lambda category, widget: self.mapWidgetToTree(category, widget, tree=treeview),
+                registerWidget=lambda master, category, widget: self.mapWidgetToTree(master, category, widget, tree=treeview),
                 k=seq
-            )[0]
+            )
+        equations_manager.set_initial_widget_states()
         self.seq = seq
         # Nos aseguramos que el treeview tenga el foco.
         treeview.focus_set()
@@ -650,7 +655,7 @@ class UIeditor(tk.Toplevel):
             else:
                 self.setSaveFlag(False)
 
-    def setSaveFlag(self, state, lstChanged = None):
+    def setSaveFlag(self, state, lstChanged=None):
         suffix = '  **' if state else ''
         fileName = (self.currentFile if self.currentFile else 'default.pck') + suffix
         self.title(fileName)
@@ -706,7 +711,7 @@ class UIeditor(tk.Toplevel):
                     setParentTo='root',
                     registerWidget=lambda category, widget: self.mapWidgetToTree(category, widget, tree=treeview),
                     k=self.seq
-                )[0]
+                )
         elif event_type == 'Delete':
             answ = tkMessageBox.askquestion(
                 'Delete widget',
@@ -757,8 +762,13 @@ class UIeditor(tk.Toplevel):
         self.destroy()
         pass
 
-if __name__ == "__main__":
-    Root = tk.Tk()
-    Root.withdraw()
+
+def main():
+    root = tk.Tk()
+    root.withdraw()
     mainWin = UIeditor()
-    Root.wait_window(mainWin)
+    root.wait_window(mainWin)
+
+
+if __name__ == "__main__":
+    main()
