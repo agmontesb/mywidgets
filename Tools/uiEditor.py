@@ -103,12 +103,12 @@ class UIeditor(tk.Toplevel):
             self.onXmlTextModified
         )
 
-        # widgetParams = formFrameGen(
-        #     self.ui_view,
-        #     filename=os.path.join('../data/kodi/', 'WidgetParams.xml')
-        # )
-        # widgetParams.pack(side=tk.RIGHT, fill=tk.Y, expand=tk.YES, anchor=tk.E)
-        # widgetParams.widget_attrs.bind('<<OptionList_Edit>>', self.doOptionListEdit)
+        widgetParams = formFrameGen(
+            self.ui_view,
+            filename=os.path.join('../data/kodi/', 'WidgetParams.xml')
+        )
+        widgetParams.pack(side=tk.RIGHT, fill=tk.Y, expand=tk.YES, anchor=tk.E)
+        widgetParams.widget_attrs.bind('<<OptionList_Edit>>', self.doOptionListEdit)
 
         self.testFrame = CollapsingFrame.collapsingFrame(
             self.ui_view,

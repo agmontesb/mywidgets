@@ -16,7 +16,8 @@ import importlib
 import fnmatch
 import operator
 
-from userinterface import newPanelFactory
+from userinterface import newPanelFactory, widgetFactory
+from equations import equations_manager
 
 
 def getWidgetClass(widgetName):
@@ -67,9 +68,9 @@ class baseWidget(tk.Frame, object):
         self._id = options.pop('id', wdgName)       # Atributo _id = 'id' propio.
         self.id = options.get('id').lower() if options.get('id') else None # Atributo id definido por el usuario
 
-        if 'varType' in options:                    # Atributo: value.
-            self.setVarType(options.pop('varType'))
-        self.default = None                         # Atributo: default.
+        varType = options.pop('varType', None)
+        self.value = None
+        self._default = None                         # Atributo: default.
         self.listener = None                        # Atributo: Callback function asociado
                                                     # al cambio del valor asociado al widget.
         if not issubclass(self.__class__, settContainer):
@@ -82,6 +83,10 @@ class baseWidget(tk.Frame, object):
             baseConf = dict(name=self._id)
             if options.get('bg'):
                 baseConf['bg'] = options['bg']
+
+        if varType:                    # Atributo: value.
+            self.setVarType(varType, name=baseConf.get('name', None))
+
         tk.Frame.__init__(self, master, **baseConf)
         # Se definen dos atributos:
         # path = Camino que resulta de concatenar los nombres de los Frame que contienen
@@ -96,22 +101,35 @@ class baseWidget(tk.Frame, object):
             self.form = master.form if hasattr(master, 'form') else master
             self.pack(side=tk.TOP, fill=tk.BOTH, expand=tk.YES, ipadx=2, ipady=2, padx=1, pady=1)
 
-    def setVarType(self, varType='string'):
+    @property
+    def default(self):
+        return self._default
+
+    @default.setter
+    def default(self, value):
+        self._default = value
+        if not str(self.value).startswith('PY_VAR'):
+            equations_manager.var_values[str(self.value)] = value
+        pass
+
+    def setVarType(self, vartype='string', name=None):
         '''
         Tipo de valor asociado con el widget.
-        :param varType: str. Tipo de variable, puede ser uno de estas:
+        :param vartype: str. Tipo de variable, puede ser uno de estas:
                         ['str', 'int', 'double', 'boolean'], cualquier
                         otro valor se asimila a 'str'.
+        :param name: str or None. Nombre de la variable, que cuando existe, se hace igual
+                     al nombre del widget. Si no tiene nombre name es None.
         :return: None.
         '''
-        if varType == 'int':
-            self.value = tk.IntVar()
-        elif varType == 'double':
-            self.value = tk.DoubleVar()
-        elif varType == 'boolean':
-            self.value = tk.BooleanVar()
+        if vartype == 'int':
+            self.value = tk.IntVar(name=name)
+        elif vartype == 'double':
+            self.value = tk.DoubleVar(name=name)
+        elif vartype == 'boolean':
+            self.value = tk.BooleanVar(name=name)
         else:
-            self.value = tk.StringVar()
+            self.value = tk.StringVar(name=name)
 
     def getSettingPair(self, tId=False):
         '''
@@ -892,7 +910,7 @@ class settFragment(baseWidget):
         tk.Frame(self, name=self.id).pack(side=tk.TOP, fill=tk.BOTH, expand=tk.YES)
 
 
-class formFrame(tk.Frame):
+class FormFrame(tk.Frame):
     '''
     Clase que entrega un Frame lleno con los widgets definicos en un archivo layout definido.
     '''
@@ -907,9 +925,8 @@ class formFrame(tk.Frame):
                             definidos por el usuario.
         '''
         tk.Frame.__init__(self, master)
-        self.settings = settings or {}
-        self.enEquations = {}
-        self.dependents = {}
+        settings = settings or {}
+        self.settings = settings
         self.widgetMapping = {}
         self.nameToId = {}
         self.radioGroups = {}
@@ -942,14 +959,12 @@ class formFrame(tk.Frame):
         :return: None.
         '''
         # En este punto se debe incluir la lógica para la visibleEc
-        enableEq = newPanelFactory(self, selPane, genPanelModule=formModule, registerWidget=self.regWidget)[1]
+        newPanelFactory(self, selPane, genPanelModule=formModule, registerWidget=self.regWidget)
         self.nameToId = {value.rsplit('.', 1)[-1]: key for key, value in self.widgetMapping.items()}
         self.category = selPane.get('label')
-        self.registerEc(enableEq)
-        self.setDependantWdgState()
-        self.registerChangeListeners()
+        # self.setChangeSettings(settings)
 
-    def regWidget(self, xmlwidget, widget):
+    def regWidget(self, master, xmlwidget, widget):
         '''
         Crea un acceso directo al widget procesado por newPanelFactory.
         :param xmlwidget: element tree node. Representación base para la generación de widget.
@@ -990,116 +1005,6 @@ class formFrame(tk.Frame):
         toReset = set(mapping).difference(toModify)
         list(map(lambda w: w.setValue(w.default), self.getWidgets(toReset)))
 
-    def registerEc(self, enableEquations):
-        '''
-        Preprocesa las enable equations: obtiene forma absoluta, las variables asociadas,
-        y mapea al widget con su correspondiente ecuación absoluta la cual es posible evaluar
-        como una expresión de python.
-        :param enableEquations: str. Equación que establece cuando se habilita un widget
-                                con base al valor o estado de otros en la  forma.
-        :return: None.
-        '''
-        for posWidget, enableEc in enableEquations:
-            enableEc = self.getAbsEcuation(posWidget, enableEc)
-            wVars = list(map(str, self.findVars(enableEc)))
-            assert set(wVars).issubset(self.nameToId), 'The enable equation for "%s" widget' \
-                                                       ' reference a non id widget' \
-                                                       % (self.nameToId[str(posWidget)])
-            for elem in wVars:
-                self.dependents[elem] = self.dependents.get(elem, []) + [str(posWidget)]
-            self.enEquations[str(posWidget)] = enableEc.replace('+', ' and ')
-
-    def getAbsEcuation(self, pos, enableEc):
-        '''
-
-        :param pos: int. Id absoluto del widget al que se quiere asociar la enableEc.
-        :param enableEc: str. Equación que establece cuando se habilita un widget
-                         con base al valor o estado de otros en la  forma.
-        :return: str. Ecuación absoluta porque en la enableEc se integra la "pos" en los
-                 tos en que queda implicita esta.
-        '''
-        for tag in ['eq(', 'lt(', 'gt(']:
-            enableEc = enableEc.replace(tag, tag + '+')
-        enableEc = enableEc.replace('+-', '-').replace('!', 'not ')
-        enableEc = enableEc.replace('true', 'True').replace('false', 'False').replace(',)', ',None)')
-        for tag in ['eq(', 'lt(', 'gt(']:
-            enableEc = enableEc.replace(tag, tag + str(pos))
-        return enableEc
-
-    def findVars(self, enableEc):
-        '''
-
-        :param enableEc: str. Equación que establece cuando se habilita un widget
-                         con base al valor o estado de otros en la  forma.
-        :return: list. Lista widgets ids (enteros) de los cuales depende el estado que a los
-                 que la enableEc se refiere.
-        '''
-        enableEc = enableEc.replace('not ', '').replace('*', '+')
-        eq = lt = gt = lambda x, a: [x]
-        vars = eval(enableEc)
-        try:
-            retval = set(vars)
-        except:
-            retval = []
-        else:
-            retval = list(retval)
-        return retval
-        # return [elem for k, elem in enumerate(vars) if elem not in vars[0:k]]
-
-    def findWidgetState(self, enableEq):
-        '''
-        Evalúa la enableEq para encontrar el widget state.
-        :param enableEq: str. Expresión válida en python.
-        :return: tk.NORMAL o tk.DISABLE.
-        '''
-        eq = lambda x, a: getattr(self, self.nameToId[str(x)]).getValue() == a
-        lt = lambda x, a: getattr(self, self.nameToId[str(x)]).getValue() < a
-        gt = lambda x, a: getattr(self, self.nameToId[str(x)]).getValue() > a
-        state = eval(enableEq) >= 1
-        return tk.NORMAL if state else tk.DISABLED
-
-    def setDependantWdgState(self):
-        '''
-        Establece el estado de los widgets que componen la forma.
-        :return: None.
-        '''
-        for key in sorted(self.enEquations.keys(), key=int):
-            enableEq = self.enEquations[key]
-            calcState = self.findWidgetState(enableEq)
-            widget = getattr(self, self.nameToId[key])
-            try:
-                idKey = widget.id
-                widget.children[idKey].configure(state=calcState)
-            except:
-                pass
-
-    def registerChangeListeners(self):
-        '''
-        Establece como callbak function a self.varChange en todos aquellos widgets que puedan
-        afectar el estado de otros en la forma.
-        :return: None
-        '''
-        for key in self.dependents.keys():
-            widget = getattr(self, self.nameToId[key])
-            widget.setListener(self.varChange)
-
-    def varChange(self, widgetName):
-        '''
-        Callback function que actualiza el estado de los widgets que dependen de widgetName
-        cuando este cambia de valor/estado.
-        :param widgetName: str. Nombre del widget cuyo valor/estado ha cambiado.
-        :return: None.
-        '''
-        for depname in self.dependents[widgetName]:
-            enableEq = self.enEquations[depname]
-            calcState = self.findWidgetState(enableEq)
-            widget = getattr(self, self.nameToId[depname])
-            try:
-                idKey = widget.id
-                widget.children[idKey].configure(state=calcState)
-            except:
-                pass
-
     def registerWidget(self, wdId, wdPath):
         '''
         Mapea el wdId y el camino absoluto del widget.
@@ -1125,7 +1030,7 @@ class formFrame(tk.Frame):
         :param groupName: str. Nombre del radio grupo cuya variable se quiere referenciar.
         :return: tk.StringVar. Variable que tiene el valor asociado cen el groupName.
         '''
-        return self.radioGroups.setdefault(groupName, tk.StringVar())
+        return self.radioGroups.setdefault(groupName, tk.StringVar(name=groupName))
 
     def getGroupValue(self, groupName):
         '''
@@ -1159,13 +1064,17 @@ class formFrame(tk.Frame):
         toProcess = dict([(key, value) for key, value in changedSettings.items() if filterFlag(key)])
         return toProcess
 
+# Se hace para compatibilidad con versiones anteriores.
+formFrame = FormFrame
+
 
 def formFrameGen(master, filename=None, selPane=None, settings=None):
     '''
     Identifica la librería que se utiliza para generar los widgets que conforman la form.
     :param master: tkinter Frame que actuara como padre de la forma.
-    :param settings: dict. Valores diferentes a default para las variables de la forma.
+    :param filename: str. Path al archivo xml que contiene el layout a configurar.
     :param selPane: ElementTreee. Nodo raiz del element tree que traduce el layout.
+    :param settings: dict. Valores diferentes a default para las variables de la forma.
     :return: formFrame or object define in user library.
     '''
     if not any((filename, selPane)):

@@ -186,28 +186,27 @@ def widgetFactory(master, selPane, panelModule=None, setParentTo='master', regis
     return k
 
 
-def newPanelFactory(master, selPane, genPanelModule=None, registerWidget=None):
+def newPanelFactory(master, selpane, genPanelModule=None, registerWidget=None):
     '''
     Crea la jerarquia de widgets que conforman una tkinter form.
     :param registerWidget:
     :param master:      tkinter Form. Padre de la Form a generar.
     :param selPane:     element tree nade. Nodo raiz definido por el archivo de layout.
     :param genPanelModule: modulo. Define los widgets definidos por el usuario.
-    :param k:           integer. Consecutivo utilizado por la función para crear el nombre
-                        interno de los widgets a crear.
+    :param registerWidget: callable. Callback function para registrar los widgets creados.
     :return:            2 members tuple. Posición 0: Valor consecutivo del últimmo widget agregado.
                         Posición 1: Lista de tuples que muestra el id del widget y
                         la ecuación que activa (enable) el widget.
     '''
 
-    categories = selPane.findall('category')
+    categories = selpane.findall('category')
     n = -1
     if len(categories) <= 1:
-        if selPane.tag != 'category':
-            selPane = selPane.find('category')
-        n, enableEc, visibleEc = widgetFactory(
+        if selpane.tag != 'category':
+            selpane = selpane.find('category')
+        n = widgetFactory(
             master,
-            selPane,
+            selpane,
             panelModule=genPanelModule,
             registerWidget=registerWidget,
             k=n
@@ -235,20 +234,16 @@ def newPanelFactory(master, selPane, genPanelModule=None, registerWidget=None):
             pane.form = master
             paneArray.append(pane)
         for child in leftPane.winfo_children():
-            child.config(command= lambda x=child['value'], y=tuple(paneArray): selectPane(x, y))
+            child.config(command=lambda x=child['value'], y=tuple(paneArray): selectPane(x, y))
 
         frstboton.invoke()
-        enableEc = []
-        visibleEc = []
         for root, selPane in zip(paneArray, categories):
-            n, deltEnableEc, deltVisibleEc = widgetFactory(
+            n = widgetFactory(
                 root,
                 selPane,
                 panelModule=genPanelModule,
                 registerWidget=registerWidget,
                 k=n)
-            enableEc += deltEnableEc
-            visibleEc += deltVisibleEc
-    return n, enableEc, visibleEc
+    return n
 
 

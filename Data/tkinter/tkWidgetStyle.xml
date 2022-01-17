@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<settings>
+    <category label="Testing Styles">
+        <label text="label" name="lbl" padx="10"/>
+        <button text="boton" name="btn" padx="10"/>
+        <koptionlst id="widget_attrs" anchor="n" fill="x" lib="Widgets.kodiwidgets" default="" label=".option_add params" columnsheadings="Pattern, Value" />
+    </category>
+</settings>
