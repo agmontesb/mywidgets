@@ -4,7 +4,7 @@ import os
 import tkinter as tk
 import tkinter.ttk as ttk
 import xml.etree.ElementTree as ET
-from userinterface import formFrameGen, newPanelFactory, getWidgetInstance
+from userinterface import newPanelFactory, getWidgetInstance
 from Widgets.kodiwidgets import formFrame
 
 
@@ -90,7 +90,60 @@ class Example(tk.Frame):
     def on_main_click(self, event):
         print("main widget binding")
 
+def nameElements(htmlstr, k=-1):
+    import Tools.uiStyle.CustomRegEx as CustomRegEx
+    htmlstr = '''<!DOCTYPE html>
+    <html>
+    <head>
+    <style>
+    p {
+      text-align: center;
+      color: red;
+    }
+    </style>
+    </head>
+    <body>
+
+    <p>Every paragraph will be affected by the style.</p>
+    <p id="para1">Me too!</p>
+    <p>And me!</p>
+
+    </body>
+    </html>'''
+
+    htmlstr = '''<head>
+    <uno id="alex" />
+    <dos />
+    <tres>esto es el freeze</tres>
+    </head>'''
+
+    cmpobj = CustomRegEx.compile('(?#<__TAG__ __TAG__=tag id=_id_ >)')
+
+    from_pos = 0
+    to_pos = len(htmlstr)
+    answ = []
+    it = cmpobj.finditer(htmlstr, from_pos, to_pos)
+    stack = [(m.span(), m.groups()) for m in it]
+
+    while stack:
+        (pini, pfin), (tag, id) = stack.pop(0)
+        if id is None:
+            k += 1
+            id = str(k)
+        answ.append(((pini, pfin), (tag, id)))
+
+        from_pos = htmlstr[pini:pfin].find('>') + pini + 1
+        to_pos = htmlstr[pini:pfin].rfind('<') + pini
+
+        bflag = from_pos != -1 and to_pos != -1 and from_pos < to_pos
+        if bflag:
+            it = cmpobj.finditer(htmlstr, from_pos, to_pos)
+            stack = [(m.span(), m.groups()) for m in it] + stack
+    return answ
+
+
 if __name__ == '__main__':
+    nameElements('')
     top = tk.Tk()
     caso = 'test_newPaneFactory'
     if caso == 'tkinter':

@@ -6,6 +6,7 @@
 
 import importlib
 import tkinter as tk
+import xml.etree.ElementTree as ET
 
 from equations import equations_manager
 import cbwidgetstate
@@ -13,6 +14,14 @@ import cbwidgetstate
 pack_params = ["after", "anchor", "before", "expand", "fill", "in", "ipadx", "ipady", "padx", "pady", "side"]
 grid_params = ["column", "columnspan", "in", "ipadx", "ipady", "padx", "pady", "row", "rowspan", "sticky"]
 place_params = ["anchor", "bordermode", "height", "in", "relheight", "relwidth", "relx", "rely", "width", "x", "y"]
+
+
+def getLayout(layoutfile):
+    # restype = directory_indx('layout')
+    # layoutfile = self._unpack_pointer(id, restype)
+    with open(layoutfile, 'rb') as f:
+        xmlstr = f.read()
+    return ET.XML(xmlstr)
 
 
 def findGeometricManager(tag):
