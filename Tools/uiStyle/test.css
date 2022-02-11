@@ -1,0 +1,151 @@
+/*
+    La definición de estos selectores se puede encontrar en:
+    https://www.w3schools.com/cssref/css_selectors.asp
+*/
+
+::after {
+  text-align: center;
+}
+
+/* The CSS class Selector */
+.center {
+  text-align: center;
+  color: red;
+}
+
+/* The CSS id Selector */
+#para1 {
+  text-align: center;
+  color: red;
+}
+
+/* The CSS universal Selector */
+* {
+  text-align: center;
+  color: blue;
+}
+
+/* The CSS element Selector */
+p {
+  text-align: center;
+  color: red;
+}
+
+
+/* CSS element.class Selector */
+p.center {
+  text-align: center;
+  color: red;
+}
+
+/*
+    The CSS Grouping Selector
+    Selects all <h1> elements, all <h2> elements and all <p> elements
+*/
+h1, h2, p {
+  text-align: center;
+  color: red;
+}
+
+/*
+    CSS element element Selector
+    Select and style every <p> element that is inside <div> elements
+    CustomRegEx pattern: (?#<div <p>>)
+*/
+div p {
+  background-color: yellow;
+}
+
+/*
+    CSS element>element Selector
+    Select and style every <p> element where the parent is a <div> element
+*/
+div > p {
+  background-color: yellow;
+}
+
+/*
+    CSS element+element Selector
+    Selects the first <p> element that is placed immediately
+    after <div> elements
+    CustomRegEx pattern: (?#<div><p>)
+*/
+div + p {
+  background-color: yellow;
+}
+
+/*
+    CSS element1~element2 Selector
+    Selects every <ul> element that is preceded by a <p> element
+    CustomRegEx pattern: not yet implemented
+*/
+p ~ ul {
+  background: #ff0000;
+}
+
+/*
+    CSS [attribute] Selector
+    Selects all elements with a target attribute
+    CustomRegEx pattern: (?#<a target>)
+*/
+a[target] {
+  background-color: yellow;
+}
+
+/*
+    CSS [attribute=value] Selector
+    Selects all elements with target="_blank"
+    CustomRegEx pattern: (?#<a target="_blank">)
+*/
+a[target=_blank] {
+  background-color: yellow;
+} 
+
+
+/*
+    CSS [attribute~=value] Selector
+    Select and style elements with a title attribute containing the word "flower"
+    CustomRegEx pattern: (?#<__TAG__ title=".*?\bflower\b.*?">)
+*/
+[title~=flower] {
+  background-color: yellow;
+}
+
+/*
+    CSS [attribute|=value] Selector
+    Select and style elements, where the lang attribute's value starts with "en" or "en-"
+    CustomRegEx pattern: (?#<__TAG__ lang="en-*.*?">)
+*/
+[lang|=en] {
+  background-color: yellow;
+}
+
+/*
+    CSS [attribute^=value] Selector
+    Set a background color on all <div> elements that have a class attribute value that begins with "test".
+    CustomRegEx pattern: (?#<div class="test.*?">)
+*/
+div[class^="test"] {
+  background: #ffff00;
+}
+
+/*
+    CSS [attribute$=value] Selector
+    Set a background color on all <div> elements that have a class attribute value that ends with "test"
+    CustomRegEx pattern: (?#<div class=".*?test">)
+*/
+div[class$="test"] {
+  background: #ffff00;
+}
+
+/*
+    CSS [attribute*=value] Selector
+    Set a background color on all <div> elements that have a class attribute value containing "test"
+    CustomRegEx pattern: (?#<div class=".*?test.*?">)
+*/
+div[class*="test"] {
+  background: #ffff00;
+}
+
+/*
+    Siguen otros que vamos a ir integrando poco a poco.

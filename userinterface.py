@@ -109,7 +109,9 @@ def widgetFactory(master, selPane, panelModule=None, setParentTo='master', regis
         has_children = bool(len(xmlwidget.getchildren()))
         is_widget = xmlwidget.tag != 'var'
         options = dict.copy(xmlwidget.attrib)
-        options.setdefault('name', str(k))    # Se asigna el consecutivo como nombre del widget.
+        # Se asigna como id del widget el último segmento del id definido.
+        name_default = options.get('id', '').rsplit('/')[-1] or str(k)
+        options.setdefault('name', name_default)    # Se asigna el consecutivo como nombre del widget.
 
         parent = master
         bparent = is_widget and ((setParentTo == 'category' and selPane.tag != 'category') or setParentTo == 'root')
@@ -119,9 +121,6 @@ def widgetFactory(master, selPane, panelModule=None, setParentTo='master', regis
             # la categoría pero puestos bajo el widget master
             options.setdefault('in', master.winfo_name())
             parent = master.nametowidget(master.winfo_parent())
-
-        # Se asigna como id del widget el último segmento del id definido.
-        id = options.get('id', '').rsplit('/')[-1]
 
         options.pop('geomanager', None)
 

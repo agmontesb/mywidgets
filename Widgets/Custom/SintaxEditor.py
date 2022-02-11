@@ -4,11 +4,23 @@ Created on 23/02/2015
 @author: Alex Montes Barrios
 '''
 
+import os
+import thread
+import urllib
+import urllib2
+import httplib
+import socket
+import urlparse
 import tkinter as tk
+import tkinter.ttk as ttk
 import tkinter.font as tkFont
+import tkinter.filedialog as tkFileDialog
+import tkinter.messagebox as tkMessageBox
 import re
 import queue as Queue
 import keyword
+
+import Tools.uiStyle.CustomRegEx as CustomRegEx
 
 
 def rgbColor(red, green, blue):
@@ -377,3 +389,4 @@ class CodeEditor(SintaxEditor):
         content = self.coder.knothCode(actThread)
         contentDesc = (content, 'genfile', 'addon_module')
         self.setContent(contentDesc, inspos="0.0", isEditable=True)
+

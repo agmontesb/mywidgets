@@ -11,6 +11,8 @@ from timeit import template
 import itertools
 import operator
 from html.parser import HTMLParser
+import copy
+import threading
 
 RGXFLAGS = ['IGNORECASE', 'LOCALE', 'MULTILINE', 'DOTALL', 'UNICODE', 'VERBOSE']
 RGXFLAGSPAT = ['i', 'L', 'm', 's', 'u', 'x']
@@ -24,11 +26,11 @@ FLAGS = RGXFLAGS + CRGFLAGS
 def getCompFlagsPatt(compFlags):
     if compFlags == '0': return ''
     compFlags = compFlags.replace('re.', '')
-    trnMap = dict(zip(RGXFLAGS + CRGFLAGS, RGXFLAGSPAT + CRGFLAGSPAT))
-    compFlags = ''.join(map(lambda x: trnMap[x], compFlags.split('|')))
+    trnMap = dict(list(zip(RGXFLAGS + CRGFLAGS, RGXFLAGSPAT + CRGFLAGSPAT)))
+    compFlags = ''.join([trnMap[x] for x in compFlags.split('|')])
     rgxflags = ''.join(re.findall(r'[iLmsux]', compFlags))
     crgflags = re.findall(r'\(\?#<[A-Z]+>\)', compFlags)
-    crgflags = filter(lambda x: x in CRGFLAGSPAT, crgflags)
+    crgflags = [x for x in crgflags if x in CRGFLAGSPAT]
     crgflags = ''.join(crgflags)
     if rgxflags: rgxflags = '(?%s)' % rgxflags
     return rgxflags + crgflags
@@ -38,11 +40,11 @@ def getCompFlags(flags):
     crgpat = r'\(\?\#\<[A-Z]+\>\)'
     pattern = r'^(\(\?[iLmsux]+\))*((?:%s)+)*' % crgpat
     rgxflags, crgflags = re.findall(pattern, flags)[0]
-    trnMap = dict(zip(RGXFLAGSPAT, RGXFLAGS))
-    rgxflags = map(lambda x: trnMap[x], rgxflags.strip('(?)'))
-    trnMap = dict(zip(CRGFLAGSPAT, CRGFLAGS))
-    crgflags = map(lambda x: trnMap.get(x, None), re.findall(crgpat, crgflags))
-    crgflags = filter(None, crgflags)
+    trnMap = dict(list(zip(RGXFLAGSPAT, RGXFLAGS)))
+    rgxflags = [trnMap[x] for x in rgxflags.strip('(?)')]
+    trnMap = dict(list(zip(CRGFLAGSPAT, CRGFLAGS)))
+    crgflags = [trnMap.get(x, None) for x in re.findall(crgpat, crgflags)]
+    crgflags = [_f for _f in crgflags if _f]
     return rgxflags + crgflags
 
 
@@ -51,8 +53,8 @@ def getFlagsRegexPair(regexpat):
     pattern = r'^(\(\?[iLmsux]+\))*((?:%s)+)*(.+)' % crgpat
     rgxflags, crgflags, regexp = re.findall(pattern, regexpat)[0]
     crgflags = re.findall(crgpat, crgflags)
-    regexp = ''.join(filter(lambda x: x not in CRGFLAGSPAT, crgflags)) + regexp
-    crgflags = ''.join(filter(lambda x: x in CRGFLAGSPAT, crgflags))
+    regexp = ''.join([x for x in crgflags if x not in CRGFLAGSPAT]) + regexp
+    crgflags = ''.join([x for x in crgflags if x in CRGFLAGSPAT])
     return rgxflags, crgflags, regexp
 
 
@@ -104,7 +106,7 @@ class ExtRegexParser(HTMLParser):
         reqAttr = self.reqTags.get(tag, {})
         for attr in reqAttr:
             fullAttr = tag + ATTRSEP + attr
-            if not fullAttr in self.varDict: continue
+            if fullAttr not in self.varDict: continue
             k = self.varDict[fullAttr]
             if reqAttr[attr] and reqAttr[attr].groups:
                 m = reqAttr[attr].match(tagAttr[attr])
@@ -115,7 +117,7 @@ class ExtRegexParser(HTMLParser):
         optAttr = self.optTags.get(tag, {})
         for attr in optAttr:
             fullAttr = tag + ATTRSEP + attr
-            if not attr in paramPos: continue
+            if attr not in paramPos: continue
             if optAttr[attr]:
                 m = optAttr[attr].match(tagAttr[attr])
                 if not m: continue
@@ -129,8 +131,8 @@ class ExtRegexParser(HTMLParser):
 
     def haveTagAllAttrReq(self, tag, tagAttr, reqTags=-1):
         if reqTags == -1: reqTags = self.reqTags.get(tag, {})
-        diffSet = set(reqTags.keys()).difference(tagAttr.keys())
-        interSet = set(reqTags.keys()).intersection(tagAttr.keys())
+        diffSet = set(reqTags.keys()).difference(list(tagAttr.keys()))
+        interSet = set(reqTags.keys()).intersection(list(tagAttr.keys()))
         bFlag = diffSet or not all([reqTags[key].match(tagAttr[key]) for key in interSet if reqTags[key]])
         return not bFlag
 
@@ -150,7 +152,7 @@ class ExtRegexParser(HTMLParser):
         return tagAttr
 
     def setPathTag(self, tagList, rootName='tagpholder', reqSet=-1):
-        dadList = [-1]
+        dadList = [-1]  # dadList[k] señala la posición del padre de tagList[k]
         no_reqSetFlag = reqSet == -1
         for k in range(len(tagList) - 1):
             indx = k + 1
@@ -167,8 +169,7 @@ class ExtRegexParser(HTMLParser):
         if not no_reqSetFlag:
             if tagList[0][1] in reqSet: toProcess.append(0)
             reqSet.difference_update([tagList[0][1]])
-            # relPath = sorted([x for x in reqSet if x.find('..') != -1], cmp=lambda x, y: y.count('.') - x.count('.'))
-            relPath = sorted([x for x in reqSet if x.find('..') != -1], key=lambda x: str.count(x, '.'))
+            relPath = sorted([x for x in reqSet if x.find('..') != -1], key=lambda x: x.count('.'))
             efe = lambda x: not (pathTag.startswith(x.split('..')[0]) and pathTag.endswith(x.split('..')[1]))
 
         for k in range(1, len(tagList)):
@@ -643,7 +644,7 @@ class ExtMatchObject:
         pass
 
     def _varIndex(self, x):
-        nPos = self.groupindex[x] if isinstance(x, (bytes, str)) else int(x)
+        nPos = self.groupindex[x] if isinstance(x, str) else int(x)
         if nPos > len(self.varpos): raise Exception
         return nPos
 
@@ -664,9 +665,9 @@ class ExtMatchObject:
         # return tuple(self.string[tpl[0]:tpl[1]] or None for tpl in self.varpos[1:])
 
     def groupdict(self, default=None):
-        keys = sorted(self.groupindex.keys(), key=lambda x: self.groupindex[x])
+        keys = sorted(list(self.groupindex.keys()), key=lambda x: self.groupindex[x])
         values = self.groups()
-        return dict(zip(keys, values))
+        return dict(list(zip(keys, values)))
 
     def start(self, group=0):
         return self.span(group)[0]
@@ -726,6 +727,20 @@ a {'href': '/\\Z'}
 
 
 def ExtCompile(regexPattern, flags=0):
+    '''
+    Analiza el regexPattern para encontrar: tag pattern, required attrs y sus patterns asociados,
+     las variables a entregar.
+     tag pattern: (?#<tagpattern .........>) o (?#<tagpattern>). El tagpattern puede ser el nombre
+     del elemento (a, div, table, input, etc) o una expresión válida de re (cas[a-zA-Z3], *.+?, etc)
+     required attrs: Son los atributos asociados a un elemento. Estos pueden referirse al elemento
+     requerido o el de uno cualquiera de sus descendientes. Para designar un descendiente de primer nivel
+     precedemos el nombre con el camino que llega a el separando los elementos que lo contienen con
+     un punto table.a.div.span.* se refiere a el comentario del elemento span que desciende de table
+     pasando por a y div (es decir span es bisnieto de a.
+    :param regexPattern:
+    :param flags:
+    :return:
+    '''
     def skipCharsInSet(strvar, aSet, npos=0, peek=False):
         m = cmp_patt__in[aSet].match(strvar, npos)
         res = m.group() if m else ''
@@ -736,7 +751,19 @@ def ExtCompile(regexPattern, flags=0):
         res = m.group() if m else ''
         return (res, npos + len(res)) if not peek else res
 
-    match = re.search('\(\?#<\(*(?P<tagpattern>[a-zA-Z]\S*|__TAG__)\)*(?P<vars>[^>]*>)\)', regexPattern)
+        # r'''
+        # \(\?\#\w<                               # Prefix Tag for CustomRegEx
+        # \(*                                     # Inicio de grupo
+        # (?P<tagpattern>[a-zA-Z]\S*|__TAG__)     # Toda palabra que comience con una letra o __TAG__
+        # \)*                                     # Fin de grupo
+        # (?P<vars>[^>]*>)                        # Lo que no es >
+        # \)                                      # Sufix Tag for CustomRegEx
+        # '''
+
+    match = re.search(
+        '\(\?#<\(*(?P<tagpattern>[a-zA-Z]\S*|__TAG__)\)*(?P<vars>[^>]*>)\)',
+        regexPattern
+    )
     if not match:
         answ = re.compile(regexPattern, flags)
     else:
@@ -756,12 +783,20 @@ def ExtCompile(regexPattern, flags=0):
         VAR_PATT = EQ + PATH_RES + END_PAT + ATTR_LDEL
 
         cmp = re.compile
-        cmp_patt_not = dict([('TAG_PATT', cmp('[^' + TAG_PATT + ']+')), ('ATTR_PATT', cmp('[^' + ATTR_PATT + ']+')),
-                             ('PARAM_PATT', cmp('[^' + PARAM_PATT + ']+')), ('VAR_PATT', cmp('[^' + VAR_PATT + ']+'))])
-        cmp_patt__in = dict([('PATH_RES', cmp('[' + PATH_RES + ']+')), ('ATTR_LDEL', cmp('[' + ATTR_LDEL + ']+')),
-                             ('ATTR_RDEL', cmp('[' + ATTR_RDEL + ']+')), ('PARAM_DEL', cmp('[' + PARAM_DEL + ']+'))])
+        cmp_patt_not = dict([
+            ('TAG_PATT', cmp('[^' + TAG_PATT + ']+')),          # [^> \t\n\r\f\v]+
+            ('ATTR_PATT', cmp('[^' + ATTR_PATT + ']+')),        # [^}{=> \t\n\r\f\v]+
+            ('PARAM_PATT', cmp('[^' + PARAM_PATT + ']+')),      # [^\'"]+
+            ('VAR_PATT', cmp('[^' + VAR_PATT + ']+'))           # [^=}>\'" \t\n\r\f\v]+
+        ])
 
         rootTag = "tagpholder"
+        cmp_patt__in = dict([
+            ('PATH_RES', cmp('[' + PATH_RES + ']+')),   # [}]+
+            ('ATTR_LDEL', cmp('[' + ATTR_LDEL + ']+')), # [\'" \t\n\r\f\v]+
+            ('ATTR_RDEL', cmp('[' + ATTR_RDEL + ']+')), # [{=> \t\n\r\f\v]+
+            ('PARAM_DEL', cmp('[' + PARAM_DEL + ']+'))  # [\'"]+
+        ])
         rootTagStck = [rootTag]
         pattern = regexPattern.strip('(?#)')
 
@@ -874,10 +909,10 @@ def ExtCompile(regexPattern, flags=0):
                             raise re.error(v)
                         attrName = pathKey + ATTRSEP + attrKey
                         varName = VAR.strip('&')
-                        if attrName in map(operator.itemgetter(0), varList):
+                        if attrName in list(map(operator.itemgetter(0), varList)):
                             v = 'reassigment of attribute ' + attrName + ' to var ' + varName
                             raise re.error(v)
-                        if varName in map(operator.itemgetter(1), varList):
+                        if varName in list(map(operator.itemgetter(1), varList)):
                             v = 'redefinition of group name ' + varName + ' as group ' + str(len(varList) + 1)
                             raise re.error(v)
                         varList.append([attrName, varName])
@@ -950,15 +985,29 @@ def compile(regexPatternIn, flags=0, debug=0):
     patt1 = BEG + '<' + patterns[0] + '>' + END
     zone = 'zin'
     if token == ZIN:
+        #
+        # (?#<h1 class="price" <p *=label>>)
+        # (?#<h1 class="price" <__TAG__ __TAG__="p|span" *=label>>)
+        #
         patt2 = patterns[-2] if tags[-1] == '>>' else ''
         patt2 = BEG + '<' + patt2 + '>' + END
         # zone = 0 if tags[1] == '<' else patterns[1]
     elif token == CHILDREN:
+        #
+        # Dos formas:
+        # Primera:
+        #       (?#<h1 class="price" .p<*=label>*>)
+        # Segunda:
+        #       (?#<h1 class="price" <__TAG__ __TAG__="p|span" *=label>*>)
+        #
         chldpat = '|'.join(re.findall(r'(?<= )[.]([a-z\d_-]+)(?=[ >])', patt1))
         chldpat = chldpat or '__TAG__'
         patt2 = patterns[-1] if tags[-1] == '>*>' else ''
         patt2 = BEG + '<' + chldpat + ' ' + patt2 + '>' + END
     elif token == NXTTAG:
+        #
+        # (?#<h1 class="price"><__TAG__ __TAG__="p|span" *=label>)
+        #
         patt2 = patterns[-1] if tags[-1] == '>' else ''
         patt2 = BEG + '<__TAG__ ' + patt2 + '>' + END
         zone = 'zoutr'
@@ -1019,487 +1068,46 @@ def sub(pattern, repl, string, count=0, flags=0):
 def subn(pattern, repl, string, count=0, flags=0):
     pass
 
+if __name__ == '__main__':
+    htmlstr = '''
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Elementos para estudio de CustomRegEx</title>
+    <!--
+    (?#<table span.attr=label>) label = hijo2
+    (?#<table ..attr=label>)    label = hijo1
+    (?#<table .[1].attr=label>) label = hijo1
+    (?#<table .[2].attr=label>) label = hijo3 ???? Se salto span con attr="hijo2"
+    (?#<table .[2].__TAG__=label>) label = span
+    (?#<table .[2].__TAG__=lbl1 .[2].attr=lbl2>) lbl1=span, lbl2=hijo3
+    (?#<table .[2]{__TAG__=lbl attr=lbl2}>) lbl1=span, lbl2=hijo3   
+    -->
+    <table attr="padre">
+        <row attr="hijo1">
+            <col attr="nieto">
+                <span attr="bisnieto"/>
+            </col>
+        </row>
+        <span attr="hijo2">
+            <row attr="hijo1">
+                <span attr="nieto">
+            </row>
+        </span>
+        <span attr="hijo3"/>
+    </table>
+</head>
+<body>
 
-if __name__ == "__main__":
+</body>
+</html>
+    '''
 
-    # curl "http://www.bvc.com.co/pps/tibco/portalbvc/Home/Mercados/enlinea/acciones?com.tibco.ps.pagesvc.action=portletAction&com.tibco.ps.pagesvc.targetSubscription=5d9e2b27_11de9ed172b_-74187f000001&action=buscar" --data-urlencode "tipoMercado=1" --data-urlencode "diaFecha=26" --data-urlencode "mesFecha=04" --data-urlencode "anioFecha=2018" --data-urlencode "nemo=EXITO     " -e "http://www.bvc.com.co/pps/tibco/portalbvc/Home/Mercados/enlinea/acciones" --compressed
-    tableIntradiaBody = r'(?#<table id="texto_27" .tr<td{1.*=&td1& 2.*=&td2& 3.*=&td3& 4.*=&td4& 5.*=&td5& 6.*=&td6& 7.*=&td7&}>*>)'
-
-    # content = '''<form name="file" enctype="multipart/form-data" action="http://d5387.allmyvideos.net/cgi-bin/upload.cgi?upload_id=" method="post" onSubmit="return StartUpload(this);">'''
-    # answ = ExtRegexParser.getAttrDict(content)
-
-    #     testStr = ['<uno><dos><!--Comentario en <dos>--></dos><script f="uno">script en <uno></script></uno>',
-    #                '<!--Comentario al inicio --><uno><dos><!--Comentario en el medio--></dos></uno><!--Comentario al final -->']
-    #
-    #     for elem in testStr:
-    #         equis = filteredStr(elem)
-    #         print equis
-    #
-    #     pattern = r'<dos>.*?</dos>'
-    #     match = re.search(pattern, testStr[0])
-    #     print 'original', match.start(), match.end(), match.group()
-    #
-    #     equis = filteredStr(testStr[0])    #Aca debo resolver el problema que no ve silteredStr como una str
-    #     print 'start', equis.start
-    #     print 'end', equis.end
-    #     print 'base', equis.base
-    #
-    #     print len(str(equis)), equis
-    #     match = re.search(pattern, str(equis))
-    #     print 'filtered', match.start(), match.end(), match.group()
-    #     print 'filterToOrig', match.start(), match.end(), equis.trnsSlice(match.start(), match.end())
-
-    #     with open(r'c:/fileTest/htmlRegexTest.txt', 'r') as origF:
-    #         ese = origF.read()
-    #
-    #     equis = filteredStr(ese)
-    #     print 'start', equis.start
-    #     print 'end', equis.end
-    #     print 'base', equis.base
-    #
-    #     with open(r'c:/fileTest/htmlRegexMod.txt', 'w') as origF:
-    #         origF.write(str(equis))
-
-    #     with open(r'c:/fileTest/htmlRegexMod.txt', 'r') as origF:
-    #
-    #     filteredEquis = filteredStr(equis)
-    #     print 'mod = 5649', filteredEquis.deTrnsSlice(5649, 5649)
-    #     print 'real = 10288', filteredEquis.transSlice(10288, 10288)
-
-    #     salida = ''
-    #     testHtmlPattern(equis,0)
-
-    #     compile('(?#<TAG table ID="2345" clase ref=url a.title=label>)', 0)
-    #     compile("(?#<TAG table ID='2345' clase ref=url a.title=label>)", 0)
-
-    #     modEquis = filteredStr(equis)
-    #     filteredEquis = str(modEquis)
-    #
-    #     with open(r'c:/fileTest/NEWhtmlRegexMod.txt', 'w') as origF:
-    #         origF.write(str(filteredEquis))
-
-    #     with open(r'c:/fileTest/htmlRegexTest.txt', 'r') as origF:
-    #         equis = origF.read()
-    #
-    #     import pprint
-    #     reg = compile('(?#<TAG tr td.a.href=url td.a.*=label td[3].*=when td[4].*=quality>)', 0)
-    #     ese = reg.findall(equis)
-    #     pprint.pprint(ese)
-    #     print len(ese)
-    #
-
-    #
-    #     with open(r'c:/fileTest/extRegExTest.txt', 'r') as origF:
-    #         equis = origF.read()
-    #     reg = compile(r'(?#<TAG li a.title=label a.href=url>)',0)
-    #     ese = reg.findall(equis)
-    #     print len(ese)
-
-    #     reg = compile('(?#<TAG a href=url target="_blank" *=label>)', 0)
-    #     match = reg.search(equis)
-    #     print match.groupdict()
-    #
-    #     reg = compile('(?#<TAG td align="center" a.href=url a.style=label>)', 0)
-    #     print match.group()
-    #     print match.start(), match.end()
-    #     print match.span()
-    #
-    #     print match.group('url')
-    #     print match.start('url'), match.end('url')
-    #     print match.span('url')
-    #     ese = reg.findall(equis)
-    #     print ese
-    #     print len(ese)
-    #
-    #
-    #
-    #
-    # #     for tag in ["uno", "uno.dos", "uno.dos[2]", "uno.dos[2].tres[6]"]:
-    # #         print tag, findPredecesor(tag)
-    # #
-    # #     tag = "uno.dos[2].tres[6]"
-    # #     print '*****'
-    # #     while tag:
-    # #         print tag
-    # #         tag = findPredecesor(tag)
-    #
-    #
-    #
-
-#     print
-#     '******* BEG ********'
-#     testing = "errortest"  # "tagAttrTiming"
-#
-#     if testing == "errortest":
-#         htmlStr = '''
-# <rexp id="nav_tabs" flags="re.DOTALL|re.IGNORECASE">&lt;li class="[un]*pressed"&gt;&lt;a href="(?P&lt;url&gt;[^"]+)" title="[WLP].+?"&gt;(?P&lt;label&gt;.+?)&lt;/a&gt;&lt;/li&gt;</rexp>
-#         '''
-#         pattern = r'(?#<rexp id="nav_tabs" flags=compflags *=regexp>)'
-#         m = search(pattern, htmlStr)
-#         print
-#         m.groups()
-#
-#     if testing == "tagAttrTiming":
-#         """
-#         Tiempos totales incrementando lista un test a la vez
-# 0      0.01522        0.01934        0.78693
-# 1      3.81680        3.14853        1.21225
-# 2     22.83019       14.96986        1.52508
-# 3     40.31430       26.10081        1.54456
-# 4     58.14717       37.98537        1.53078
-# 5     80.19113       51.07605        1.57003
-# 6    107.88327       66.52695        1.62165
-# 7    140.75882       86.49728        1.62732
-# 8    207.82065      125.02239        1.66227
-#         """
-#
-#         setupStrBase = """
-# from xbmcUI.CustomRegEx import ExtCompileNEW, ExtCompile
-# regexdat  = [
-#              '(?#<table>)',
-#              '(?#<a href=url *=label>)',
-#              '(?#<a (href) *=label>)',
-#              '(?#<a (href) *=&label&>)',
-#              '(?#<ese a.*="http//.+?/prueba"=icon href=url>)',
-#              '(?#<a href="http://uno/.+?/tres.html" href=url *=label>)',
-#              '(?#<a href span{src=icon *=label} div.id>)',
-#              '(?#<table id td{1.*=grp1 2{b.*=grp2 a{href=grp2a src=grp2b}} 3.*=grp3 4.*=grp4}>)']
-#
-# ene = len(regexdat) - 0
-# regexpatt = regexdat[:ene]
-# """
-#         execNew = """
-# for pattern in regexpatt:
-#     cmppatt = ExtCompileNEW(pattern)
-# """
-#
-#         execOld = """
-# for pattern in regexpatt:
-#     cmppatt = ExtCompile(pattern)
-# """
-#
-#         import timeit
-#
-#         testResults = [['ExtCompileNEW'],
-#                        ['ExtCompile'],
-#                        ['Cociente'],
-#                        ['Total']]
-#
-#         print('*** ', timeit.time.asctime(), testResults[0][0])
-#         t = timeit.Timer(execNew, setupStrBase)
-#         testResults[0].extend(t.repeat(10, 10000))
-#
-#         print('*** ', timeit.time.asctime(), testResults[1][0])
-#
-#         t = timeit.Timer(execOld, setupStrBase)
-#         testResults[1].extend(t.repeat(10, 10000))
-#
-#         print('*** ', timeit.time.asctime(), 'Test End')
-#
-#         listLen = len(testResults[0])
-#         testResults[2].extend([testResults[0][k] / testResults[1][k] for k in range(1, listLen)])
-#         tot1 = sum(testResults[0][1:listLen])
-#         print(testResults[0][1:listLen])
-#         print(tot1)
-#         tot2 = sum(testResults[1][1:listLen])
-#         coc = tot1 / tot2
-#         testResults[3].extend([tot1, tot2, coc])
-#
-#         print(
-#             'Case'.rjust(10) + ''.join(map("{:>15}".format, [testResults[0][0], testResults[1][0], testResults[2][0]]))
-#         )
-#         for k in range(1, len(testResults[0])):
-#             print(
-#                 str(k).rjust(10) + ''.join(
-#                     map("{:15.5f}".format, [testResults[0][k], testResults[1][k], testResults[2][k]])
-#                 )
-#             )
-#         print(
-#             'total'.rjust(10) + ''.join(map("{:15.5f}".format, [tot1, tot2, coc]))
-#         )
-#
-#     if testing == "<ZIN>":
-#         with open(r'c:/fileTest/extRegExTest.txt', 'r') as origF:
-#             equis = origF.read()
-#
-#         #         testPattern = compile('(?#<ul class="links">)<ZIN>(?#<a title=label href=url>)', 0)
-#         testPattern = compile(
-#             '<ul class="links">.+?</ul><ZIN><a title="(?P<label>[^"]+)" href="(?P<url>[^"]+)">.+?</a>', re.DOTALL)
-#         #         testPattern = compile('<ul class="links">.+?</ul><ZIN>(?#<a title=label href=url>)', re.DOTALL)
-#         pos = 0
-#         for k in range(59):
-#             match = testPattern.search(equis, pos)
-#             print
-#             match.group()
-#             print
-#             match.groupdict()
-#             print
-#             match.span()
-#             pos = match.end()
-#         match = testPattern.search(equis, pos)
-#         print
-#         match.group()
-#         print
-#         match.groupdict()
-#         print
-#         match.span()
-#
-#         pos = 0
-#         testPattern = compile(
-#             '(?#<div class="tagindex" h4.*="A">)<ZIN><a title="(?P<label>[^"]+)" href="(?P<url>[^"]+)">.+?</a>',
-#             re.DOTALL)
-#         print
-#         '****   finditer   ****'
-#         for match in testPattern.finditer(equis, pos):
-#             print
-#             match.group()
-#
-#         pos = 0
-#         import pprint
-#
-#         pprint.pprint(testPattern.findall(equis, pos))
-#
-#     if testing == "doctest":
-#         import doctest
-#
-#         doctest.testmod(verbose=True)
-#
-#     if testing == "regexparser":
-#         setupStrTest = """
-# import CustomRegEx
-# with open(r'c:/fileTest/extRegExTest.txt', 'r') as origF:
-#     equis = origF.read()
-#
-# reqTags = {'li': {}, 'li.a': {'title':'', 'href':''}}
-# varList = [('li.a.title', 'label'), ('li.a.href', 'url')]
-# dmy = CustomRegEx.ExtRegexParser(varList, reqTags)
-# ene = 0
-# """
-#         execStr = """
-# varPos = dmy.initParse(equis[7958:], 7958)
-# posIni, posFin = varPos[1]
-# ene += 1
-# print '***', ene, '***   ', equis[7958:][posIni:posFin]
-# """
-#
-#         #         import timeit
-#         #         t = timeit.Timer(execStr, setupStrTest)
-#         #         print t.repeat(3,2582)
-#
-#         with open(r'c:/fileTest/extRegExTest.txt', 'r') as origF:
-#             equis = origF.read()
-#
-#         reqTags = {'li': {}, 'li.a': {'title': '', 'href': ''}}
-#         varList = [('li.a.title', 'label'), ('li.a.href', 'url')]
-#         dmy = ExtRegexParser(varList, reqTags)
-#         varPos = dmy.initParse(equis[7958:], 7958)
-#         for posIni, posFin in varPos:
-#             print
-#             equis[7958:][posIni:posFin]
-#
-#     #         with open(r'c:/fileTest/NEWhtmlRegexMod.txt', 'r') as origF:
-#     #             equis = origF.read()
-#     #
-#     #         reqTags = {'tr.td.a': {'target':re.compile('_blank' + r'\Z'), '*':'' }, 'tr.td.img': {'src':''}, 'tr.td[3]':{'*':''}, 'tr.td[4]':{'*':''} }
-#     #         varList = [('tr.td.a.*', 'resolver'), ('tr.td.img.src', 'icon'), ('tr.td[3].*', 'when'), ('tr.td[4].*', 'who') ]
-#     #
-#     #         dmy = newRegexParser(reqTags, varList)
-#     #         varPos = dmy.initParse(equis[5059:], 5059)
-#     #         for posIni, posFin in varPos:
-#     #             print equis[5059:][posIni:posFin]
-#
-#     if testing == "TIMETEST":
-#         setupStrBase = """
-# import re
-# case = 'Base re'
-# with open(r'c:/fileTest/extRegExTest.txt', 'r') as origF:
-#     equis = origF.read()
-# reg = re.compile(r'<li><a title="(?P<label>[^"]+)" href="(?P<url>[^"]+)">')
-# """
-#         setupStrTest = """
-# import CustomRegEx
-# case = 'CustomRegEx'
-# with open(r'c:/fileTest/extRegExTest.txt', 'r') as origF:
-#     equis = origF.read()
-# reg = CustomRegEx.compile(r'(?#<TAG li a.title=label a.href=url>)',0)
-# """
-#         execStr = """
-# answer = []
-# nPos = 0
-# while 1:
-#     match = reg.search(equis,nPos)
-#     if not match:break
-#     answer.append(match)
-#     nPos = match.end()
-#     #print equis[match.start(1):match.end(1)]
-# print '***', len(answer)
-# """
-#         import timeit
-#
-#         testResults = [['CustomRegEx '],
-#                        ['Base Case re'],
-#                        ['Cociente    ']]
-#
-#         t = timeit.Timer(execStr, setupStrBase)
-#         testResults[1].extend(t.repeat(10, 2))
-#
-#         print
-#         '****'
-#
-#         t = timeit.Timer(execStr, setupStrTest)
-#         testResults[0].extend(t.repeat(10, 2))
-#
-#         testResults[2].extend([testResults[0][k] / testResults[1][k] for k in range(1, len(testResults[0]))])
-#
-#         for k in range(len(testResults)):
-#             print
-#             testResults[k]
-#
-#         """
-# ['Base Case re', 0.017796395910653448, 0.06384938588563631, 0.006653778622702056]
-# ['CustomRegEx' , 4.617611456204629,    4.556558026229592,   4.550929028689399]
-# ['RegexParser',  1.5810683341039153,   1.3093148011828322,  1.2611394744304092]
-# ['myHtmlParser', 0.5135678556911564,   0.48400788368354086, 0.5097856710838946]
-# """
-#
-#         """
-# ['CustomRegEx', 3.990230601934045, 3.7897863415601707, 3.792617916522909]
-# [0.7224969933329516, 0.48941115421094017, 0.5274976987298665]
-# [1.8069470421520055, 1.378646867129761, 1.3666685989420442]
-# ['CustomRegEx', 0.7102466933646595, 0.13496191555071946, 0.04810506642604018]
-# """
-#
-#     print
-#     '******* END ********'
-#
-#     if testing == "HTMLPARRSER":
-#         from html.parser import HTMLParser
-#         from html.entities import name2codepoint
-#
-#         with open('c:/testFiles/pic/testHtmlParser.txt', 'rb') as f:
-#             content = f.read().decode('utf-8')
-#
-#
-#         class MyHTMLParser(HTMLParser):
-#             def __init__(self):
-#                 self.pos = 0
-#                 HTMLParser.__init__(self)
-# 
-#             def getSpan(self, entityStr):
-#                 posini = self.pos
-#                 self.pos = posfin = posini + len(entityStr)
-#                 return (posini, posfin)
-#
-#             def handle_starttag(self, tag, attrs):
-#                 posini, posfin = self.getSpan(self.get_starttag_text())
-#                 print(posini, posfin), '**', content[posini:posfin], '**'
-#                 print
-#                 "Start tag:", tag
-#                 for attr in attrs:
-#                     print
-#                     "     attr:", attr
-#
-#             def handle_endtag(self, tag):
-#                 posini, posfin = self.getSpan('</%s>' % tag)
-#                 print(posini, posfin), '**', content[posini:posfin], '**'
-#                 print
-#                 "End tag  :", tag
-#
-#             def handle_startendtag(self, tag, attrs):
-#                 posini, posfin = self.getSpan(self.get_starttag_text())
-#                 print(posini, posfin), content[posini:posfin]
-#                 print
-#                 "Start tag:", tag
-#                 for attr in attrs:
-#                     print
-#                     "     attr:", attr
-#
-#             def handle_data(self, data):
-#                 posini, posfin = self.getSpan(data)
-#                 print(posini, posfin), '**', content[posini:posfin], '**'
-#                 print
-#                 "Data     :", data
-#
-#             def handle_entityref(self, name):
-#                 posini, posfin = self.getSpan('&%s;' % name)
-#                 print(posini, posfin), '**', content[posini:posfin], '**'
-#                 c = chr(name2codepoint[name])
-#                 print
-#                 "Named ent:", c
-#
-#             def handle_charref(self, name):
-#                 posini, posfin = self.getSpan('&%s;' % name)
-#                 print(posini, posfin), '**', content[posini:posfin], '**'
-#                 if name.startswith('x'):
-#                     c = chr(int(name[1:], 16))
-#                 else:
-#                     c = chr(int(name))
-#                 print
-#                 "Num ent  :", c
-#
-#             def handle_comment(self, data):
-#                 posini, posfin = self.getSpan('<!--%s-->' % data)
-#                 print(posini, posfin), '**', content[posini:posfin], '**'
-#                 print
-#                 "Comment  :", data
-#
-#             def handle_decl(self, data):
-#                 posini, posfin = self.getSpan('<!%s>' % data)
-#                 print(posini, posfin), '**', content[posini:posfin], '**'
-#                 print
-#                 "Decl     :", data
-#
-#             def handle_pi(self, data):
-#                 posini, posfin = self.getSpan('<?%s>' % data)
-#                 print(posini, posfin), '**', content[posini:posfin], '**'
-#                 print
-#                 "pi     :", data
-#
-#             def unknown_decl(self, data):
-#                 posini, posfin = self.getSpan('<![%s]>' % data)
-#                 print(posini, posfin), '**', content[posini:posfin], '**'
-#                 print
-#                 "Unknown     :", data
-#
-#             parser = MyHTMLParser()
-#             parser.feed(content)
-#
-#     if testing == "opVariables":
-#         content = '<parent href="href" href1="href1">' \
-#                   '<son href="sonhref"></son>' \
-#                   'primero</parent>'
-#         regexPat = r'(?#<parent href=url href1=_url_ *=&label& son.href=__url__>)'
-#         # compPat = ExtCompile(regexPat)
-#         # m = compPat.search(content)
-#         htmlStr = """
-# <span class="independiente">span0</span>
-# <script>
-#     <span class="bloque1">span1</span>
-#     <a href="http://www.eltiempo.com.co">El Tiempo</a>
-#     <span class="bloque1">span2</span>
-# </script>
-# <bloque>
-#     <span class="independiente">bloque1</span>
-#     <parent id="root">
-#     <hijo id="hijo1">primer hijo</hijo>
-#     <hijo id="hijo2" exp="hijo con varios comentarios">
-#          <h1>El primer comentario</h1>
-#          <h1>El segundo comentario</h1>
-#          <h1>El tercer comentario</h1>
-#     </hijo>
-#     <hijo id="hijo3">tercer hijo</hijo>
-#     </parent>
-#     <span class="independiente">bloque2</span>
-# </bloque>
-# <!--
-#     <span class="bloque2">span1</span>
-#     <a href="http://www.elheraldo.com.co">El Heraldo</a>
-#     <span class="bloque2">span2</span>
-# -->
-# <span class="independiente">span3</span>
-#         """
-#
-#         cmpobj = ExtCompile('(?#<(span|a) *=label>)')
-#         answer = cmpobj.findall(htmlStr)
-#         print
-#         answer
+    pattern = '(?#<table ..attr=label>)'
+    pattern = '(?#<table .[1].attr=label>)'
+    pattern = '(?#<table .2.attr=label>)'
+    pattern = '(?#<table .[2].__TAG__=lbl1 .[2].attr=lbl2>)'
+    pattern = '(?#<table .[2].attr=label>)'
+    m = search(pattern, htmlstr)
+    print('Hola miundo')
