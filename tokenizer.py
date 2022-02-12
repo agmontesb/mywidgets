@@ -13,7 +13,7 @@ class Tokenizer(typing.Iterable):
 
     def tokenize(self, strin):
         self.strIn = strin
-        self.pos = None
+        self.pos = 0
         self._nxtToken = (-1, self.Token('', '\0'))
         self._actToken = (-1, self.Token('', '\0'))
         self._prevToken = (-1, self.Token('', '\0'))
@@ -85,3 +85,6 @@ class Tokenizer(typing.Iterable):
             else prvToken.value[0]
         )
         return strToken
+
+    def getPrevToken(self):
+        return self._prevToken[1]

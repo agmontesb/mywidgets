@@ -22,6 +22,70 @@ def htmlString():
     return equis
 
 
+class TestNestedCPatterns:
+    htmlStr = """
+    <span class="independiente">span0</span>
+    <script>
+        <span class="bloque1">span1</span>
+        <a href="http://www.eltiempo.com.co">El Tiempo</a>
+        <span class="bloque1">span2</span>
+    </script>
+    <bloque>
+        <span class="independiente">bloque1</span>
+        <parent id="root">
+            <hijo id="hijo1">primer hijo</hijo>
+            <hijo id="hijo2" exp="hijo con varios comentarios">
+                 <h1>El primer comentario</h1>
+                 <h1>El segundo comentario</h1>
+                 <h1>El tercer comentario</h1>
+            </hijo>
+            <span class="colado">blk1</span>
+            <hijo id="hijo3">tercer hijo</hijo>
+        </parent>
+        <span class="independiente">bloque2</span>
+    </bloque>
+    <!--
+        <span class="bloque2">span1</span>
+        <a href="http://www.elheraldo.com.co">El Heraldo</a>
+        <span class="bloque2">span2</span>
+    -->
+    <span class="independiente">span3</span>
+        """
+
+    def test_compile(self):
+        regex_str = r'(?#' + '<<bloque<hijo id="hijo2">><h1 *="El segundo comentario">*>' + r')'
+        comp_obj1 = MarkupRe.compile(regex_str)
+        assert type(comp_obj1) == MarkupRe.zinwrapper, 'NestedCPatterns: Not a zinwrapper object'
+        assert comp_obj1.pattern == regex_str
+
+        assert type(comp_obj1.spanRegexObj) == MarkupRe.zinwrapper
+        assert comp_obj1.spanRegexObj.pattern == '(?#<bloque<hijo id="hijo2">>)'
+        assert type(comp_obj1.spanRegexObj.spanRegexObj) == MarkupRe.ExtRegexObject
+        assert comp_obj1.spanRegexObj.spanRegexObj.pattern == '(?#<bloque>)'
+        assert comp_obj1.spanRegexObj.srchRegexObj.pattern == '(?#<hijo id="hijo2">)'
+
+        assert type(comp_obj1.srchRegexObj) == MarkupRe.ExtRegexObject
+        assert comp_obj1.srchRegexObj.pattern == '(?#<__TAG__ __TAG__="h1" *="El segundo comentario">)'
+
+    def test_finditer(self):
+        regex_strs = [
+            '<<bloque<hijo id="hijo2">><h1 *="El segundo comentario">*>',
+            '<<parent<hijo id="hijo2">*><h1 *="El segundo comentario">*>',
+            '<<bloque<parent id="root">><h1 *="El segundo comentario">>',
+        ]
+        for regex_str in regex_strs:
+            comp_obj1 = MarkupRe.compile(r'(?#' + regex_str + r')')
+            answer = [
+                self.htmlStr[a:b] for a, b in
+                [m.span() for m in comp_obj1.finditer(self.htmlStr)]
+            ]
+            required = ['<h1>El segundo comentario</h1>']
+            assert answer == required
+
+
+
+
+
 class TestHTMLPointer:
     html_str = '''
     <beg num="1">

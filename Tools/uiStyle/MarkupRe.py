@@ -591,8 +591,8 @@ class zinwrapper(ExtRegexObject):
         :param zone: CPatterns. Compole patterns type.
         '''
 
-        self.__dict__['spanRegexObj'] = spanRegexObj
-        self.__dict__['srchRegexObj'] = srchRegexObj
+        self.spanRegexObj = spanRegexObj
+        self.srchRegexObj = srchRegexObj
         self.zone = zone
         self.parameters = namedtuple('zinparams', sorted(spanRegexObj.groupindex.keys()))
         self.spanDelim = self.params = None
@@ -609,10 +609,10 @@ class zinwrapper(ExtRegexObject):
         )
 
     def __getattr__(self, attr):
-        return getattr(self.__dict__['srchRegexObj'], attr)
-
-    def __setattr__(self, attr, value):
-        return setattr(self.__dict__['srchRegexObj'], attr, value)
+        return getattr(self.srchRegexObj, attr)
+    #
+    # def __setattr__(self, attr, value):
+    #     return setattr(self.__dict__['srchRegexObj'], attr, value)
 
     @property
     def searchFlag(self):
@@ -623,7 +623,10 @@ class zinwrapper(ExtRegexObject):
         self.srchRegexObj.searchFlag = value
         self.spanRegexObj.searchFlag = value
 
-    def finditer(self, html_string, pos=-1, endpos=-1, parameters=None):
+    def match(self, html_string, pos=-1, endpos=-1, parameters=None):
+        return self.srchRegexObj.match(html_string, pos, endpos, parameters)
+
+    def finditer(self, html_string, pos=-1, endpos=-1, seek_to_end=False, parameters=None):
         bflag = not self.zone == CPatterns.ZIN  # Con esto se asegura que el puntero se va al final
 
         # del span que es lo que se quiere en caso de
@@ -1012,18 +1015,18 @@ REGEX_SCANNER = re.compile(r'''
         (?<=<)\s*?                   # Precedida por < y posiblemente espacios
         \(*(?:__TAG__|[A-Za-z].*?)\)*   # Pattern tag
         (?!=)
-        (?=\s|>)                 # La sigue uno o mas espacios o >
+        (?=\s|>|<)                 # La sigue uno o mas espacios o >
      )) |           
     (?P<VAR>(?:
         (?<=\=)                 # Precedida por el signo igual
         (?:_{,2}|&)*           # Indica variable opcional(_) o clean var (&)
         [a-zA-Z][a-zA-Z\d_]*?        # Nombre de la variable
         (?:_{,2}|&)*           # Indica variable opcional(_) o clean var (&)
-        (?=\s|>|\})             # Siempre seguida por ' ', > o }
+        (?=\s|>|<|\})             # Siempre seguida por ' ', > o }
      )) |           
     (?P<ATTRIBUTE>(?:
         [a-zA-Z\*\.\d][a-zA-Z\d\.\[\]\*]*?        # Nombre de atributo
-        (?=\=|>|\s)
+        (?=\=|>|<|\s)
      )) |           
     (?P<PREFIX>(?:
         [a-zA-Z\.\d][a-zA-Z\d\.\[\]]*?        # Nombre de la variable
@@ -1101,25 +1104,41 @@ def compile(regex_str_in, flags=0, etags_str='[!--|style|script]'):
 
     compile_type = ''
     regexobj_stack = []
-
+    separator_stack = []
+    pini = 0
     tokens = tokenizer.Tokenizer(REGEX_SCANNER)
-    for token in tokens.tokenize(regex_str):
+    tokens_it = tokens.tokenize(regex_str)
+    while True:
+        try:
+            token = next(tokens_it)
+        except StopIteration:
+            break
+        if tokens.getPrevToken().tag == 'SEPARATOR' and token.tag != 'SEPARATOR':
+            # Reset variables del regexobj
+            prefix_stack = ['tagpholder']
+            prefix = 'tagpholder'
+            attribute = ''
+            n_implicit = 0
+
+            tag_pattern = tag_pattern_default = '[a-zA-Z][^\s>]*'
+            tags = {}
+            varList = []
+            maskParam = etags_str
+
         match token.tag:
             case 'SEPARATOR':
-                compile_type += token.value
-                match compile_type:
-                    case '<' | '<*<':  # Primer separator
-                        pini = tokens.pos
-                    case '<>' | '<*<>' | '<><' | '<>*<' | '<<':  # Segundo separator
-                        end = len(token.value)
-                        pfin = tokens.pos
-                        spattern = f'(?#<{regex_str[pini: pfin - end]}>)'
-                        if compile_type == '<>':
-                            compile_type = ''
-                        regex_obj1 = ExtRegexObject(spattern, flags, tag_pattern, tags, list(varList), maskParam)
-                        regexobj_stack.append(regex_obj1)
-                        pini = pfin
-                    case CPatterns.ZIN | CPatterns.CHILDREN | CPatterns.NXTTAG:  # Tercer separator
+                pfin = tokens.pos
+                end = len(token.value)
+                if pini == pfin - end:
+                    separator_stack.append((token.value, pini))
+                    pini = pfin
+                else:
+                    compile_type, zini = separator_stack.pop() if separator_stack else ('', 0)
+                    compile_type += token.value
+                    try:
+                        zone = CPatterns(compile_type)
+                        if zone in [CPatterns.PARENT, CPatterns.SIBLINGS]:
+                            raise MarkupReError(f'{compile_type} not yet implemented')
                         regex_obj1 = regexobj_stack.pop()
                         end = len(token.value)
                         pfin = tokens.pos
@@ -1141,25 +1160,32 @@ def compile(regex_str_in, flags=0, etags_str='[!--|style|script]'):
                         spattern = f'(?#<{spattern}>)'
                         regex_obj2 = ExtRegexObject(spattern, flags, tag_pattern, tags, list(varList), maskParam)
                         regexobj = zinwrapper(
-                            f'(?#{regex_str})', flags, regex_obj1, regex_obj2, CPatterns(compile_type)
+                            f'(?#{regex_str[zini:pfin]})', flags, regex_obj1, regex_obj2, CPatterns(compile_type)
                         )
                         regexobj_stack.append(regexobj)
-                        compile_type = ''
-                    case CPatterns.PARENT | CPatterns.SIBLINGS:
-                        raise MarkupReError(f'{compile_type} not yet implemented')
-                    case _:
-                        raise MarkupReError(f'{compile_type}: Unrecognizable compile type')
-
-                # Reset variables del regexobj
-                prefix_stack = ['tagpholder']
-                prefix = 'tagpholder'
-                attribute = ''
-                n_implicit = 0
-
-                tag_pattern = tag_pattern_default = '[a-zA-Z][^\s>]*'
-                tags = {}
-                varList = []
-                maskParam = etags_str
+                        if separator_stack:
+                            try:
+                                token = next(tokens_it)
+                            except StopIteration:
+                                raise MarkupReError(f'Incomplete pattern')
+                            compile_type, zini = separator_stack.pop()
+                            compile_type += token.value
+                            separator_stack.append((compile_type, zini))
+                            pini = tokens.pos
+                    except ValueError:
+                        if compile_type in ['<>', '<*<>', '<><', '<>*<', '<<']:
+                            if compile_type != '<>':
+                                separator_stack.append((compile_type, zini))
+                            end = len(token.value)
+                            pfin = tokens.pos
+                            spattern = f'(?#<{regex_str[pini: pfin - end]}>)'
+                            # if compile_type == '<>':
+                            #     compile_type = ''
+                            regex_obj1 = ExtRegexObject(spattern, flags, tag_pattern, tags, list(varList), maskParam)
+                            regexobj_stack.append(regex_obj1)
+                            pini = pfin
+                        else:
+                            raise MarkupReError(f'{compile_type}: Unrecognizable compile type')
 
             case 'TAG_PATTERN':
                 if token.value == '__TAG__':
@@ -1263,7 +1289,7 @@ if __name__ == '__main__':
 
     console = Console(color_system='truecolor')
 
-    test = 'tokenizer'
+    test = 'nested cpatterns'
     if test == 'zin':
         htmlStr = """
         <span class="independiente">span0</span>
@@ -1381,14 +1407,60 @@ if __name__ == '__main__':
 
         pointer = HTMLPointer(html_str, next_pattern=cp_pattern, special_zones='[!--]^[out]', seek_to_end=False)
         console.print([html_str[b:e] for b, e in pointer()])
+    elif test == 'nested cpatterns':
+        htmlStr = """
+        <span class="independiente">span0</span>
+        <script>
+            <span class="bloque1">span1</span>
+            <a href="http://www.eltiempo.com.co">El Tiempo</a>
+            <span class="bloque1">span2</span>
+        </script>
+        <bloque>
+            <span class="independiente">bloque1</span>
+            <parent id="root">
+                <hijo id="hijo1">primer hijo</hijo>
+                <hijo id="hijo2" exp="hijo con varios comentarios">
+                     <h1>El primer comentario</h1>
+                     <h1>El segundo comentario</h1>
+                     <h1>El tercer comentario</h1>
+                </hijo>
+                <span class="colado">blk1</span>
+                <hijo id="hijo3">tercer hijo</hijo>
+            </parent>
+            <span class="independiente">bloque2</span>
+        </bloque>
+        <!--
+            <span class="bloque2">span1</span>
+            <a href="http://www.elheraldo.com.co">El Heraldo</a>
+            <span class="bloque2">span2</span>
+        -->
+        <span class="independiente">span3</span>
+            """
+        cases = {
+            'Nested CPatterns4': '<<bloque<hijo id="hijo2">><h1 *="El segundo comentario">*>',
+            'Nested CPatterns3': '<<parent<hijo id="hijo2">*><h1 *="El segundo comentario">*>',
+            'Nested CPatterns2': '<<bloque<parent id="root">><h1 *="El segundo comentario">>',
+        }
+        console.print('Inicio')
+        for case, regex_str in list(cases.items())[:1]:
+            regex_str = r'(?#' + regex_str + r')'
+            comp_obj1 = compile(regex_str)
+
+            answer = [
+                htmlStr[a:b] for a, b in
+                [m.span() for m in comp_obj1.finditer(htmlStr)]
+            ]
+            console.print(answer)
+            pass
     elif test == 'extcompile':
         cases = {
+            'Nested CPatterns1': '<bloque<row class="base">>',
+            'test_namedvars': '<a href=url *=label>',
             'No tag attribute': '<*=label>',
             '__TAG__ implicit': '<__TAG__=name>',
             'TestOptionalVars2': '<son id=_id_ href=_url_>',
             'minimo': '<table>',
             'all_text': '<hijo exp .*>',
-            'test_namedvars': '<a href=url *=label>',
             'test_namedvarswithpattern1': '<a href="http://uno/.+?/tres.html">',
             'test_namedvarswithpattern2': '<a href="http://uno/.+?/tres.html" href=url *=label>',
             'test_implicitvars1': '<a (href)>',
@@ -1419,7 +1491,7 @@ if __name__ == '__main__':
         attrs = ('regex_pattern_str', 'tag_pattern', 'req_attrs', 'opt_attrs', 'var_list', '_e_zones')
         # attrs = ('tagPattern', 'tags', 'optTags', 'varList', '_maskTags')
         console.print('Inicio')
-        for case, regex_str in list(cases.items()):
+        for case, regex_str in list(cases.items())[:1]:
             regex_str = r'(?#' + regex_str + r')'
             comp_obj1 = compile(regex_str)
             comp_obj2 = ExtCompile(regex_str)
