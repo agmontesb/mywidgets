@@ -82,8 +82,14 @@ class TestNestedCPatterns:
             required = ['<h1>El segundo comentario</h1>']
             assert answer == required
 
-
-
+    def test_parameters(self):
+        case = '<<parent id=idp<hijo id="hijo2"=idh>*><h1 *="El segundo comentario">*>'
+        regex_str = f'(?#{case})'
+        comp_obj1 = MarkupRe.compile(regex_str)
+        match = comp_obj1.search(self.htmlStr)
+        answer = [x._asdict() for x in match.parameters]
+        required = [dict(idp='root'), dict(idh='hijo2')]
+        assert answer == required
 
 
 class TestHTMLPointer:

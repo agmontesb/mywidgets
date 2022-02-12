@@ -670,7 +670,7 @@ class RegexpBar(tk.Frame):
         if regexPattern.startswith('(?#<SPAN>)'):
             pini = 0
             if hasattr(reg, 'parameters'):
-                prefix.extend(reg.parameters._fields)
+                prefix.extend(reg.params_class._fields)
         else:
             pini = 2
 
@@ -761,12 +761,12 @@ class RegexpBar(tk.Frame):
                     self.textWidget.mark_set(iid, tagIni)
 
                     nCols = len(match.groups())
-                    bFlag = hasattr(match, 'parameters') and match.parameters
+                    bFlag = hasattr(match, 'parameters') and match.params_class
                     if bFlag:
-                        nCols += len(match.parameters)
+                        nCols += len(match.params_class)
                     nCols = min(len(self.tree['columns']) - 2, nCols)
                     tagValues = (match.start(0), match.end(0))
-                    if bFlag: tagValues += match.parameters
+                    if bFlag: tagValues += match.params_class
                     tagValues += match.groups()[:nCols - len(tagValues) + 2]
                     tagValues = tagValues + (len(self.tree['columns']) - len(tagValues)) * ('',)
                     self.tree.insert('', 'end', iid, values=tagValues)  # Por revisar

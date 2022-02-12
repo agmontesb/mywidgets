@@ -544,7 +544,7 @@ class ExtRegexObject:
         return match_gen(html_string, pointer_pos)
 
     def search(self, html_string, spos=-1, sendpos=-1, parameters=None):
-        it = finditer(self, html_string, spos, sendpos, parameters)
+        it = self.finditer(html_string, spos, sendpos, parameters)
         return next(it)
 
     def split(self, html_string, maxsplit=0):
@@ -580,7 +580,7 @@ class ExtRegexObject:
 
 
 class zinwrapper(ExtRegexObject):
-    def __init__(self, pattern, flags, spanRegexObj, srchRegexObj, zone=CPatterns.ZIN):
+    def __init__(self, pattern, flags, spanRegexObj, srchRegexObj, zone=CPatterns.ZIN, parameters=None):
         '''
         ExtRegexObject para patterns compuestos. Ver enum CPatterns.
         :param pattern: str. Pattern compuesto compilado.
@@ -594,8 +594,8 @@ class zinwrapper(ExtRegexObject):
         self.spanRegexObj = spanRegexObj
         self.srchRegexObj = srchRegexObj
         self.zone = zone
-        self.parameters = namedtuple('zinparams', sorted(spanRegexObj.groupindex.keys()))
-        self.spanDelim = self.params = None
+        self.spanDelim = None
+        self.params = parameters or []
         self.pattern = pattern
         self.flags = flags
         pass
@@ -608,11 +608,13 @@ class zinwrapper(ExtRegexObject):
             ]
         )
 
-    def __getattr__(self, attr):
-        return getattr(self.srchRegexObj, attr)
-    #
-    # def __setattr__(self, attr, value):
-    #     return setattr(self.__dict__['srchRegexObj'], attr, value)
+    @property
+    def groupindex(self):
+        return self.srchRegexObj.groupindex
+
+    @property
+    def params_class(self):
+        return namedtuple('zinparams', sorted(self.spanRegexObj.groupindex.keys()))
 
     @property
     def searchFlag(self):
@@ -635,7 +637,8 @@ class zinwrapper(ExtRegexObject):
             for match_srchobj in self.spanRegexObj.finditer(
                     html_string, pos, endpos, seek_to_end=False, parameters=parameters
             ):
-                params = self.parameters(**match_srchobj.groupdict())
+                params = match_srchobj.parameters[::]
+                params.append(self.params_class(**match_srchobj.groupdict()))
                 span_beg_pos, span_end_pos = match_srchobj.span()
                 match self.zone:
                     case CPatterns.ZIN | CPatterns.CHILDREN:
@@ -669,7 +672,7 @@ class ExtMatchObject:
         self.re = regexObject
         self.string = htmlstring
         self.varpos = varPos
-        self.parameters = parameters
+        self.parameters = parameters or []
         pass
 
     def _varIndex(self, x):
@@ -1289,7 +1292,37 @@ if __name__ == '__main__':
 
     console = Console(color_system='truecolor')
 
-    test = 'nested cpatterns'
+    htmlStr1 = """
+    <span class="independiente">span0</span>
+    <script>
+        <span class="bloque1">span1</span>
+        <a href="http://www.eltiempo.com.co">El Tiempo</a>
+        <span class="bloque1">span2</span>
+    </script>
+    <bloque>
+        <span class="independiente">bloque1</span>
+        <parent id="root">
+            <hijo id="hijo1">primer hijo</hijo>
+            <hijo id="hijo2" exp="hijo con varios comentarios">
+                 <h1>El primer comentario</h1>
+                 <h1>El segundo comentario</h1>
+                 <h1>El tercer comentario</h1>
+            </hijo>
+            <span class="colado">blk1</span>
+            <hijo id="hijo3">tercer hijo</hijo>
+        </parent>
+        <span class="independiente">bloque2</span>
+    </bloque>
+    <!--
+        <span class="bloque2">span1</span>
+        <a href="http://www.elheraldo.com.co">El Heraldo</a>
+        <span class="bloque2">span2</span>
+    -->
+    <span class="independiente">span3</span>
+        """
+
+    console.print('Inicio')
+    test = 'params'
     if test == 'zin':
         htmlStr = """
         <span class="independiente">span0</span>
@@ -1407,41 +1440,31 @@ if __name__ == '__main__':
 
         pointer = HTMLPointer(html_str, next_pattern=cp_pattern, special_zones='[!--]^[out]', seek_to_end=False)
         console.print([html_str[b:e] for b, e in pointer()])
-    elif test == 'nested cpatterns':
-        htmlStr = """
-        <span class="independiente">span0</span>
-        <script>
-            <span class="bloque1">span1</span>
-            <a href="http://www.eltiempo.com.co">El Tiempo</a>
-            <span class="bloque1">span2</span>
-        </script>
-        <bloque>
-            <span class="independiente">bloque1</span>
-            <parent id="root">
-                <hijo id="hijo1">primer hijo</hijo>
-                <hijo id="hijo2" exp="hijo con varios comentarios">
-                     <h1>El primer comentario</h1>
-                     <h1>El segundo comentario</h1>
-                     <h1>El tercer comentario</h1>
-                </hijo>
-                <span class="colado">blk1</span>
-                <hijo id="hijo3">tercer hijo</hijo>
-            </parent>
-            <span class="independiente">bloque2</span>
-        </bloque>
-        <!--
-            <span class="bloque2">span1</span>
-            <a href="http://www.elheraldo.com.co">El Heraldo</a>
-            <span class="bloque2">span2</span>
-        -->
-        <span class="independiente">span3</span>
-            """
+    elif test == 'params':
+        htmlStr = htmlStr1
+        cases = {
+            'Nested CPatterns3': '<<parent id=idp<hijo id="hijo2"=idh>*><h1 *="El segundo comentario">*>',
+            'Nested CPatterns4': '<<bloque<hijo id="hijo2">><h1 *="El segundo comentario">*>',
+            'Nested CPatterns2': '<<bloque<parent id="root">><h1 *="El segundo comentario">>',
+        }
+        for case, regex_str in list(cases.items())[:1]:
+            regex_str = r'(?#' + regex_str + r')'
+            comp_obj1 = compile(regex_str)
+            answer = comp_obj1.search(htmlStr)
+
+            # answer = [
+            #     [m.params for m in comp_obj1.finditer(htmlStr)]
+            # ]
+            console.print(answer.parameters)
+            pass
+
+    elif test == 'nested_cpatterns':
+        htmlStr = htmlStr1
         cases = {
             'Nested CPatterns4': '<<bloque<hijo id="hijo2">><h1 *="El segundo comentario">*>',
             'Nested CPatterns3': '<<parent<hijo id="hijo2">*><h1 *="El segundo comentario">*>',
             'Nested CPatterns2': '<<bloque<parent id="root">><h1 *="El segundo comentario">>',
         }
-        console.print('Inicio')
         for case, regex_str in list(cases.items())[:1]:
             regex_str = r'(?#' + regex_str + r')'
             comp_obj1 = compile(regex_str)
@@ -1490,7 +1513,6 @@ if __name__ == '__main__':
         }
         attrs = ('regex_pattern_str', 'tag_pattern', 'req_attrs', 'opt_attrs', 'var_list', '_e_zones')
         # attrs = ('tagPattern', 'tags', 'optTags', 'varList', '_maskTags')
-        console.print('Inicio')
         for case, regex_str in list(cases.items())[:1]:
             regex_str = r'(?#' + regex_str + r')'
             comp_obj1 = compile(regex_str)
