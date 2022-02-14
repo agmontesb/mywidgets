@@ -55,10 +55,10 @@ class TestNestedCPatterns:
     def test_compile(self):
         regex_str = r'(?#' + '<<bloque<hijo id="hijo2">><h1 *="El segundo comentario">*>' + r')'
         comp_obj1 = MarkupRe.compile(regex_str)
-        assert type(comp_obj1) == MarkupRe.zinwrapper, 'NestedCPatterns: Not a zinwrapper object'
+        assert type(comp_obj1) == MarkupRe.CompoundRegexObject, 'NestedCPatterns: Not a zinwrapper object'
         assert comp_obj1.pattern == regex_str
 
-        assert type(comp_obj1.spanRegexObj) == MarkupRe.zinwrapper
+        assert type(comp_obj1.spanRegexObj) == MarkupRe.CompoundRegexObject
         assert comp_obj1.spanRegexObj.pattern == '(?#<bloque<hijo id="hijo2">>)'
         assert type(comp_obj1.spanRegexObj.spanRegexObj) == MarkupRe.ExtRegexObject
         assert comp_obj1.spanRegexObj.spanRegexObj.pattern == '(?#<bloque>)'
@@ -66,6 +66,23 @@ class TestNestedCPatterns:
 
         assert type(comp_obj1.srchRegexObj) == MarkupRe.ExtRegexObject
         assert comp_obj1.srchRegexObj.pattern == '(?#<__TAG__ __TAG__="h1" *="El segundo comentario">)'
+
+    def test_equivalent_compile(self):
+        first_pat = '(?#<bloque<hijo id="hijo2">>)'
+        regex1_str = '(?#<bloque>)'
+        regex1 = MarkupRe.compile(regex1_str)
+        regex2_str = '(?#<hijo id="hijo2">)'
+        regex2 = MarkupRe.compile(regex2_str)
+        compound1 = MarkupRe.CompoundRegexObject(regex1, regex2, MarkupRe.CPatterns.ZIN)
+        assert compound1.pattern == first_pat
+        assert compound1 == MarkupRe.compile(first_pat)
+
+        scnd_pat = '(?#<<bloque<hijo id="hijo2">><h1 *="El segundo comentario">*>)'
+        regex3_str = '(?#<h1 *="El segundo comentario">)'
+        regex3 = MarkupRe.compile(regex3_str)
+        compound2 = MarkupRe.CompoundRegexObject(compound1, regex3, MarkupRe.CPatterns.CHILDREN)
+        assert compound2.pattern == scnd_pat
+        assert compound2 == MarkupRe.compile(scnd_pat)
 
     def test_finditer(self):
         regex_strs = [
@@ -461,7 +478,7 @@ class TestExtRegexParser:
         assert attrD['href4'] == "el \'tiempo com\'", "Error comillas interiores ajustadas a la derecha"
 
 
-class TestRelationalTags:
+class TestCompoundPatterns:
     htmlStr = """
     <span class="independiente">span0</span>
     <script>
