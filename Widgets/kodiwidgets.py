@@ -108,8 +108,6 @@ class baseWidget(tk.Frame, object):
     @default.setter
     def default(self, value):
         self._default = value
-        if not str(self.value).startswith('PY_VAR'):
-            equations_manager.var_values[str(self.value)] = value
         pass
 
     def setVarType(self, vartype='string', name=None):
@@ -153,6 +151,8 @@ class baseWidget(tk.Frame, object):
         :param value: obj. Puede ser str, int, double, boolean
         :return: None.
         '''
+        if not str(self.value).startswith('PY_VAR'):
+            equations_manager.var_values[str(self.value)] = value
         self.value.set(value)
 
     def getValue(self):
@@ -177,6 +177,11 @@ class baseWidget(tk.Frame, object):
         :return: None
         '''
         self.children[self.id].configure(**options)
+
+    def configure(self, option=None, **options):
+        if option:
+            return self.getConfig(option)
+        return self.setConfig(**options)
 
     def setListener(self, function):
         '''
@@ -376,9 +381,8 @@ class settEnum(baseWidget):
 
 class CustomDialog(tkSimpleDialog.Dialog):
     def __init__(self, master, title=None, xmlFile=None, isFile=False, settings=None):
-        # import xmlFileWrapper
         self.allSettings = None
-        self.settings = settings = settings or {}
+        self.settings = settings or {}
         if isFile:
             with open(xmlFile, 'rb') as f:
                 xmlFile = f.read()
@@ -393,9 +397,10 @@ class CustomDialog(tkSimpleDialog.Dialog):
         by the __init__ method.
         '''
         # selPanel = self.ads.getActivePane()
-        self.form = form = formFrameGen(master, settings={}, selPane=self.ads)
+        self.form = form = formFrameGen(master, settings=self.settings, selPane=self.ads)
         form.pack(side=tk.TOP, fill=tk.BOTH, expand=tk.YES)
-        wdgId = sorted(form.nameToId.keys(), key=int)[0]
+        wdgId = list(form.nameToId.keys())[0]
+        # wdgId = sorted(form.nameToId.keys(), key=int)[0]
         wdgId = form.nameToId[wdgId]
         widget = getattr(self.form, wdgId)
         return widget
@@ -660,7 +665,7 @@ class settText(baseWidget):
     def setGUI(self, options):
         ttk.Label(self, name='textlbl', text=options.get('label'),
                  width=20, anchor=tk.NW).pack(side=tk.LEFT)
-        self.value = tk.StringVar()
+        self.value = tk.StringVar(name=self.name)
         self.default = options.get('default', '')
         self.setValue(self.default)
         if options.get('id'):
@@ -687,7 +692,7 @@ class settBool(baseWidget):
             groupName = options['group']
             self.value = self.form.getGroupVar(groupName)
         else:
-            self.setVarType('boolean')
+            self.setVarType('boolean', name=wdgName)
         self.setGUI(options)
         self.name = wdgName
 
@@ -770,8 +775,9 @@ class settSep(baseWidget):
         self.name = wdgName
 
     def setGUI(self, options):
-        if options.get('type', None) == 'lsep': ttk.Label(self, text=options.get('label')).pack(side=tk.LEFT)
-        if not 'noline' in options:
+        if options.get('type', None) == 'lsep':
+            ttk.Label(self, text=options.get('label')).pack(side=tk.LEFT)
+        if 'noline' not in options:
             color = options.get('color', 'red')
             tk.Frame(self, relief=tk.RIDGE, height=2, bg=color).pack(side=tk.RIGHT, fill=tk.X, expand=1)
 
@@ -962,7 +968,8 @@ class FormFrame(tk.Frame):
         newPanelFactory(self, selPane, genPanelModule=formModule, registerWidget=self.regWidget)
         self.nameToId = {value.rsplit('.', 1)[-1]: key for key, value in self.widgetMapping.items()}
         self.category = selPane.get('label')
-        # self.setChangeSettings(settings)
+        self.setChangeSettings(settings)
+        equations_manager.set_initial_widget_states()
 
     def regWidget(self, master, xmlwidget, widget):
         '''

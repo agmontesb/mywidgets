@@ -540,9 +540,9 @@ class TestCompoundPatterns:
             MarkupRe.findall('(?#<*<bloque >__TAG__=name>)', self.htmlStr)
         pass
 
-    def test_sibling(self):
+    def test_siblings(self):
         with pytest.raises(MarkupRe.MarkupReError):
-            MarkupRe.findall('(?#<bloque >*<__TAG__=name>)', self.htmlStr)
+            MarkupRe.findall('(?#<bloque >=<__TAG__=name>)', self.htmlStr)
         pass
 
 

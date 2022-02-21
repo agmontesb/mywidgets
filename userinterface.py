@@ -106,7 +106,7 @@ def widgetFactory(master, selPane, panelModule=None, setParentTo='master', regis
     geometric_manager = selPane.get('geomanager', 'pack')
     for xmlwidget in selPane:
         k += 1
-        has_children = bool(len(xmlwidget.getchildren()))
+        has_children = bool(len(list(xmlwidget)))
         is_widget = xmlwidget.tag != 'var'
         options = dict.copy(xmlwidget.attrib)
         # Se asigna como id del widget el último segmento del id definido.

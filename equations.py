@@ -33,7 +33,7 @@ SCANNER = re.compile(r'''
     (?:\b(?:true | false)\b)  |                 # bool
     (?:[0-9]+(?:\.[0-9]+)*))                    # float, int
 ) |                                
-(?P<NAME>\b[_a-zA-Z][_a-zA-Z0-9]*\b) |           # string
+(?P<NAME>\b[_a-zA-Z][_a-zA-Z0-9]*?\b) |           # string
 (?P<WHITESPACE>\s+) |           # string
 (?P<ERROR>.)            # an error
 ''', re.DOTALL | re.VERBOSE)
@@ -69,7 +69,7 @@ class Equations:
         self.dependents = {}
         self.seq = 0
         self._default_root = None
-        self.enable_callbacks = True    # inhabilita la ejecución de self.var_change
+        self.enable_callbacks = False    # inhabilita la ejecución de self.var_change
         pass
 
     def default_root(self):
@@ -117,7 +117,7 @@ class Equations:
         sistema que se describe.
         return:
         '''
-        self.set_initial_widget_state()
+        self.set_initial_widget_states()
 
     def pythonize(self, equation):
         '''
@@ -189,18 +189,22 @@ class Equations:
         # Se inicializan los widgets asociados a variables de control
         # Se inhabilita la ejecución de los trace-write functions
         self.enable_callbacks = False
-        vars = self.var_values.keys() - self.state_equations.keys()
+        independents = functools.reduce(
+            lambda t, x: t | self.dependents[x],
+            self.state_equations.keys(),
+            set()
+        )
         default_root = self.default_root()
-        for var_name in vars:
-            var_value = self.var_values[var_name]
-            default_root.setvar(var_name, var_value)
-        # Se habilita la ejecución de los trace-write functions
+        for var_name in independents:
+            var_value = default_root.getvar(var_name)
+            self.var_values[var_name] = var_value
+        # # Se habilita la ejecución de los trace-write functions
         self.enable_callbacks = True
 
         if self.state_equations:
-            self.set_widget_state(self.state_equations.keys())
+            self.set_widget_state(self.state_equations.keys(), filter=False)
 
-    def set_widget_state(self, to_calculate):
+    def set_widget_state(self, to_calculate, filter=True):
         '''
         Establece el valor de las variables de estado to_calcualte.
         :param to_calculate: list. List of names of state_vars to calculate.
@@ -208,11 +212,15 @@ class Equations:
         '''
         independents = functools.reduce(lambda t, x: t | self.dependents[x], to_calculate, set())
         python_exp = str([self.state_equations[state_var] for state_var in to_calculate])
-        state_values = self.eval_equation(python_exp.replace('"', ''), independents)
-        changed_states = [
-            (value, key) for key, value in zip(to_calculate, state_values)
-            if self.var_values[key].get() != value
-        ]
+        state_values = self.eval_equation(python_exp.replace('"', '').replace("'", ''), independents)
+        changed_states = zip(state_values, to_calculate)
+        if filter:
+            changed_states = [
+                (value, key) for value, key in changed_states
+                if self.var_values[key].get() != value
+            ]
+        else:
+            changed_states = list(changed_states)
         changed_states.sort()
         [self.var_values[key].set(value) for value, key in changed_states]
 

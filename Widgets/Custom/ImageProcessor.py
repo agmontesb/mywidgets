@@ -69,6 +69,7 @@ datab = [
          [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
          [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]]
 
+
 def memoize(obj):
     cache = obj.cache = {}
 
@@ -83,6 +84,7 @@ def memoize(obj):
         return answ
     return memoizer
 
+
 def bitMapToString(bitMap):
     hNum = ''
     for j in range(len(bitMap)):
@@ -90,12 +92,14 @@ def bitMapToString(bitMap):
             hNum += "{0:x}".format(sum(elem*2**(3-k) for k, elem in enumerate(bitMap[j][4*i:4*(i+1)])))
     return hNum
 
+
 def getBitmapIconImageTk(imageStr):
     imSize = int((len(4*imageStr))**0.5)
     imString = imageStr.decode('hex')
     im = Image.frombytes('1',(imSize,imSize),imString)
     im = ImageTk.BitmapImage(im)
     return im
+
 
 def _parseXml(settingXmlFile):
     try:
@@ -107,6 +111,7 @@ def _parseXml(settingXmlFile):
             content = re.sub(r'(?<==)(["\'])(.*?)\1', lambda x: quoteattr(x.group(2)), content)
         root = ET.fromstring(content)
     return root
+
 
 def _getThemeColour(srchcolor, theme='confluence'):
     # if not re.match('[0-9ABCDEF]{8}\Z', srchcolor.upper()):
@@ -137,6 +142,7 @@ def _getThemeColour(srchcolor, theme='confluence'):
     # transp, red, green, blue = color
     transp, red, green, blue = 1, 256, 256, 256
     return (red, green, blue, transp)
+
 
 def _imageFile(imageFile):
     if not os.path.dirname(imageFile):
@@ -171,6 +177,7 @@ def _imageFile(imageFile):
 #             filename = fullname
 #             break
 #     return ImageFont.truetype(filename, size)
+
 
 @memoize
 def getTexture(imageFile, Width, Height, aspectratio='stretch', **options):
@@ -285,6 +292,7 @@ def getTexture(imageFile, Width, Height, aspectratio='stretch', **options):
     retIm.paste(region, (x1d, y1d, x2d, y2d))
     return retIm
 
+
 def getLabel(label, font, textcolor, background=None, xpos=0, ypos=0, **options):
     SPACING = 4
     align = 'left'
@@ -356,11 +364,13 @@ def getLabel(label, font, textcolor, background=None, xpos=0, ypos=0, **options)
 
     return background.paste(txt, box=(xpos, ypos), mask=txt)
 
+
 @memoize
 def staticFile(filename_url):
     if filename_url.startswith("http"):
         filename_url, headers = urllib.urlretrieve(filename_url)
     return filename_url
+
 
 @memoize
 def ccsCharCodeMap(css_url):
@@ -378,6 +388,7 @@ def ccsCharCodeMap(css_url):
     #     aliasMap = dict.fromkeys(seq, value)
     #     charcode.update(aliasMap)
     return charcode
+
 
 def fontAwesomeIcon(iconStr, **styleRequested):
     def processCSS(cssDict, cssToProcess):
@@ -455,9 +466,9 @@ def getFontAwesomeIcon(charname, **optionsreq):
                     ('isPhotoImage', False)])
     options.update(optionsreq)
     rootdir = os.path.dirname(__file__)
-    ttf_url = os.path.join(rootdir,'FontAwesome','fa-solid-900.ttf')
+    ttf_url = os.path.join(rootdir, 'FontAwesome', 'fa-solid-900.ttf')
     ttf_url = staticFile(ttf_url)
-    css_url = os.path.join(rootdir,'FontAwesome','fontawesome-all.css')
+    css_url = os.path.join(rootdir, 'FontAwesome', 'fontawesome-all.css')
     css_url = staticFile(css_url)
     faMap = ccsCharCodeMap(css_url)
     charCode = faMap.get(charname)

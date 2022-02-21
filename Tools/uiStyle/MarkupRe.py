@@ -23,8 +23,9 @@ class CPatterns(Enum):
     ZIN = '<<>>'
     CHILDREN = '<<>*>'
     NXTTAG = '<><>'
+    PRECEDES = '<>*<>'
     PARENT = '<*<>>'
-    SIBLINGS = '<>*<>'
+    SIBLINGS = '<>=<>'
 
     def __eq__(self, other):
         if isinstance(other, str):
@@ -546,8 +547,12 @@ class ExtRegexObject:
         return match_gen(html_string, pointer_pos)
 
     def search(self, html_string, spos=-1, sendpos=-1, parameters=None):
-        it = self.finditer(html_string, spos, sendpos, parameters)
-        return next(it)
+        try:
+            it = self.finditer(html_string, spos, sendpos, parameters)
+            answ = next(it)
+        except StopIteration:
+            answ = None
+        return answ
 
     def split(self, html_string, maxsplit=0):
         answer = []
@@ -581,89 +586,6 @@ class ExtRegexObject:
         pass
 
 
-class zinwrapper(ExtRegexObject):
-    def __init__(self, pattern, flags, spanRegexObj, srchRegexObj, zone=CPatterns.ZIN, parameters=None):
-        '''
-        ExtRegexObject para patterns compuestos. Ver enum CPatterns.
-        :param pattern: str. Pattern compuesto compilado.
-        :param flags: int. Para compatibilidad con re original. Siempre es cero.
-        :param spanRegexObj: ExtRegexObject. Compile pattern que entrega las zonas válidas
-                            para la búsqueda.
-        :param srchRegexObj: ExtRegexObject. Compile pattern que entrega los datos buscados.
-        :param zone: CPatterns. Compole patterns type.
-        '''
-
-        self.spanRegexObj = spanRegexObj
-        self.srchRegexObj = srchRegexObj
-        self.zone = zone
-        self.spanDelim = None
-        self.params = parameters or []
-        self.pattern = pattern
-        self.flags = flags
-        pass
-
-    def __eq__(self, other):
-        return all(
-            [
-                self.spanRegexObj == other.spanRegexObj,
-                self.srchRegexObj == other.srchRegexObj,
-            ]
-        )
-
-    @property
-    def groupindex(self):
-        return self.srchRegexObj.groupindex
-
-    @property
-    def params_class(self):
-        return namedtuple('zinparams', sorted(self.spanRegexObj.groupindex.keys()))
-
-    @property
-    def searchFlag(self):
-        return self.srchRegexObj.searchFlag
-
-    @searchFlag.setter
-    def searchFlag(self, value):
-        self.srchRegexObj.searchFlag = value
-        self.spanRegexObj.searchFlag = value
-
-    def match(self, html_string, pos=-1, endpos=-1, parameters=None):
-        return self.srchRegexObj.match(html_string, pos, endpos, parameters)
-
-    def finditer(self, html_string, pos=-1, endpos=-1, seek_to_end=False, parameters=None):
-        bflag = not self.zone == CPatterns.ZIN  # Con esto se asegura que el puntero se va al final
-
-        # del span que es lo que se quiere en caso de
-        # '<<>*>'(children) y de '<><>' (nexttag)
-        def match_gen(html_string):
-            for match_srchobj in self.spanRegexObj.finditer(
-                    html_string, pos, endpos, seek_to_end=False, parameters=parameters
-            ):
-                params = match_srchobj.parameters[::]
-                params.append(self.params_class(**match_srchobj.groupdict()))
-                span_beg_pos, span_end_pos = match_srchobj.span()
-                match self.zone:
-                    case CPatterns.ZIN | CPatterns.CHILDREN:
-                        it = self.srchRegexObj.finditer(
-                            html_string, span_beg_pos + 1, span_end_pos,
-                            seek_to_end=bflag, parameters=params
-                        )
-                    case CPatterns.NXTTAG:
-                        beg_pos = html_string[span_end_pos + 1: endpos].find('<')
-                        if beg_pos > 0:
-                            beg_pos += span_end_pos + 1
-                            m = self.srchRegexObj.match(html_string, beg_pos, parameters=params)
-                        else:
-                            m = None
-                        it = [m] if m else []
-                    case CPatterns.PARENT | CPatterns.SIBLINGS:
-                        # No se ha implementado y se coloca la lista vacía
-                        it = []
-                yield from it
-
-        return match_gen(html_string)
-
-
 class CompoundRegexObject(ExtRegexObject):
     def __init__(self, spanRegexObj, srchRegexObj, cpattern=CPatterns.ZIN, parameters=None):
         '''
@@ -679,7 +601,8 @@ class CompoundRegexObject(ExtRegexObject):
         self.srchRegexObj = self.validateSrchRegexObj(srchRegexObj, cpattern)
         self.cpattern = cpattern
         self.spanDelim = None
-        self.params = parameters or []
+        self.params = parameters or tuple()
+        self._params_class = -1
         self.pattern = pattern
         self.flags = 0
         pass
@@ -692,13 +615,26 @@ class CompoundRegexObject(ExtRegexObject):
             ]
         )
 
+    def __getattr__(self, item):
+        return getattr(self.srchRegexObj, item)
+
     @property
     def groupindex(self):
         return self.srchRegexObj.groupindex
 
     @property
     def params_class(self):
-        return namedtuple('zinparams', sorted(self.spanRegexObj.groupindex.keys()))
+        if self._params_class == -1:
+            fields = tuple()
+            co = self.spanRegexObj
+            while True:
+                fields = tuple(sorted(co.groupindex.keys())) + fields
+                if not isinstance(co, self.__class__):
+                    break
+                co = co.spanRegexObj
+            param_class = namedtuple('zinparams', fields)
+            self._params_class = param_class
+        return self._params_class
 
     @property
     def searchFlag(self):
@@ -763,7 +699,6 @@ class CompoundRegexObject(ExtRegexObject):
                 pattern = ''
         return pattern
 
-
     def match(self, html_string, pos=-1, endpos=-1, parameters=None):
         return self.srchRegexObj.match(html_string, pos, endpos, parameters)
 
@@ -776,8 +711,17 @@ class CompoundRegexObject(ExtRegexObject):
             for match_srchobj in self.spanRegexObj.finditer(
                     html_string, pos, endpos, seek_to_end=False, parameters=parameters
             ):
-                params = match_srchobj.parameters[::]
-                params.append(self.params_class(**match_srchobj.groupdict()))
+                params = match_srchobj.parameters
+                if match_srchobj.groupdict():
+                    params = tuple(
+                        [
+                            *params,
+                            *tuple(
+                                value for _, value in sorted(match_srchobj.groupdict().items())
+                            )
+                        ]
+                    )
+                    params = self.params_class(*params)
                 span_beg_pos, span_end_pos = match_srchobj.span()
                 match self.cpattern:
                     case CPatterns.ZIN | CPatterns.CHILDREN:
@@ -785,11 +729,13 @@ class CompoundRegexObject(ExtRegexObject):
                             html_string, span_beg_pos + 1, span_end_pos,
                             seek_to_end=bflag, parameters=params
                         )
-                    case CPatterns.NXTTAG:
+                    case CPatterns.NXTTAG | CPatterns.PRECEDES:
                         beg_pos = html_string[span_end_pos + 1: endpos].find('<')
+                        method_name = 'match' if self.cpattern == CPatterns.NXTTAG else 'search'
+                        method = getattr(self.srchRegexObj, method_name)
                         if beg_pos > 0:
                             beg_pos += span_end_pos + 1
-                            m = self.srchRegexObj.match(html_string, beg_pos, parameters=params)
+                            m = method(html_string, beg_pos, parameters=params)
                         else:
                             m = None
                         it = [m] if m else []
@@ -811,7 +757,7 @@ class ExtMatchObject:
         self.re = regexObject
         self.string = htmlstring
         self.varpos = varPos
-        self.parameters = parameters or []
+        self.parameters = parameters or tuple()
         pass
 
     def _varIndex(self, x):
@@ -1185,7 +1131,7 @@ REGEX_SCANNER = re.compile(r'''
         (?P<quote>["'])     # Prefix
         (.*?)               # Pattern, puede ser nula
         (?P=quote)          # Suffix
-        (?=\s|>|=)          # Nota: Esto no acepta espacios en el pattern luego de un scape quote
+        (?=\s|>|<|=)          # Nota: Esto no acepta espacios en el pattern luego de un scape quote
     )) |
     (?P<ASIGNATION>(?:
         =                   # Igual
@@ -1286,7 +1232,7 @@ def compile(regex_str_in, flags=0, etags_str='[!--|style|script]'):
                         spattern = f'(?#<{regex_str[pini: pfin - end]}>)'
                         regex_obj1 = ExtRegexObject(spattern, flags, tag_pattern, tags, list(varList), maskParam)
                         regexobj_stack.append(regex_obj1)
-                    case CPatterns.ZIN | CPatterns.CHILDREN | CPatterns.NXTTAG:
+                    case CPatterns.ZIN | CPatterns.CHILDREN | CPatterns.NXTTAG | CPatterns.PRECEDES:
                         cpattern = CPatterns(compile_type)
                         regex_obj1 = regexobj_stack.pop()
                         spattern = f'(?#<{regex_str[pini: pfin - end]}>)'

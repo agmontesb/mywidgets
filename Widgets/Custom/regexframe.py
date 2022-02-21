@@ -9,114 +9,18 @@ import _thread
 import tkinter.ttk
 import tkinter.font
 import urllib.request, urllib.parse, urllib.error
+
 import CollapsingFrame as collapsingFrame
 import urllib.parse
-from functools import partial
 import re
-import Tools.uiStyle.CustomRegEx as CustomRegEx
+import Tools.uiStyle.MarkupRe as MarkupRe
+from Tools.uiStyle.uicss import Selector
 import network
 import queue
-import xml.etree.ElementTree as ET
-# from OptionsWnd import AppSettingDialog
+from Widgets.kodiwidgets import CustomDialog
 import threading
 import ImageProcessor as imgp
 from functools import reduce
-
-
-class AppSettingDialog(tk.Toplevel):
-    def __init__(self, master, xmlSettingFile, isFile=True, settings=None, title=None, dheight=None, dwidth=None):
-        tk.Toplevel.__init__(self, master)
-        self.resizable(False, False)
-        self.transient(master)
-        if title: self.title(title)
-        self.parent = master
-        body = tk.Frame(self, bg='grey')
-        if dheight:
-            body.configure(height=dheight)
-        if dwidth:
-            body.configure(width=dwidth)
-        body.pack(padx=5, pady=5)
-        # body.pack_propagate(0)
-        self.flag = 0
-        self.settings = settings or {}
-        self.allSettings = None
-        self.result = dict(self.settings)
-        self.applySelected = False
-        if isFile:
-            self.root = ET.parse(xmlSettingFile).getroot()
-        else:
-            self.root = ET.fromstring(xmlSettingFile)
-        self.initial_focus = self.setGUI(body)
-
-        self.grab_set()
-        if not self.initial_focus: self.initial_focus = self
-        self.protocol('WM_DELETE_WINDOW', self.Close)
-        self.geometry("+%d+%d" % (master.winfo_rootx() + 50,
-                                  master.winfo_rooty() + 50))
-        self.initial_focus.focus_set()
-        self.wait_window(self)
-
-    def getSettings(self):
-        return self.settings
-
-    def Close(self):
-        self.destroy()
-
-    def setGUI(self, master):
-        topPane = tk.Frame(master)
-        topPane.pack(side=tk.TOP, fill=tk.BOTH, expand=1)
-        topPane.grid_propagate(0)
-        self.topPane = topPane
-
-        bottomPane = tk.Frame(master, relief=tk.RIDGE, bd=5, bg='white', padx=3, pady=3)
-        bottomPane.pack(side=tk.TOP, fill=tk.X)
-        for label in ['Apply', 'Cancel']:
-            boton = tk.Button(bottomPane, name=label.lower(), text=label, command=partial(self.onAction, label))
-            boton.pack(side=tk.RIGHT)
-
-        self.setFrameFromXML()
-        self.rightPane = None
-        self.selOption(0)
-        self.rightPane.pack(side=tk.TOP, fill=tk.BOTH)
-
-        return bottomPane.children['apply']
-
-    def onAction(self, action):
-        self.applySelected = False
-        if action == 'Apply':
-            changedSettings = self.rightPane.getChangeSettings(self.settings)
-            reset = changedSettings.pop('reset')
-            for key in reset: self.settings.pop(key)
-            self.settings.update(changedSettings)
-            # self.applySelected = cmp(self.settings, self.result) != 0
-            self.applySelected = reset + changedSettings.keys()
-            self.result = dict(self.settings)
-            self.allSettings = self.rightPane.getAllSettings(keyfunc=lambda x: int(x.name))
-        self.Close()
-
-    def setFrameFromXML(self):
-        root = self.root
-        self.intVar = tk.IntVar()
-        categories = root.findall('category')
-        if len(categories) <= 1: return
-        self.leftPane = tk.Frame(self.topPane, relief=tk.RIDGE, bd=5, bg='white', padx=3, pady=3)
-        self.leftPane.pack(side=tk.LEFT, fill=tk.Y)
-        for k, elem in enumerate(categories):
-            boton = tk.Radiobutton(self.leftPane, text=elem.get('label'), value=k, variable=self.intVar,
-                                   command=partial(self.selOption, k), indicatoron=0)
-            boton.pack(side=tk.TOP, fill=tk.X)
-
-    def selOption(self, ene):
-        self.intVar.set(ene)
-        if self.rightPane:
-            changedSettings = self.rightPane.getChangeSettings(self.settings)
-            reset = changedSettings.pop('reset')
-            for key in reset: self.settings.pop(key)
-            self.settings.update(changedSettings)
-            self.rightPane.forget()
-        selPane = self.root.findall('category')[ene]
-        self.rightPane = scrolledFrame(self.topPane, self.settings, selPane)
-        self.rightPane.pack(side=tk.TOP, fill=tk.BOTH)
 
 
 class TreeList(ttk.Treeview):
@@ -266,8 +170,13 @@ class TreeList(ttk.Treeview):
             # print '**', iid, '**'
 
 
-
 class RegexpBar(tk.Frame):
+    RGXFLAGS = ['IGNORECASE', 'LOCALE', 'MULTILINE', 'DOTALL', 'UNICODE', 'VERBOSE']
+    RGXFLAGSPAT = ['i', 'L', 'm', 's', 'u', 'x']
+    CRGFLAGS = ['SPAN', 'PARAM']
+    CRGFLAGSPAT = ['(?#<SPAN>)', '(?#<PARAM>)']
+    FLAGS = RGXFLAGS + CRGFLAGS
+
     def __init__(self, master, messageVar):
         tk.Frame.__init__(self, master)
         self.dropDownFiler = None
@@ -291,10 +200,11 @@ class RegexpBar(tk.Frame):
 
     def onTreeSel(self, event):
         treew = event.widget
-        selId = treew.selection()[0]
-        posINI = treew.set(selId, column='posINI')
-        posFIN = treew.set(selId, column='posFIN')
-        self.setActualMatch((posINI, posFIN))
+        if treew.selection():
+            selId = treew.selection()[0]
+            posINI = treew.set(selId, column='posINI')
+            posFIN = treew.set(selId, column='posFIN')
+            self.setActualMatch((posINI, posFIN))
 
     def setDropDownFiler(self, callbckFunc):
         self.dropDownFiler = callbckFunc
@@ -347,9 +257,11 @@ class RegexpBar(tk.Frame):
         self.regexPattern = tk.StringVar()
         cbStyle = tkinter.ttk.Style()
         cbStyle = cbStyle.configure('red.TCombobox', foreground='red')
-        self.entry = tkinter.ttk.Combobox(frame1,
-                                  font=self.customFont,
-                                  textvariable=self.regexPattern)
+        self.entry = tkinter.ttk.Combobox(
+            frame1,
+            font=self.customFont,
+            textvariable=self.regexPattern
+        )
         self.entry.configure(postcommand=self.fillDropDownLst)
         self.entry.pack(side=tk.LEFT, fill=tk.X, expand=1)
 
@@ -366,7 +278,7 @@ class RegexpBar(tk.Frame):
         label.pack(side=tk.LEFT)
 
         self.chkVar = {}
-        chkTxt = CustomRegEx.FLAGS
+        chkTxt = self.FLAGS
         for elem in chkTxt:
             self.chkVar[elem] = tk.IntVar()
             chkbutt = tk.Checkbutton(frame15, text=elem, variable=self.chkVar[elem], font=self.customFont)
@@ -402,7 +314,7 @@ class RegexpBar(tk.Frame):
             height = textw.winfo_height()
             wndINI = textw.index('@0,0')
             wndFIN = textw.index('@0,%s' % height)
-            seeIndx = textw.index('@0,%s' % (height / 2))
+            seeIndx = textw.index('@0,%s' % (height // 2))
             self.anchorPos = [(wndINI, wndFIN, seeIndx)]
         else:
             wndINI, wndFIN, seeIndx = self.anchorPos.pop()
@@ -489,19 +401,12 @@ class RegexpBar(tk.Frame):
     def getRegexpPattern(self, withFlags=False):
         regExPat = self.regexPattern.get()
         if withFlags:
-            regExPat = self.getCompFlagsPatt() + regExPat
+            compFlags = self.getCompFlags()
+            regExPat = self.getCompFlagsPatt(compFlags) + regExPat
         return regExPat
 
-    def getCompFlags(self):
-        compflags = ['re.' + key for key in CustomRegEx.FLAGS if self.chkVar[key].get()]
-        return '|'.join(compflags) if compflags else '0'
-
-    def getCompFlagsPatt(self):
-        compFlags = self.getCompFlags()
-        return CustomRegEx.getCompFlagsPatt(compFlags)
-
     def setCompFlagsPatt(self, comFlagsPatt):
-        comFlagsPatt = CustomRegEx.getCompFlags(comFlagsPatt)
+        comFlagsPatt = self.getCompFlags(comFlagsPatt)
         comFlags = '|'.join(['re.%s' % x for x in comFlagsPatt])
         self.setCompFlags(comFlags)
 
@@ -514,7 +419,7 @@ class RegexpBar(tk.Frame):
 
     def setRegexpPattern(self, regexp):
         if regexp:
-            rgxflags, crgflags, regexp = CustomRegEx.getFlagsRegexPair(regexp)
+            rgxflags, crgflags, regexp = self.getFlagsRegexPair(regexp)
             compFlags = rgxflags + crgflags
             if compFlags:
                 self.setCompFlagsPatt(compFlags)
@@ -609,7 +514,8 @@ class RegexpBar(tk.Frame):
         else:
             if self.cbIndex.get():
                 cbValues = self.entry.cget('values')
-                if self.cbIndex.get() + pattern not in cbValues: self.cbIndex.set('')
+                if self.cbIndex.get() + pattern not in cbValues:
+                    self.cbIndex.set('')
         self.setRegexpPattern(pattern)
         self.formatContent()
         if self.cbIndex.get():
@@ -630,12 +536,13 @@ class RegexpBar(tk.Frame):
         self.queue.queue.clear()
         self.removeTags('1.0', 'end')
 
-        regexPattern = self.getRegexpPattern()
-        if not regexPattern: return None
+        no_flags_pattern = self.getRegexpPattern()
+        if not no_flags_pattern:
+            return None
         regexPattern = self.getRegexpPattern(withFlags=True)
-        rgxflags, crgflags, regexPattern = CustomRegEx.getFlagsRegexPair(regexPattern)
-        regexPattern = crgflags + regexPattern
-        compileOp = CustomRegEx.getCompFlags(rgxflags)
+        rgxflags, crgflags, no_flags_pattern = self.getFlagsRegexPair(regexPattern)
+        regexPattern = crgflags + no_flags_pattern
+        compileOp = self.getCompFlags(rgxflags)
         matchLabel = self.matchLabel
 
         opFlag = {'UNICODE': re.UNICODE, 'DOTALL': re.DOTALL, 'IGNORECASE': re.IGNORECASE,
@@ -643,7 +550,8 @@ class RegexpBar(tk.Frame):
         compFlags = reduce(lambda x, y: x | y, [opFlag[key] for key in compileOp], 0)
 
         content = self.textWidget.get(index1, index2)
-        if not content.strip(' \n\r\t\f'): return None
+        if not content.strip(' \n\r\t\f'):
+            return None
         baseIndex = self.textWidget.index(index1)
 
         yesCompFlag = len(regexPattern) > 0
@@ -652,15 +560,23 @@ class RegexpBar(tk.Frame):
             return None
         self.entry.configure(style='red.TCombobox')
         try:
-            reg = CustomRegEx.compile(regexPattern, compFlags)
+            sel = Selector(no_flags_pattern)
+            if sel.is_valid:
+                reg = sel.compiled_selector
+                # Para que se presente el span de los aciertos.
+                regexPattern = '(?#<SPAN>)' + no_flags_pattern
+            else:
+                reg = MarkupRe.compile(no_flags_pattern, compFlags)
         except Exception as inst:
             self.queue.put([None, (str(inst),)])
             return self.updateGUI()
         else:
             self.matchLabel.config(text='')
             self.messageVar.set('')
-            if not reg: return None
-        if hasattr(reg, 'searchFlag'): reg.searchFlag = mutex
+            if not reg:
+                return None
+        if hasattr(reg, 'searchFlag'):
+            reg.searchFlag = mutex
         self.entry.configure(style='TCombobox')
         tags = ['_grp%s' % x for x in range(1, reg.groups + 1)]
         for key, val in list(reg.groupindex.items()):
@@ -669,8 +585,8 @@ class RegexpBar(tk.Frame):
         prefix = ['PosINI', 'PosFIN']
         if regexPattern.startswith('(?#<SPAN>)'):
             pini = 0
-            if hasattr(reg, 'parameters'):
-                prefix.extend(reg.params_class._fields)
+            if hasattr(reg, 'params_class'):
+                prefix += reg.params_class._fields
         else:
             pini = 2
 
@@ -685,30 +601,28 @@ class RegexpBar(tk.Frame):
 
         if not mutex.is_set():
             mutex.set()
-            self.t = threading.Thread(name="searchThread",
-                                      target=self.lengthProcess,
-                                      args=(reg, content, baseIndex, mutex))
+            self.t = threading.Thread(
+                name="searchThread",
+                target=self.lengthProcess,
+                args=(reg, content, baseIndex, mutex)
+            )
             self.t.start()
             self.activeCallBack.append(self.after(100, self.updateGUI))
 
     def lengthProcess(self, reg, content, baseIndex, mutex):
-        k = 0
-        pos = 0
-        while mutex.is_set():
+        sentinel = 0
+        it = enumerate(reg.finditer(content, 0))
+        while mutex.is_set() and sentinel >= 0:
             try:
-                match = reg.search(content, pos)
+                k, match = next(it)
+                sentinel = k = k + 1
+            except StopIteration:
+                k, match = -sentinel, None
+                sentinel = -1
             except Exception as e:
-                self.queue.put([None, (str(e),)])
-                return
-            if not match:
-                k = -k
-                break
-            k += 1
-            pos = match.end(0)
+                k, match = None, (str(e),)
+                sentinel = -1
             self.queue.put([k, (match, baseIndex)])
-        if k <= 0:
-            self.queue.put([k, (None, baseIndex)])
-        return
 
     def removeTags(self, tagIni, tagFin):
         tagColor = ['evenMatch', 'oddMatch', 'actMatch', 'group', 'hyper']
@@ -727,8 +641,9 @@ class RegexpBar(tk.Frame):
         try:
             self.textWidget.tag_add(tag, tagIni, tagFin)
         except:
-            print()
-            'exception: ' + tag + ' tagIni: ' + tagIni + ' tagFin: ' + tagFin
+            print(
+                'exception: ' + tag + ' tagIni: ' + tagIni + ' tagFin: ' + tagFin
+            )
 
         ngroups = len(match.groups())
         for key in range(1, ngroups + 1):
@@ -747,53 +662,51 @@ class RegexpBar(tk.Frame):
     def updateGUI(self):
         nProcess = 100
         k = 10000
-        while not self.queue.empty() and k > 0 and nProcess:
+        while k > 0 and not self.queue.empty() and nProcess:
             k, args = self.queue.get()
-            try:
-                if k > 0:
-                    match, baseIndex = args
-                    nProcess -= 1
-                    tagColor = ['evenMatch', 'oddMatch']
-                    matchColor = tagColor[k % 2]
-                    self.setTag(matchColor, baseIndex, match, 0)
-                    tagIni = self.textWidget.index(baseIndex + ' + %d chars' % match.start(0))
-                    iid = 'I{:03x}'.format(k)
-                    self.textWidget.mark_set(iid, tagIni)
-
-                    nCols = len(match.groups())
-                    bFlag = hasattr(match, 'parameters') and match.params_class
-                    if bFlag:
-                        nCols += len(match.params_class)
-                    nCols = min(len(self.tree['columns']) - 2, nCols)
-                    tagValues = (match.start(0), match.end(0))
-                    if bFlag: tagValues += match.params_class
-                    tagValues += match.groups()[:nCols - len(tagValues) + 2]
-                    tagValues = tagValues + (len(self.tree['columns']) - len(tagValues)) * ('',)
-                    self.tree.insert('', 'end', iid, values=tagValues)  # Por revisar
-
-                    if k > 1:
-                        matchStr = ' ' + str(k) + ' '
-                        self.matchLabel.config(text=matchStr)
-                        self.matchLabel.update()
-                        continue
-                    self.actMatchIndx = 1
-                    self.matchLabel.config(text=' 1 ')
-                    self.setTag('actMatch', baseIndex, match, 0)
-                    self.textWidget.tag_delete('sel')
-                    btState = tk.NORMAL
-                elif k == 0:
-                    self.actMatchIndx = 0
-                    self.matchLabel.config(text=' 0 de 0 ', bg='red')
-                    btState = tk.DISABLED
-                elif k is not None:  # k is an negative integer, success
-                    btState = tk.NORMAL
-                    matchStr = ' ' + str(self.actMatchIndx) + ' de ' + str(-k) + ' '
-                    self.matchLabel.config(text=matchStr)
-                    self.matchLabel.update()
-            except:  # k is None, an error has ocurred
+            if k is None:
+                # k is None, an error has ocurred
                 self.messageVar.set(args[0])
                 self.matchLabel.config(text='Error', bg='red')
                 btState = tk.DISABLED
+                k = -1      # De esta forma sale del loop
+            elif k > 0:
+                match, baseIndex = args
+                nProcess -= 1
+                tagColor = ['evenMatch', 'oddMatch']
+                matchColor = tagColor[k % 2]
+                self.setTag(matchColor, baseIndex, match, 0)
+                tagIni = self.textWidget.index(baseIndex + ' + %d chars' % match.start(0))
+                iid = 'I{:03x}'.format(k)
+                self.textWidget.mark_set(iid, tagIni)
+
+                max_cols = len(self.tree['columns'])
+                tagValues = (match.start(0), match.end(0))
+                if hasattr(match, 'parameters') and match.parameters:
+                    tagValues += match.parameters
+                tagValues += match.groups() + max_cols * ('',)
+                tagValues = tagValues[:max_cols]
+                self.tree.insert('', 'end', iid, values=tagValues)
+
+                if k > 1:
+                    matchStr = ' ' + str(k) + ' '
+                    self.matchLabel.config(text=matchStr)
+                    self.matchLabel.update()
+                    continue
+                self.actMatchIndx = 1
+                self.matchLabel.config(text=' 1 ')
+                self.setTag('actMatch', baseIndex, match, 0)
+                self.textWidget.tag_delete('sel')
+                btState = tk.NORMAL
+            elif k == 0:
+                self.actMatchIndx = 0
+                self.matchLabel.config(text=' 0 de 0 ', bg='red')
+                btState = tk.DISABLED
+            elif k < 0:  # k is an negative integer, success
+                btState = tk.NORMAL
+                matchStr = ' ' + str(self.actMatchIndx) + ' de ' + str(-k) + ' '
+                self.matchLabel.config(text=matchStr)
+                self.matchLabel.update()
 
             if btState == tk.DISABLED and self.leftWing.winfo_ismapped():
                 for button in [self.leftWing, self.rightWing]:
@@ -802,11 +715,47 @@ class RegexpBar(tk.Frame):
                 self.matchLabel.pack_forget()
                 for button in [self.leftWing, self.matchLabel, self.rightWing]:
                     button.pack(side=tk.LEFT)
-        if k > 0 or not self.queue.empty():
+        if k is not None and k > 0 or not self.queue.empty():
             if self.activeCallBack:
                 idAfter = self.activeCallBack.pop()
                 self.after_cancel(idAfter)
             self.activeCallBack.append(self.after(100, self.updateGUI))
+
+    def getCompFlagsPatt(self, compFlags):
+        if compFlags == '0':
+            return ''
+        compFlags = compFlags.replace('re.', '')
+        trnMap = dict(list(zip(self.RGXFLAGS + self.CRGFLAGS, self.RGXFLAGSPAT + self.CRGFLAGSPAT)))
+        compFlags = ''.join([trnMap[x] for x in compFlags.split('|')])
+        rgxflags = ''.join(re.findall(r'[iLmsux]', compFlags))
+        crgflags = re.findall(r'\(\?#<[A-Z]+>\)', compFlags)
+        crgflags = [x for x in crgflags if x in self.CRGFLAGSPAT]
+        crgflags = ''.join(crgflags)
+        if rgxflags: rgxflags = '(?%s)' % rgxflags
+        return rgxflags + crgflags
+
+    def getCompFlags(self, flags=None):
+        if flags is None:
+            compflags = ['re.' + key for key in self.FLAGS if self.chkVar[key].get()]
+            return '|'.join(compflags) if compflags else '0'
+        crgpat = r'\(\?\#\<[A-Z]+\>\)'
+        pattern = r'^(\(\?[iLmsux]+\))*((?:%s)+)*' % crgpat
+        rgxflags, crgflags = re.findall(pattern, flags)[0]
+        trnMap = dict(list(zip(self.RGXFLAGSPAT, self.RGXFLAGS)))
+        rgxflags = [trnMap[x] for x in rgxflags.strip('(?)')]
+        trnMap = dict(list(zip(self.CRGFLAGSPAT, self.CRGFLAGS)))
+        crgflags = [trnMap.get(x, None) for x in re.findall(crgpat, crgflags)]
+        crgflags = [_f for _f in crgflags if _f]
+        return rgxflags + crgflags
+
+    def getFlagsRegexPair(self, regexpat):
+        crgpat = r'\(\?\#\<[A-Z]+\>\)'
+        pattern = r'^(\(\?[iLmsux]+\))*((?:%s)+)*(.+)' % crgpat
+        rgxflags, crgflags, regexp = re.findall(pattern, regexpat)[0]
+        crgflags = re.findall(crgpat, crgflags)
+        regexp = ''.join([x for x in crgflags if x not in self.CRGFLAGSPAT]) + regexp
+        crgflags = ''.join([x for x in crgflags if x in self.CRGFLAGSPAT])
+        return rgxflags, crgflags, regexp
 
 
 class NavigationBar(tk.Frame):
@@ -862,11 +811,14 @@ class NavigationBar(tk.Frame):
         entryUrl.bind('<Control-o>', self.controlleftKey)
 
     def settingComm(self):
-        browser = AppSettingDialog(self, 'browserSettings.xml', settings=self.browserParam,
-                                   title='Browser config params')
-        bp = browser.result
-        self.browserParam = bp
-        self.initNetwork()
+        file_name = '/mnt/c/Users/Alex Montes/PycharmProjects/mywidgets/Data/kodi/browserSettings.xml'
+        settingObj = CustomDialog(
+            self, title='Application Settings', xmlFile=file_name, isFile=True, settings=self.browserParam.copy()
+        )
+        changed_settings = settingObj.settings
+        if self.browserParam != changed_settings:
+            self.browserParam = changed_settings
+            self.initNetwork()
 
     def initNetwork(self):
         bp = self.browserParam
@@ -940,7 +892,7 @@ class NavigationBar(tk.Frame):
     def controlleftKey(self, event):
         name = tkFileDialog.askopenfilename(filetypes=[('text Files', '*.txt'), ('All Files', '*.*')])
         if name:
-            name = 'file:' + urllib.request.pathname2url(name)
+            name = 'file://' + urllib.request.pathname2url(name)
             self.activeUrl.set(name)
             self.returnKey()
 
@@ -1219,7 +1171,7 @@ class PythonEditor(tk.Frame):
     def setContent(self, text):
         self.textw.delete('1.0', 'end')
         if text:
-            self.textw.insert('1.0', text.encode('utf-8'))
+            self.textw.insert('1.0', text.replace('\r', ''))
 
     def selDel(self, event=None):
         textw = self.textw
@@ -1275,11 +1227,32 @@ class PythonEditor(tk.Frame):
         self.textw.bind('<Key>', objInst.keyHandler)
 
 
-class RegexpFrame(tk.Frame):
-    def __init__(self, master, xbmcThreads, messageVar):
+class StatusBar(tk.Frame):
+    def __init__(self, master, statusList):
         tk.Frame.__init__(self, master)
-        self.xbmcThreads = xbmcThreads
-        self.linkedPane = None
+        self.setGUI(statusList)
+
+    def setGUI(self, statusList):
+        kwargs = dict(bd=3, relief=tk.SUNKEN, height=1, width=40, anchor=tk.NW, padx=5)
+        frame = tk.Frame(self, bd=5)
+        frame.pack(side=tk.TOP, fill=tk.X)
+        for ltext, str_var in statusList[:-1]:
+            label = tk.Label(frame, text=ltext, bd=3)
+            label.pack(side=tk.LEFT)
+            kwargs['textvariable'] = str_var
+            label = tk.Label(frame, **kwargs)
+            label.pack(side=tk.LEFT)
+
+        kwargs['textvariable'] = statusList[-1][1]
+        label = tk.Label(frame, **kwargs)
+        label.pack(side=tk.RIGHT, fill=tk.X, expand=1)
+        label = tk.Label(frame, text=statusList[-1][0], bd=3)
+        label.pack(side=tk.RIGHT)
+
+
+class RegexpFrame(tk.Frame):
+    def __init__(self, master, messageVar):
+        tk.Frame.__init__(self, master)
         self.dropDownFiler = None
         self.popUpMenu = None
         self.state = None
@@ -1289,18 +1262,6 @@ class RegexpFrame(tk.Frame):
 
         self.messageVar = messageVar
         self.setGUI()
-
-    def initFrameExec(self, refreshFlag=False):
-        xbmcThreads = self.xbmcThreads
-        getThParam = xbmcThreads.getThreadParam
-        activeKnotId = xbmcThreads.threadDef
-        actState = (getThParam(activeKnotId, 'url'), getThParam(activeKnotId, 'regexp'))
-        if refreshFlag and self.state == actState: return
-        urlToOpen = 'plugin://plugin.video?menu=%s' % activeKnotId
-        rgfrm = self.regexBar
-        self.setActiveUrl(urlToOpen)
-        if actState != ('', ''):
-            self.state = actState
 
     def setGUI(self):
         self.customFont = tkinter.font.Font(family='Consolas', size=18)
@@ -1316,9 +1277,13 @@ class RegexpFrame(tk.Frame):
         frame2 = collapsingFrame.collapsingFrame(self, buttconf='mRM')
         frame2.pack(fill=tk.BOTH, expand=1)
         self.txtEditor = PythonEditor(frame2.frstWidget)
-        self.tree = TreeList(frame2.scndWidget, displaycolumns='#all',
-                                        show='headings', columns=(
-            'posINI', 'posFIN', 'var0', 'var1', 'var2', 'var3', 'var4', 'var5', 'var6', 'var7', 'var8', 'var9'))
+        self.tree = TreeList(
+            frame2.scndWidget,
+            displaycolumns='#all',
+            show='headings', columns=(
+                'posINI', 'posFIN', 'var0', 'var1', 'var2', 'var3', 'var4', 'var5', 'var6', 'var7', 'var8', 'var9'
+            )
+        )
         self.tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=1)
 
         self.txtEditor.setKeyHandler(self)
@@ -1338,7 +1303,7 @@ class RegexpFrame(tk.Frame):
             zinBuff = [self.txtEditor.scrbar.get(), selRange]
             textw = self.txtEditor.textw
             height = textw.winfo_height()
-            zinBuff.append((textw.index(tk.INSERT), textw.index('@0,%s' % (height / 2))))
+            zinBuff.append((textw.index(tk.INSERT), textw.index('@0,%s' % (height // 2))))
             rgxFlag = not self.txtEditor.getSelRange()
             texto = self.txtEditor.getContent(*selRange)
             self.setContent(texto, False)
@@ -1347,7 +1312,8 @@ class RegexpFrame(tk.Frame):
             zinBuff.append((prefix, regExPat))
             self.regexBar.anchorPos.append(zinBuff)
             self.regexBar.butAnchor['state'] = tk.DISABLED
-            if regExPat.startswith('(?#<SPAN>)'): self.setActiveUrl()
+            if regExPat.startswith('(?#<SPAN>)'):
+                self.setActiveUrl()
             return True
         else:
             self.urlFrame.returnKey()
@@ -1420,131 +1386,18 @@ class RegexpFrame(tk.Frame):
     def setCompFlags(self, compflags):
         self.regexBar.setCompFlags(compflags)
 
-    def getNxtMenu(self, threadId, urlout):
-        cbIndx = self.regexBar.cbIndex.get()
-        m = re.search(r'<[^-]+-([^-]+)-[^-]+>', cbIndx)
-        if m: return m.group(1)
-        xbmcThreads = self.xbmcThreads
-        defValue = xbmcThreads.getThreadAttr(threadId, 'up')
-        discrim = xbmcThreads.getThreadParam(threadId, 'discrim')
-        if discrim:
-            disc = xbmcThreads.getThreadParam(threadId, discrim)
-            listaDisc = [(disc, threadId)] if disc else []
-            listaMenu = [xbmcThreads.getThreadAttr(elem, 'name') for elem in xbmcThreads.getRawChildren(threadId) if
-                         xbmcThreads.getThreadAttr(elem, 'type') == 'link']
-            for elem in listaMenu:
-                params = xbmcThreads.parseThreads[elem]['params']
-                listaDisc.extend([(disc, elem) for key, disc in list(params.items()) if key.startswith(discrim)])
-            discrimDict = dict(listaDisc)
-            if discrim.startswith('urlout'):
-                toTest = urlout
-            elif discrim.startswith('urlin'):
-                toTest = self.urlFrame.getActiveUrl()
-            elif discrim.startswith('option'):
-                iid = self.regexBar.getBorderTags('current', withActMatch=False)[0][1:]
-                toTest = str(int(iid, 16) - 1)
-            else:
-                return defValue
-            for key, value in list(discrimDict.items()):
-                if key in toTest:
-                    defValue = value
-                    break
-        return defValue
-
     def hyperLnkMngr(self, url):
-        regexp = self.getRegexpPattern(withFlags=True)
-        if not '(?#<SPAN>)' in regexp:
-            baseurl = self.urlFrame.getActiveUrl()
-            url = urllib.parse.urljoin(baseurl, url)
-        xbmcThreads = self.xbmcThreads
-        activeKnotId = xbmcThreads.threadDef
-        menuId = xbmcThreads.getThreadAttr(activeKnotId, 'up')
-        urlsplit = urllib.parse.urlsplit(url)
-        content = ''
-        if urlsplit.netloc:
-            query = dict(urllib.parse.parse_qsl(urlsplit.query))
-            menu = query.get('menu')
-            if urlsplit.scheme == 'plugin' and xbmcThreads.getThreadAttr(menu, 'type') == 'thread':
-                url = xbmcThreads.getThreadParam(menu, 'url')
-
-            if not url.startswith('plugin://'):
-                self.urlFrame.setActiveUrl(url)
-                if urlsplit.scheme == 'plugin':
-                    menuId = menu
-                else:
-                    menuId = self.getNxtMenu(activeKnotId, url)
-                rgxexp = '(?#<rexp-{0}>){1}'.format(menuId, xbmcThreads.getThreadParam(menuId, 'regexp'))
-            else:
-                self.urlFrame.setActiveUrl('')
-                menuId = menu
-                content = ''
-                for node in xbmcThreads.getChildren(menuId):
-                    content += 'name=%s, url=plugin://plugin.video?menu=%s\n' % (
-                    xbmcThreads.getThreadAttr(node, 'name'), node)
-                rgxexp = xbmcThreads.getThreadParam(menuId, 'regexp')
-        else:
-            menuId = xbmcThreads.getThreadAttr(activeKnotId, 'up')
-            textWidget = self.txtEditor.textw
-            tagnames = textWidget.tag_names('current')
-            nxtTag = set(['oddMatch', 'evenMatch']).intersection(tagnames).pop()
-            srange = textWidget.tag_prevrange(nxtTag, 'current')
-            content = self.getContent(*srange)
-            rgxexp = '(?#<rexp-{0}>){1}'.format(menuId, xbmcThreads.getThreadParam(menuId, 'regexp'))
-            pass
-        if menuId:
-            compFlags = xbmcThreads.getThreadParam(menuId, 'compflags')
-            self.setCompFlags(compFlags)
-            self.setRegexpPattern(rgxexp)
-        self.setContent(content)
-
-        xbmcThreads.threadDef = menuId
-        if self.linkedPane: self.linkedPane.refreshPaneInfo()
+        baseurl = self.urlFrame.getActiveUrl()
+        url = urllib.parse.urljoin(baseurl, url)
+        self.urlFrame.setActiveUrl(url)
+        # self.setContent(content)
 
     def setActiveUrl(self, url=None):
-        if url and self.regexBar.anchorPos:
-            self.regexBar.anchorPos = []
-            self.regexBar.anchor.set(0)
-        rgxNode = None
-        rgfrm = self.regexBar
-        theValues = rgfrm.dropDownFiler()
-        ndxpos = [val[0] for val in theValues]
-        if not url or not url.startswith('plugin://'):
-            rgxNode = rgfrm.cbIndex.get()
-            if rgxNode: rgfrm.entry.set('')
-            if url: self.urlFrame.setActiveUrl(url)
-            if rgxNode:
-                actpos = ndxpos.index(rgxNode)
-                rgxNode = theValues[actpos][2]
-        else:  # Cuando se trata de un List Node
-            rgfrm.cbIndex.set('')
-            self.regexBar.removeTags('1.0', 'end')
-            query = urllib.parse.urlsplit(url).query
-            query = dict(urllib.parse.parse_qsl(query))
-            activeKnotId = query['menu']
-            xbmcThreads = self.xbmcThreads
-            self.setRegexpPattern('')
-            if xbmcThreads.getThreadAttr(activeKnotId, 'type') == 'list':
-                content = ''
-                for node in xbmcThreads.getChildren(activeKnotId):
-                    if node.endswith('_lnk'):
-                        node = xbmcThreads.getThreadAttr(node, 'name')
-                    content += 'name=%s, url=plugin://plugin.video?menu=%s\n' % (
-                    xbmcThreads.getThreadAttr(node, 'name'), node)
-                self.setRegexpPattern(r'name=(?P<label>.+?), url=(?P<url>.+?)\s')
-                self.setCompFlags('')
-                self.setContent(content)
-                return
-            else:
-                urlToOpen = query.get('url') or xbmcThreads.getThreadParam(activeKnotId, 'url')
-                if not urlToOpen: return
-                self.urlFrame.setActiveUrl(urlToOpen)
-                rgxNode = '(?#<rexp-%s>)' % activeKnotId
-                compFlags = xbmcThreads.getThreadParam(activeKnotId, 'compflags')
-                self.setCompFlags(compFlags)
-                self.regexBar.fillDropDownLst()
-        if rgxNode:
-            nxtpos = ndxpos.index(rgxNode)
-            rgfrm.entry.current(nxtpos)
+        if url:
+            if self.regexBar.anchorPos:
+                self.regexBar.anchorPos = []
+                self.regexBar.anchor.set(0)
+            self.urlFrame.setActiveUrl(url)
 
     def getActiveUrl(self):
         return self.urlFrame.getActiveUrl()
@@ -1552,6 +1405,10 @@ class RegexpFrame(tk.Frame):
 
 if __name__ == '__main__':
     top = tk.Tk()
-    rgf = RegexpFrame(top, None, tk.StringVar())
+    message = tk.StringVar()
+    status_list = [('Message:', message)]
+    sb = StatusBar(top, status_list)
+    sb.pack(side=tk.BOTTOM, fill=tk.X, expand=0)
+    rgf = RegexpFrame(top, message)
     rgf.pack(side=tk.TOP, fill=tk.BOTH, expand=tk.YES)
     top.mainloop()

@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<settings>
+  <category label="Settings" lib="Widgets.kodiwidgets">
+	  <kcontainer label="General Settings" scrolled="true">
+			<ktext id="user-agent"  label="User Agent:   " default=""/>
+			<kfolder id="working-dir"  label="Default directory:   " default=""/>
+			<ktext id="cookie-jar"  label="Cookie File:   " default="cookies.lwp"/>
+			<klsep type="lsep" label ="Output: "/>
+			<kbool id="flag_output"  label ="Use output: " default="false"/>
+			<ktext id="output"  label="Output to:   " default="output.txt" enable="eq(flag_output,true)"/>
+			<kbool id="remote-name"  label ="Use remote name: " default="false" enable="eq(flag_output,true)"/>
+			<kbool id="remote-header-name"  label ="Use remote header name: " default="false" enable="eq(flag_output,true)"/>
+			<klsep type="lsep" label ="Switches:    "/>
+			<kbool id="switch_location"  label ="Redirection" default="false"/>
+			<kbool id="switch_include"  label ="Include log" default="false"/>
+			<kbool id="switch_post301"  label ="Post301" default="false"/>
+			<kbool id="switch_post302"  label ="Post302" default="false"/>
+			<kbool id="switch_post303"  label ="Post303" default="false"/>
+			<klsep type="lsep" label ="Proxy: "/>
+			<kbool id="flag_proxy"  label ="Use Proxy: " default="false"/>
+			<ktext id="proxy"  label="Proxy:   " default="" enable="eq(flag_proxy,true)"/>
+			<klabelenum id="proxy_auth"  label="Proxy Auth:   " default="0" values="No authentication|Basic|Digest" enable="eq(flag_proxy,true)"/>
+			<ktext id="proxy_user"  label="User:   " default="" enable="eq(flag_proxy,true)"/>
+			<ktext id="proxy_password"  label="Password:   " default="" enable="eq(flag_proxy,true)"/>
+	  </kcontainer>
+  </category>
+</settings>

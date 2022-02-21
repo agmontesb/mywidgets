@@ -115,7 +115,7 @@ class UIeditor(tk.Toplevel):
             tk.VERTICAL,
             inisplit=0.2,
             buttconf='RM',
-            bg='yellow',
+            # bg='yellow',
         )
         self.testFrame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=tk.YES)
         self.testFrame.pack_propagate(0)
@@ -338,15 +338,12 @@ class UIeditor(tk.Toplevel):
 
     def programSettingDialog(self):
         file_name = '/mnt/c/Users/Alex Montes/PycharmProjects/mywidgets/Data/kodi/uiEditorSettings.xml'
-        with open(file_name, 'rb') as f:
-            file_content = f.read()
-        settingObj = CustomDialog(self, title='Application Settings', xmlFile=file_content, isFile=True, settings={})
+        settingObj = CustomDialog(self, title='Application Settings', xmlFile=file_name, isFile=True, settings={})
         all_settings = settingObj.allSettings
-        for key, value in all_settings:
-            setattr(R, key, value)
-        R.__dict__.update(all_settings)
-
-        print(R.initial_path)
+        if all_settings:
+            for key, value in all_settings:
+                setattr(R, key, value)
+            print(R.initial_path)
         # settingObj = AppSettingDialog(self, 'IDE_Settings.xml', settings = nonDefParam, title = 'IDE General Settings')
         # self.ideSettings.setNonDefaultParams(settingObj.result)
         # if settingObj.applySelected:

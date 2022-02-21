@@ -3,6 +3,7 @@ import pytest
 
 from . import uicss
 
+
 class TestSelector:
 
     def test_compiled_patterns(self):
@@ -15,22 +16,10 @@ class TestSelector:
             assert sel.pattern.startswith('SelectorStrError')
             return sel
 
-        selector_str = 'p, span, dos'
+        selector_str = '(?#<nav'
         selector = helper_f(selector_str)
 
-        # Este caso no se como se resuelve parece ser un bug en el modulo re. El corchete derecho
-        # desaparece.
-        # >>> import re
-        # >>> COMBINATORS = re.compile('(?:\W*?([\+\>\ \~\,]+)\W*?)')
-        # >>> selector_str = 'li > a[href*="en-US"] > .inline-warning'
-        # >>> splt_str = COMBINATORS.split(selector_str)
-        # >>> splt_str
-        # ['li', ' > ', 'a[href*="en-US', ' > ', '.inline-warning']
-        # >>> selector_str == ''.join(splt_str)
-        # False
-
-
-        selector_str = 'li > a[href*="en-US"] > .inline-warning'
+        selector_str = 'p, span, dos'
         selector = helper_f(selector_str)
 
     def test_specifity(self):

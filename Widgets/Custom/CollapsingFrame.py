@@ -3,7 +3,6 @@ import tkinter as tk
 import ImageProcessor as imgp
 
 
-
 BAND_WIDTH = 18
 BAND_COLOR = 'light sea green'
 

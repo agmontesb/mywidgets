@@ -251,14 +251,14 @@ class network:
                 responseinfo = self.response.info()
                 content_encoding = responseinfo.get('Content-Encoding')
                 data = unCompressMethods(data, content_encoding)
+                encoding = None
                 if "text" in responseinfo.get_content_type():
-                    encoding = None
                     if 'content-type' in responseinfo:
                         content_type = responseinfo.get('content-type').lower()
                         match = re.search('charset=(\S+)', content_type)
                         if match: encoding = match.group(1)
-                    charset = encoding or 'iso-8859-1'
-                    data = data.decode(charset, 'replace')
+                charset = encoding or 'iso-8859-1'
+                data = data.decode(charset, 'replace')
                 self.processData(values, data)
             finally:
                 self.response.close()

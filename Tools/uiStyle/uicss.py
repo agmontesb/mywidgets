@@ -10,20 +10,21 @@
 import re
 import itertools
 
-import Tools.uiStyle.CustomRegEx as CustomRegEx
+import Tools.uiStyle.MarkupRe as MarkupRe
 
 THOUSANDS = 0
 HUNDRES = 1
 TENS = 2
 ONES = 3
 
-PATTERN = re.compile('(?:\:*[:\.#]*?[A-Za-z\d\-\_]+)|(?:\[.+?\])')
-COMBINATORS = re.compile('(?:\W*?([\+\>\ \~\,]+)\W*?)')
-ATTRIBUTES = re.compile('([\&\|\^\$\*]*=)')
+PATTERN = re.compile(r'(?:\:*[:\.#]*?[A-Za-z\d\-\_]+)|(?:\[.+?\])')
+SPLIT_PATTERN = re.compile(r'((?:(?:\:*[:\.#]*?[A-Za-z\d\-\_]+)|(?:\[.+?\]))+)')
+COMBINATORS = re.compile(r'([\+\>\ \~\,]+)')
+ATTRIBUTES = re.compile(r'([\&\|\^\$\*]*=)')
 
 
 def getWidgetMap(htmlstr, k=-1):
-    cmpobj = CustomRegEx.compile('(?#<__TAG__ __TAG__=tag name=_name_ id=_id_ >)')
+    cmpobj = MarkupRe.compile('(?#<__TAG__ __TAG__=tag name=_name_ id=_id_ >)')
 
     from_pos = 0
     to_pos = len(htmlstr)
@@ -55,6 +56,10 @@ def getWidgetMap(htmlstr, k=-1):
     return wdg_map
 
 
+class UiCssError(Exception):
+    pass
+
+
 class Selector:
     seq_gen = itertools.count()
 
@@ -73,12 +78,12 @@ class Selector:
         self._selector_str = selector_str
         self._compiled_selector = None
         try:
-            assert  not selector_str.count(','), f'SelectorStrError: Aggregated patterns (,) not posible'
-            pattern = self._set_selector_pattern()
-            cp = CustomRegEx.compile(pattern)
-            assert isinstance(cp, CustomRegEx.ExtRegexObject) or cp.regex_pattern_str == '<', f'SelectorStrError: Not a valid CustomRegEx object: {cp.regex_pattern_str}'
+            assert not selector_str.count(','), f'SelectorStrError: Aggregated patterns (,) not posible'
+            cp = self._get_compiled_selector_pattern()
+            pattern = cp.pattern
+            assert isinstance(cp, MarkupRe.ExtRegexObject) or cp.regex_pattern_str == '<', f'SelectorStrError: Not a valid MarkupRe object: {cp.regex_pattern_str}'
             self._compiled_selector = cp
-        except AssertionError as e:
+        except (UiCssError, AssertionError) as e:
             self._pattern = str(e)
         else:
             self._pattern = pattern
@@ -103,7 +108,7 @@ class Selector:
     @property
     def pattern(self):
         '''
-        :return: str. CustomRegEx pattern equivalente al CSS selector.
+        :return: str. MarkupRe pattern equivalente al CSS selector.
         '''
         return self._pattern
 
@@ -123,17 +128,21 @@ class Selector:
     def compiled_selector(self):
         return self._compiled_selector
 
-    def _get_basic_pattern(self, basic_selectors):
+    def _get_basic_pattern(self, basic_selector):
         '''
-        Entrega el pattern correspondiente a un selector básico para el CustomRegEx
+        Entrega el pattern correspondiente a un selector básico para el MarkupRe
         Se entiende como básicos: *, p, .clase, #id, [attr]
-        :param basic_selectors: str. Descripción de un selector básico
-        :return: str. CustomRegEx pattern.
+        :param basic_selector: str. Descripción de un selector básico
+        :return: str. MarkupRe pattern.
         '''
-        bflag = basic_selectors[0] in '.#[:'
+        items = PATTERN.findall(basic_selector)
+        try:
+            assert basic_selector == ''.join(items)
+        except AssertionError:
+            raise UiCssError(f"SelectorStrError: {basic_selector} is not a basic selector")
+        bflag = items[0][0] in '.#[:'
         if not bflag:
             self._specificity[ONES] += 1
-        items = PATTERN.findall(basic_selectors)
         basic_pattern = [f'{items.pop(0) if not bflag else "__TAG__"}']
         while items:
             selector = items.pop(0)
@@ -152,30 +161,40 @@ class Selector:
             else:                    # case == '[': [exp]
                 self._specificity[TENS] += 1
                 selector = selector[:-1]
-                splt_sel = COMBINATORS.split(selector)
-                case = len(splt_sel)
-                if case == 1:      # Case [target]:
-                    attr = splt_sel[0]
-                    basic_pattern.append(f'{attr}')
-                elif case == 3:
-                    attr, case, value = splt_sel
-                    value = value.strip('\'"')
-                    if case == '=':
-                        basic_pattern.append(f'{attr}="{value}"')
-                    elif case == '&=':          # Antiguo '~='
-                        basic_pattern.append(f'{attr}=".*?\\b{value}\\b.*?"')
-                    elif case == '|=':
-                        basic_pattern.append(f'{attr}="{value}-*.*?"')
-                    elif case == '^=':
-                        basic_pattern.append(f'{attr}="{value}.*?"')
-                    elif case == '$=':
-                        basic_pattern.append(f'{attr}=".*?{value}"')
-                    elif case == '*=':
-                        basic_pattern.append(f'{attr}=".+?{value}.+?"')
+                selectors = selector.split(' ')
+                for selector in selectors:
+                    splt_sel = ATTRIBUTES.split(selector)
+                    case = len(splt_sel)
+                    if case == 1:      # Case [target]:
+                        attr = splt_sel[0]
+                        basic_pattern.append(f'{attr}')
+                    else:       # case >= 3
+                        bflag = not case % 2 or case > 5    # case 2, 4 y case > 5: [a=], [a=b=] y [a=b=c=...]
+                        if not bflag:                       # case in (3, 5)    [a=b], [a=b=c]
+                            (attr, case, value), suffix = splt_sel[:3], ''.join(splt_sel[3:])
+                            bflag = suffix and suffix[0] != '='
+                        if bflag:
+                            raise UiCssError(f"SelectorStrError: {selector} is not allowed as attribute selector")
+                        if case == '=':
+                            delta = f'{attr}={value}'
+                        else:
+                            value = value.strip('\'"')
+                            if case == '&=':          # Antiguo '~='
+                                delta = f'{attr}=".*?\\b{value}\\b.*?"'
+                            elif case == '|=':
+                                delta = f'{attr}="{value}-*.*?"'
+                            elif case == '^=':
+                                delta = f'{attr}="{value}.*?"'
+                            elif case == '$=':
+                                delta = f'{attr}=".*?{value}"'
+                            elif case == '*=':
+                                delta = f'{attr}=".+?{value}.+?"'
+                            delta += suffix
+                        basic_pattern.append(delta)
         basic_pattern = ' '.join(basic_pattern)
         return basic_pattern
 
-    def _set_selector_pattern(self):
+    def _get_compiled_selector_pattern(self):
         '''
         Entrega el regex pattern necesario para encontrar los widgets a los cuales aplicar el estilo.
         Formas de selectores válidos (<tag class="clase" id="id">):
@@ -200,37 +219,40 @@ class Selector:
         selector_str = selector_str.replace('~=', '&=')     # Se hace para evitar conflicto entre combinator y
                                                             # y attributes.
         if selector_str == '*':
-            return f'(?#<__TAG__>)'
+            return MarkupRe.compile('(?#<__TAG__>)')
         selector_str = selector_str.strip('\n\t ')
-        splt_sel = COMBINATORS.split(selector_str)
+        splt_sel = SPLIT_PATTERN.split(selector_str)[1:-1]
         try:
             assert selector_str == ''.join(splt_sel), 'Bad split selector string'
         except AssertionError:
-            raise AssertionError(f"SelectorStrError: Can't split selector str: {selector_str} != {''.join(splt_sel)}")
+            raise UiCssError(f"SelectorStrError: Can't split selector str: {selector_str} != {''.join(splt_sel)}")
         split_selectors = [
             x.strip('\n\t ') for x in splt_sel
         ]
-        assert len(split_selectors) % 2 == 1, 'Siempre núnero impar cuando se tienen combinators '
+        try:
+            assert len(split_selectors) % 2 == 1, 'Siempre número impar cuando se tienen combinators '
+        except AssertionError:
+            raise UiCssError(f"SelectorStrError: {selector_str}")
         linf, lsup = 0, len(split_selectors)
         selectors, combinators = split_selectors[linf:lsup:2], split_selectors[linf + 1:lsup:2]
 
-        selectors = [self._get_basic_pattern(x) for x in selectors]
+        basic_patterns = [f'(?#<{self._get_basic_pattern(x)}>)' for x in selectors]
+        cp_selectors = [MarkupRe.compile(basic_pattern) for basic_pattern in basic_patterns]
+
+        CPatterns = MarkupRe.CPatterns
+        combinators_map = {
+            '': CPatterns.ZIN, '+': CPatterns.NXTTAG, '>': CPatterns.CHILDREN, '~': CPatterns.PRECEDES
+        }
+        cpatterns = [combinators_map[x] for x in combinators]
         self._freeze_specificity()
 
-        while combinators:
-            case = combinators.pop(0)
-            sel_pattern = selectors.pop(0)
-            inner_pattern = selectors.pop(0)
-            if case == '':              # CustomRegx.ZIN
-                sel_pattern = f'{sel_pattern} <{inner_pattern}>'
-            elif case == '+':           # CustomRegx.NEXTTAG
-                sel_pattern = f'{sel_pattern}><{inner_pattern}'
-            elif case == '>':           # CustomRegx.CHILDREN
-                sel_pattern = f'{sel_pattern} <{inner_pattern}>*'
-            elif case == '~':           # CustomRegx.SIBLING
-                sel_pattern = f'{sel_pattern}>*<{inner_pattern}'
-            selectors.insert(0, sel_pattern)
-        cp_pattern = f'(?#<{selectors.pop()}>)'
+        while cpatterns:
+            cpattern = cpatterns.pop(0)
+            span_regex = cp_selectors.pop(0)
+            srch_regex = cp_selectors.pop(0)
+            sel_pattern = MarkupRe.CompoundRegexObject(span_regex, srch_regex, cpattern)
+            cp_selectors.insert(0, sel_pattern)
+        cp_pattern = cp_selectors.pop()
         return cp_pattern
 
     def _freeze_specificity(self):
@@ -343,7 +365,7 @@ def selectorPattern(selector_str):
     '''
 
     def getBasicPattern(base_selector):
-        items = CustomRegEx.findall(pattern, base_selector)
+        items = MarkupRe.findall(pattern, base_selector)
         assert len(items) <= 2
         if len(items) == 2:
             # Se tiene en este punto un selector del tipo:
@@ -355,7 +377,7 @@ def selectorPattern(selector_str):
                 items = dmy
         if len(items) == 1:
             selector = items[0]
-            if CustomRegEx.match('[a-zA-z\d]+', selector):  # widget
+            if MarkupRe.match('[a-zA-z\d]+', selector):  # widget
                 base_pattern = f'{selector}'
             elif selector[0] == '.':  # Clase
                 base_pattern = f'__TAG__ class=".*?{selector[1:]}.*?"'
@@ -370,7 +392,7 @@ def selectorPattern(selector_str):
         return base_pattern
 
     if selector_str == '*':
-        return [CustomRegEx.compile(f'(?#<__TAG__>)')]
+        return [MarkupRe.compile(f'(?#<__TAG__>)')]
     pattern = '[\.#]*?[a-zA-z\d,]+'
     selectors = selector_str.split(' ', 1)
     split_selectors = selectors[0].split(',')
@@ -380,7 +402,7 @@ def selectorPattern(selector_str):
             raise Exception(f'Selector: {selector_str} no habilitado aún')
         inner_pattern = [getBasicPattern(x) for x in selectors[1].split(' ')]
         base_pattern = [f'{x} <{y}>' for x in base_pattern for y in inner_pattern]
-    base_pattern = [CustomRegEx.compile(f'(?#<{x}>)') for x in base_pattern]
+    base_pattern = [MarkupRe.compile(f'(?#<{x}>)') for x in base_pattern]
     return base_pattern
 
 
@@ -388,7 +410,7 @@ def selectorPattern(selector_str):
 #     answ = []
 #     selected = []
 #     for pattern in patterns:
-#         cmpobj = CustomRegEx.compile(pattern)
+#         cmpobj = MarkupRe.compile(pattern)
 #         selected.extend([m.span() for m in cmpobj.finditer(htmlstr)])
 #         answ.extend([wdg_map.get(spn, None) for spn in selected])
 #     zansw = sorted(set(zip(answ, selected)), key=lambda x: x[1])
@@ -406,171 +428,172 @@ if __name__ == '__main__':
             pi, pf = wdg_spn
             print(wdg_id, htmlstr[pi:pf])
 
-    # Selectores válidos
-    selectors = {}
-    selectors['validos'] = [
-        # 'tag1 tag2 tag3 tag4',
-        # 'tag1,tag2',           # Esto solo es válido para
-        'tag.clase',
-        'tag',
-        '.clase',
-        '#id',
-        'tag1 tag2',
-        'tag .clase',
-        '.clase tag',
-        '#id tag',
-        '#id tag.clase'
-    ]
-    selectors['redundantes'] = ['tag#id', '.clase#id', '#id.clase']
-    for key, selectores in selectors.items():
-        print(f'***** Selectores {key} *********')
-        for sel_str in selectores:
-            selector = Selector(sel_str)
-            print(f'{sel_str}, {selector.pattern}')
+    test = 'Selector_class'
+    if test == 'Selector_class':
+        # Selectores válidos
+        selectors = {}
+        selectors['validos'] = [
+            # 'tag1 tag2 tag3 tag4',
+            # 'tag1,tag2',           # Esto solo es válido para
+            'tag.clase',
+            'tag',
+            '.clase',
+            '#id',
+            'tag1 tag2',
+            'tag .clase',
+            '.clase tag',
+            '#id tag',
+            '#id tag.clase'
+        ]
+        selectors['redundantes'] = ['tag#id', '.clase#id', '#id.clase']
+        for key, selectores in selectors.items():
+            print(f'***** Selectores {key} *********')
+            for sel_str in selectores:
+                selector = Selector(sel_str)
+                print(f'{sel_str}, {selector.pattern}')
+    elif test == 'CssWrapper':
+        filename = '/mnt/c/Users/Alex Montes/PycharmProjects/mywidgets/Tools/uiStyle/test.css'
+        parser = CssWrapper(filename, isfile=True)
+        for selector in parser.selectors:
+            print(selector.selector_str, selector.specificity, selector.regex_pattern_str)
 
-
-
-    filename = '/mnt/c/Users/Alex Montes/PycharmProjects/mywidgets/Tools/uiStyle/test.css'
-    parser = CssWrapper(filename, isfile=True)
-    for selector in parser.selectors:
-        print(selector.selector_str, selector.specificity, selector.regex_pattern_str)
-
-    htmlstr = '''
-    <!DOCTYPE html>
-    <html>
-    <head>
-    <style>
-    p.center {
-      text-align: center;
-      color: red;
-    }
-
-    p.large {
-      font-size: 300%;
-    }
-    </style>
-    </head>
-    <body>
-
-    <h1 class="center">This heading will not be affected</h1>
-    <div>
-    <p class="center">This paragraph will be red and center-aligned.</p>
-    <p class="center large">This paragraph will be red, center-aligned, and in a large font-size.</p> 
-    </div>
-    </body>
-    </html>
-
-    '''
-    test_prov(htmlstr,parser)
-
-
-    htmlstr = '''<head>
-    <uno id="alex" />
-    <dos />
-    <tres>esto es el freeze</tres>
-    </head>'''
-
-    answ = getWidgetMap(htmlstr, k=-2)
-    htmlstr = '''<!DOCTYPE html>
-    <html>
-    <head>
-    <style>
-    p {
-      text-align: center;
-      color: red;
-    }
-    </style>
-    </head>
-    <body>
-
-    <p>Every paragraph will be affected by the style.</p>
-    <p id="para1">Me too!</p>
-    <p>And me!</p>
-
-    </body>
-    </html>'''
-
-    wdg_map = getWidgetMap(htmlstr, k=-2)
-    # id_pattern = '(?#<__TAG__ __TAG__=tag id="para1" >)'
-    id_pattern = selectorPattern('#para1')
-
-    htmlstr = '''
-    <!DOCTYPE html>
-    <html>
-    <head>
-    <style>
-    .center {
-      text-align: center;
-      color: red;
-    }
-    </style>
-    </head>
-    <body>
+        htmlstr = '''
+        <!DOCTYPE html>
+        <html>
+        <head>
+        <style>
+        p.center {
+          text-align: center;
+          color: red;
+        }
     
-    <h1 class="center">Red and center-aligned heading</h1>
-    <p class="center">Red and center-aligned paragraph.</p> 
+        p.large {
+          font-size: 300%;
+        }
+        </style>
+        </head>
+        <body>
     
-    </body>
-    </html>'''
+        <h1 class="center">This heading will not be affected</h1>
+        <div>
+        <p class="center">This paragraph will be red and center-aligned.</p>
+        <p class="center large">This paragraph will be red, center-aligned, and in a large font-size.</p> 
+        </div>
+        </body>
+        </html>
+    
+        '''
+        test_prov(htmlstr, parser)
 
-    pass
 
-    wdg_map = getWidgetMap(htmlstr, k=-2)
-    # class_pattern = '(?#<__TAG__ class="center" >)'
-    class_pattern = selectorPattern('.center')
+        htmlstr = '''<head>
+        <uno id="alex" />
+        <dos />
+        <tres>esto es el freeze</tres>
+        </head>'''
 
-    htmlstr = '''
-    <!DOCTYPE html>
-    <html>
-    <head>
-    <style>
-    p.center {
-      text-align: center;
-      color: red;
-    }
+        answ = getWidgetMap(htmlstr, k=-2)
+        htmlstr = '''<!DOCTYPE html>
+        <html>
+        <head>
+        <style>
+        p {
+          text-align: center;
+          color: red;
+        }
+        </style>
+        </head>
+        <body>
     
-    p.large {
-      font-size: 300%;
-    }
-    </style>
-    </head>
-    <body>
+        <p>Every paragraph will be affected by the style.</p>
+        <p id="para1">Me too!</p>
+        <p>And me!</p>
     
-    <h1 class="center">This heading will not be affected</h1>
-    <div>
-    <p class="center">This paragraph will be red and center-aligned.</p>
-    <p class="center large">This paragraph will be red, center-aligned, and in a large font-size.</p> 
-    </div>
-    </body>
-    </html>
-    
-    '''
-    wdg_map = getWidgetMap(htmlstr, k=-2)
-    # class_pattern = '(?#<__TAG__ class=".*?center.*?" >)'
-    class_pattern = selectorPattern('.center')
+        </body>
+        </html>'''
 
-    class_pattern = selectorPattern('body p h1')
+        wdg_map = getWidgetMap(htmlstr, k=-2)
 
-    htmlstr = '''
-    <!DOCTYPE html>
-    <html>
-    <head>
-    <style>
-    h1, h2, p {
-      text-align: center;
-      color: red;
-    }
-    </style>
-    </head>
-    <body>
-    
-    <h1>Hello World!</h1>
-    <h2>Smaller heading!</h2>
-    <p>This is a paragraph.</p>
-    
-    </body>
-    </html>
-    '''
-    wdg_map = getWidgetMap(htmlstr, k=-2)
-    # class_pattern = '(?#<p|h1|h2>)'
-    class_pattern = selectorPattern('body,p,h1')
+        # id_pattern = '(?#<__TAG__ __TAG__=tag id="para1" >)'
+        id_pattern = selectorPattern('#para1')
+
+
+        pass
+    elif test == 'po_ver_par_QUE_SON':
+        htmlstr = '''
+        <!DOCTYPE html>
+        <html>
+        <head>
+        <style>
+        .center {
+          text-align: center;
+          color: red;
+        }
+        </style>
+        </head>
+        <body>
+
+        <h1 class="center">Red and center-aligned heading</h1>
+        <p class="center">Red and center-aligned paragraph.</p> 
+
+        </body>
+        </html>'''
+        wdg_map = getWidgetMap(htmlstr, k=-2)
+        # class_pattern = '(?#<__TAG__ class="center" >)'
+        class_pattern = selectorPattern('.center')
+
+        htmlstr = '''
+        <!DOCTYPE html>
+        <html>
+        <head>
+        <style>
+        p.center {
+          text-align: center;
+          color: red;
+        }
+        
+        p.large {
+          font-size: 300%;
+        }
+        </style>
+        </head>
+        <body>
+        
+        <h1 class="center">This heading will not be affected</h1>
+        <div>
+        <p class="center">This paragraph will be red and center-aligned.</p>
+        <p class="center large">This paragraph will be red, center-aligned, and in a large font-size.</p> 
+        </div>
+        </body>
+        </html>
+        
+        '''
+        wdg_map = getWidgetMap(htmlstr, k=-2)
+        # class_pattern = '(?#<__TAG__ class=".*?center.*?" >)'
+        class_pattern = selectorPattern('.center')
+
+        class_pattern = selectorPattern('body p h1')
+
+        htmlstr = '''
+        <!DOCTYPE html>
+        <html>
+        <head>
+        <style>
+        h1, h2, p {
+          text-align: center;
+          color: red;
+        }
+        </style>
+        </head>
+        <body>
+        
+        <h1>Hello World!</h1>
+        <h2>Smaller heading!</h2>
+        <p>This is a paragraph.</p>
+        
+        </body>
+        </html>
+        '''
+        wdg_map = getWidgetMap(htmlstr, k=-2)
+        # class_pattern = '(?#<p|h1|h2>)'
+        class_pattern = selectorPattern('body,p,h1')
