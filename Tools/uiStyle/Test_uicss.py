@@ -1,7 +1,5 @@
 
-import pytest
-
-from . import uicss
+import Tools.uiStyle.uicss as uicss
 
 
 class TestSelector:
@@ -58,8 +56,7 @@ class TestSelector:
         selector = uicss.Selector(selector_str)
         assert selector.specificity == (0, 0, 0, 3)
 
-        #TODO: Investigar porque el ] desaparece en el split innicial
-        # selector_str = 'li > a[href*="en-US"] > .inline-warning'
-        # selector = uicss.Selector(selector_str)
-        # assert selector.specificity == (0, 0, 2, 2)
+        selector_str = 'li > a[href*="en-US"] > .inline-warning'
+        selector = uicss.Selector(selector_str)
+        assert selector.specificity == (0, 0, 2, 2)
 

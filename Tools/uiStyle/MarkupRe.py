@@ -4,11 +4,12 @@ Created on 19/09/2015
 
 @author: Alex Montes Barrios
 '''
-from builtins import StopIteration
-from collections import namedtuple
+import functools
+from builtins import StopIteration, ValueError
+from collections import namedtuple, defaultdict, deque
 import re
 import itertools
-import operator
+from typing import Tuple, List
 from html.parser import HTMLParser
 from enum import Enum
 
@@ -16,6 +17,115 @@ import tokenizer
 from Tools.uiStyle.CustomRegEx import ExtCompile
 
 TAG_PATTERN_DEFAULT = '[a-zA-Z][^\s>]*'
+
+ATTRSEP = '.'
+COMMSEP = '*'
+TAGPHOLDER = 'tagpholder'
+
+# Tipo de pseudo attributos
+TEXTO = '*'
+PARAM_POS = '*ParamPos*'
+TAG = '__TAG__'
+N_CHILDREN = '__N_CHILDREN__'
+N_CHILD = '__N_CHILD__'
+N_TAG = '__N_TAG__'
+
+PSEUDO_ATTRS = set([TEXTO, PARAM_POS, TAG, N_CHILDREN, N_CHILD, N_TAG])
+
+REGEX_SCANNER = re.compile(r'''
+    (?P<SEPARATOR>(?:
+       (?:<\*<) |                       # Inicio Pattern
+         (?:><) |                       # Inicio Pattern
+       (?:>\*<) |                       # Inicio Pattern
+       (?:>\*>) |                       # Inicio Pattern
+         (?:>>) |                       # Inicio Pattern
+          (?:<) |                       # Inicio Pattern
+          (?:>)                         # Inicio Pattern
+    )) |
+    (?P<WHITESPACE>\s+) |           # string
+    (?P<SPECIAL_ATTR>(?:                            # Atributo del sistema
+        __                                          # Prefix = __
+        [A-Z]+?                                     # Nombre de atributo, en mayúscula
+        __                                          # Suffix = __
+        (?==)                                    # Siempre seguida por =
+     )) |           
+    (?P<TAG_PATTERN>(?:
+        (?<=<)\s*?                   # Precedida por < y posiblemente espacios
+        \(*(?:__TAG__|[A-Za-z].*?)\)*   # Pattern tag
+        (?!=)
+        (?=\s|>|<)                 # La sigue uno o mas espacios o >
+     )) |           
+    (?P<VAR>(?:
+        (?<=\=)                 # Precedida por el signo igual
+        (?:_{,2}|&)*           # Indica variable opcional(_) o clean var (&)
+        [a-zA-Z][a-zA-Z\.\d_]*?        # Nombre de la variable
+        (?:_{,2}|&)*           # Indica variable opcional(_) o clean var (&)
+        (?=\s|>|<|\})             # Siempre seguida por ' ', > o }
+     )) |           
+    (?P<ATTRIBUTE>(?:
+        [a-zA-Z\*\.\d][a-zA-Z\d\.\[\]\*]*?        # Nombre de atributo
+        (?=\=|>|<|\s)
+     )) |           
+    (?P<PREFIX>(?:
+        [a-zA-Z\.\d][a-zA-Z\d\.\[\]]*?        # Nombre de la variable
+        (?=\{)
+     )) |           
+    (?P<IMPLICIT>(?:        # Encerrado entre parentesis
+        \(                  # Prefix
+        [a-zA-Z\*\.\d][a-zA-Z\d\.\[\]\*]*?          # Pattern
+        \)                  # Suffix
+    )) |    
+    (?P<ATTR_PATTERN>(?:
+        (?<=\=)          # Debe estar precedido por el = 
+        (?P<quote>["'])     # Prefix
+        (.*?)               # Pattern, puede ser nula
+        (?P=quote)          # Suffix
+        (?=\s|>|<|=)          # Nota: Esto no acepta espacios en el pattern luego de un scape quote
+    )) |
+    (?P<ASIGNATION>(?:
+        =                   # Igual
+    )) | 
+    (?P<OPEN_TAG>(?:
+        \{      # parenthesis
+    )) | 
+    (?P<CLOSE_TAG>(?:
+        \}      # parenthesis
+    )) | 
+    (?P<ERROR>.)                    # an error
+    ''', re.DOTALL | re.VERBOSE)
+
+ATTR_SCANNER = re.compile(r'''
+    (?P<SEPARATOR>(?:
+          (?:<) |                       # Inicio Pattern
+          (?:>)                         # Inicio Pattern
+    )) |
+    (?P<WHITESPACE>\s+) |           # string
+    (?P<TAG_PATTERN>(?:
+        (?<=<)\s*?                   # Precedida por < y posiblemente espacios
+        \(*(?:__TAG__|[A-Za-z].*?)\)*   # Pattern tag
+        (?!=)
+        (?=\s|>|<)                 # La sigue uno o mas espacios o >
+     )) |           
+    (?P<ATTRIBUTE>(?:
+        (?<=\ )          # Debe estar precedido por el espacio 
+        [a-zA-Z\*\.\d][a-zA-Z\d\.\[\]\*-_]*?        # Nombre de atributo
+        (?=\=|>|<|\s)
+     )) |           
+    (?P<ATTR_PATTERN>(?:
+        (?<=\=)          # Debe estar precedido por el = 
+        (?:
+            (?P<quote>["'])(.*?)(?P=quote) |      # standar attr pattern
+            ([^=]+?)                                 # No quote attr pattern
+        )
+        (?=\s|>|<|=)          # Nota: Esto no acepta espacios en el pattern luego de un scape quote
+    )) |
+    (?P<ASIGNATION>(?:
+        =                   # Igual
+    )) | 
+    (?P<ERROR>.)                    # an error
+    ''', re.DOTALL | re.VERBOSE)
+
+Token = namedtuple('Token', ['type', 'value'])
 
 
 # Tipo de pattterns compuestos
@@ -37,400 +147,46 @@ class MarkupReError(Exception):
     pass
 
 
-class ExtRegexParser(HTMLParser):
-    def __init__(self, varList=None, reqTags=None, optTags=None, factory=None):
-        HTMLParser.__init__(self)
-        self.TAGPATT = r'<(?P<TAG>[a-zA-Z\d]+)(?P<ATTR>[^>]*)(?:>|/>)'
-        self.ATTR_PARAM = r'(?P<ATTR>(?<=\W)[^\s]+(?==))=([\"\'])(?P<PARAM>(?<==[\"\']).*?)\2(?=[\W>])'
-        self.master_pat = re.compile('|'.join([GENSELFTAG, GENTAG, ENDTAG, BLANKTEXT, DOCSTR, GENTEXT, SUFFIX]))
+class TreeElement:
+    def __init__(self, span, tag, attrs):
+        self.span = span
+        self.tag = tag
+        self.attrs = attrs
+        self.children = []
+        self._root = ''
 
-        varList = varList or []  # aqui 4
-        self.reqTags = reqTags or {}
-        self.optTags = optTags or {}
-        self.pathIndex = []
-        self.varDict = {}
-        varNames = []
-        for itemPath, itemKey in varList:
-            self.pathIndex.append(itemPath)
-            itemName = itemKey.strip('_') if itemKey != '__TAG__' else itemKey
-            if itemName in varNames:
-                k = varNames.index(itemName) + 1
-            else:
-                varNames.append(itemName)
-                k = len(varNames)
-            self.varDict[itemPath] = k
-        self.varPos = [(-1, -1) for x in range(len(varNames) + 1)]
-        self.totLen = 0
-        self.factory = factory
+    def __repr__(self):
+        return f'TreeElement({self.span}, {self.tag})'
+
+    def __lt__(self, other):
+        return self.span[0] < other.span[0]
+
+    def __eq__(self, other):
+        return self.span == other.span
+
+    def add(self, *children):
+        self.children.extend(children)
+
+    @property
+    def root_path(self):
+        return self._root
+
+    @root_path.setter
+    def root_path(self, path):
+        self._root = path
         pass
 
-    def checkStartTag(self, data):
-        # tag = re.match(r'<([a-zA-Z\d]+)[\W >]', data).group(1)
-        if 'tagpholder' not in self.reqTags:
-            return True
-        reqTags = dict(self.reqTags['tagpholder'])
-        if '*' in reqTags:
-            reqTags.pop('*')
-        tagAttr = self.getAttrDict(data, 0)
-        return self.haveTagAllAttrReq('tagpholder', tagAttr, reqTags)
+    @property
+    def full_path(self):
+        n = self.attrs.get(N_TAG, 1)
+        full_path = f'{self._root}.{self.tag}[{n}]'.strip('.').replace('[1]', '')
+        return full_path
 
-    def htmlStruct(self, data, posIni):
-        self.initParserVar()
-        tagName = re.match(r'<([a-zA-Z\d]+)[\W >]', data).group(1)
-        self.feed(data)
-        if not self.tagList: return None
-        tagList = sorted(self.tagList)
-        self.setPathTag(tagList, rootName=tagName)
-        return tagList
-
-    def storeReqVars(self, tag, tagAttr, optValues):
-        paramPos = tagAttr.pop('*ParamPos*')
-        reqAttr = self.reqTags.get(tag, {})
-        for attr in reqAttr:
-            fullAttr = tag + ATTRSEP + attr
-            if fullAttr not in self.varDict: continue
-            k = self.varDict[fullAttr]
-            if reqAttr[attr] and reqAttr[attr].groups:
-                m = reqAttr[attr].match(tagAttr[attr])
-                optValues[fullAttr] = self.trnCoord(m.span(1), paramPos[attr][0])
-            else:
-                optValues[fullAttr] = paramPos[attr]
-
-        optAttr = self.optTags.get(tag, {})
-        for attr in optAttr:
-            fullAttr = tag + ATTRSEP + attr
-            if attr not in paramPos: continue
-            if optAttr[attr]:
-                m = optAttr[attr].match(tagAttr[attr])
-                if not m: continue
-                if not optAttr[attr].groups:
-                    optValues[fullAttr] = paramPos[attr]
-                else:
-                    offset = paramPos[attr][0]
-                    optValues[fullAttr] = self.trnCoord(m.span(1), offset)
-            else:
-                optValues[fullAttr] = paramPos[attr]
-
-    def haveTagAllAttrReq(self, element_path, element_attrs, req_attrs=-1):
-        '''
-        Verifica que elemento tenga en sus atributos todos los elementos requeridos y
-        que cumplan con el pattern solicitado.
-        :param element_path: str. Full path del elemento a revisar.
-        :param element_attrs: dict. Atributs asociados al elemento.
-        :param req_attrs: dict or -1. Dict de attributos requeridos, si es -1 se utilizan los
-                          required tags.
-        :return: bool. (cumple/no cumple) con lo solicitado.
-        '''
-        if req_attrs == -1:
-            req_attrs = self.reqTags.get(element_path, {})
-        diff_set = req_attrs.keys() - element_attrs.keys()
-        if diff_set:
-            return False
-        bflag = all(
-            [
-                req_attrs[key].match(element_attrs[key])
-                for key in req_attrs if req_attrs[key]
-            ]
-        )
-        return bflag
-
-    def getAllTagData(self, tagPos, data, tagList):
-        posBeg, posEnd = tagList[tagPos][0]
-        tagAttr = self.getAttrDict(data[:posEnd], posBeg)
-        n = tagList[tagPos][2]
-        if n is None:
-            tagAttr['*'] = ''
-            tagName = tagAttr['__TAG__']
-            posBeg = posEnd = posEnd - len('</' + tagName + '>')
-            tagAttr['*ParamPos*']['*'] = (posBeg, posEnd)
-        elif n > 0:
-            posBeg, posEnd = tagList[n][0]
-            tagAttr['*'] = data[posBeg:posEnd]
-            tagAttr['*ParamPos*']['*'] = tagList[n][0]
-        return tagAttr
-
-    def setPathTag(self, tagList, rootName='tagpholder', reqSet=-1):
-        dadList = [-1]  # dadList[k] señala la posición del padre de tagList[k]
-        no_reqSetFlag = reqSet == -1
-        for k in range(len(tagList) - 1):
-            indx = k + 1
-            while 1:
-                if tagList[indx][0][1] < tagList[k][0][1]:
-                    dadList.append(k)
-                    if tagList[indx][1] == '*': tagList[k][2] = indx
-                    break
-                k = dadList[k]
-        # en este punto se tiene enlazados hijos y padres.
-        n_elem = len(tagList)
-        elem_params = [{'__DADSPAN__': tagList[dad_id][0]} for dad_id in dadList]
-        childList = {}
-        [
-            childList.setdefault(dad_id, []).append(child_id)
-            for child_id, dad_id in enumerate(dadList)
-        ]
-        [
-            # Número de hijos. Si no tiene no aparece entre las key del dict.
-            (elem_params[dad_id].setdefault('__NCHILDREN__', len(children)),
-             # Enumeración de hijos desde 1
-             elem_params[child_id].setdefault('__NCHILD__', k + 1)
-             )
-            for dad_id, children in sorted(childList.items())
-            for k, child_id in enumerate(children)
-        ]
-        # La información de DADSPAN y NCHILD no tiene sentido para el raiz
-        # porque desde allí comienza a parsear el archivo.
-        elem_params[0].pop('__DADSPAN__')
-        elem_params[0].pop('__NCHILD__')
-
-        # for dad_id, children in sorted(childList.items()):
-        #     elem_params[dad_id]['__NCHILDREN__'] = len(children)
-        #     for k, child_id in enumerate(children):
-        #         elem_params[child_id]['__NCHILD__'] = k
-
-        pathDict = {}
-        toProcess = []  # aqui 5
-        tagList[0][1] = rootName
-        if not no_reqSetFlag:
-            if tagList[0][1] in reqSet: toProcess.append(0)
-            reqSet.difference_update([tagList[0][1]])
-            relPath = sorted([x for x in reqSet if x.find('..') != -1], key=lambda x: x.count('.'))
-            efe = lambda x: not (pathTag.startswith(x.split('..')[0]) and pathTag.endswith(x.split('..')[1]))
-
-        for k in range(1, len(tagList)):
-            indx = dadList[k]
-            pathTag = tagList[indx][1] + '.' + tagList[k][1]
-            pathDict[pathTag] = pathDict.get(pathTag, 0) + 1
-            if pathDict[pathTag] > 1: pathTag += '[' + str(pathDict[pathTag]) + ']'
-            tagList[k][1] = pathTag
-            if no_reqSetFlag: continue
-            #             packedPath = pathTag if pathTag.count('.') < 3 else packPath(pathTag, pathTag.count('.'))
-            if pathTag in reqSet:
-                reqSet.difference_update([pathTag])
-                toProcess.append(k)
-            elif relPath:
-                rpos = list(itertools.takewhile(efe, relPath))
-                rpos = len(rpos) + 1
-                if rpos <= len(relPath):
-                    toProcess.append((k, relPath[rpos - 1]))
-                    reqSet.difference_update([relPath.pop(rpos - 1)])
-            if not reqSet: break
-        if no_reqSetFlag: return None
-        for k in range(len(toProcess)):
-            m = toProcess[k]
-            if isinstance(m, int): continue
-            toProcess[k] = m[0]
-            tagList[m[0]][1] = m[1]
-        return toProcess
-
-    @staticmethod
-    def getAttrDict(data, offset=0, noTag=True):
-
-        def skipCharsInSet(strvar, aSet, npos=0, peek=False):
-            m = re.match('[' + aSet + ']+', strvar[npos:])
-            res = m.group() if m else ''
-            return (res, npos + len(res)) if not peek else res
-
-        def getCharsNotInSet(strvar, aSet, npos=0, peek=False):
-            res = re.split('[' + aSet + ']', strvar[npos:], 1)[0]
-            return (res, npos + len(res)) if not peek else res
-
-        WHITESPACE = ' \t\n\r\f\v'
-        pini = offset
-        pfin = data.find('>', pini) + 1
-        tag = data[pini:pfin].strip('/>') + '>'
-
-        npos = 1
-        pmax = len(tag) - 1
-        key = '__TAG__'
-        attrD = {}
-        attrPos = {}
-        attrvalue, posfin = getCharsNotInSet(tag, '>' + WHITESPACE, npos)
-        while 1:
-            attrD[key] = attrvalue
-            attrPos[key] = (npos + offset, posfin + offset)
-            sep, npos = skipCharsInSet(tag, '\'"' + WHITESPACE, posfin)
-            if npos >= pmax: break
-            key, npos = getCharsNotInSet(tag, '=>' + WHITESPACE, npos)
-            sep, npos = skipCharsInSet(tag, '=' + WHITESPACE, npos)
-            if sep == "=":
-                sep, npos = skipCharsInSet(tag, '\'"', npos)
-                if sep:
-                    posfin = npos
-                    attr = sep
-                    while 1:
-                        attrInc, posfin = getCharsNotInSet(tag, '\'"', posfin)
-                        # if len(attr) > 1 and attrInc[-1] in '=>' and attr[0] == attr[-1]: break
-                        if len(attr) > 1 and attrInc[-1] in '=>' and attr[-1] in '\'"': break
-                        attr += attrInc
-                        sep, posfin = skipCharsInSet(tag, '\'"', posfin)
-                        attr += sep
-                    attrvalue = attr[1:-1]
-                    posfin = npos + len(attrvalue)
-                else:
-                    attrvalue, posfin = getCharsNotInSet(tag, '>' + WHITESPACE, npos)
-            else:
-                attrvalue = ''
-                posfin = npos
-
-        attrD['*ParamPos*'] = attrPos
-        return attrD if noTag else (attrD.pop('__TAG__'), attrD)
-
-    def trnCoord(self, tupleIn, offset):
-        offset = offset if tupleIn != (-1, -1) else 0
-        return (tupleIn[0] + offset, tupleIn[1] + offset)
-
-    def getTag(self, data):
-        match = re.match(self.TAGPATT, data)
-        return match.group('TAG')
-        pass
-
-    def initParse(self, data, posIni):
-        if not self.checkStartTag(data):
-            return None
-        mtag = re.match(r'<([a-zA-Z\d]+)[^>]*>', data)
-        pattEndTag = '</' + mtag.group(1) + '>' if mtag.group()[-2:] != '/>' else '/>'
-        self.initParserVar()
-        beg = 0
-        while True:
-            m = re.search(pattEndTag, data[beg:])
-            if not m:
-                self.tagList.append([mtag.span(), mtag.group(1), -1])
-                break
-            end = m.end() + beg
-            self.feed(data[beg:end])
-            if not self.tagStack:
-                break
-            beg = end
-        self.reset()
-        if not self.tagList:
-            return None
-        tagList = sorted(self.tagList)
-        reqSet = set(self.reqTags.keys())
-        optSet = set(self.optTags.keys()).difference(reqSet)
-        reqSet = reqSet.union(optSet)
-        toProcess = self.setPathTag(tagList, reqSet=reqSet)  # aqui 5
-        reqSet.difference_update(optSet)
-        if reqSet:
-            return None
-        if 'tagpholder..*' in self.varDict:
-            self.varPos = [tagList[0][0]]
-            self.varPos.extend([texto[0] for texto in tagList if texto[1][-1] == '*'])
-            self.varDict = dict(('grp%s' % k, k) for k in range(1, len(self.varPos)))
-        else:
-            self.varPos = [(-1, -1) for x in range(len(self.varPos))]
-            optValues = {}
-            self.varPos[0] = tagList[0][0]
-            for k in toProcess:
-                tag = tagList[k][1]
-                tagAttr = self.getAllTagData(k, data, tagList)
-                if not self.haveTagAllAttrReq(tag, tagAttr): return None
-                self.storeReqVars(tag, tagAttr, optValues)
-            for key in self.pathIndex:
-                value = optValues.get(key, None)
-                if value is None: continue
-                k = self.varDict[key]
-                self.varPos[k] = value
-        return [self.trnCoord(elem, posIni) for elem in self.varPos]
-
-    def initParserVar(self):
-        self.pos = 0
-        self.totLen = 0
-        self.tagStack = []
-        self.tagList = []
-        self.stackPath = ''
-
-    def getSpan(self, entityStr):
-        posini = self.pos
-        self.pos = posfin = posini + len(entityStr)
-        self.totLen += len(entityStr)
-        return (posini, posfin)
-
-    def handle_starttag(self, tag, attrs):  # startswith('<')
-        posini, posfin = self.getSpan(self.get_starttag_text())
-        self.stackPath += '.' + tag
-        self.tagStack.append([tag, (posini, posfin)])
-        self.factory.start_tag((posini, posfin), tag, attrs)
-
-    def handle_endtag(self, tag):  # startswith("</")
-        posini, posfin = self.getSpan('</%s>' % tag)
-        dmy = self.stackPath + '.'
-        rootTag, sep = dmy.rpartition('.%s.' % tag)[:2]
-        if sep:
-            self.stackPath = rootTag
-            while 1:
-                stckTag, stckTagSpan = self.tagStack.pop()
-                bFlag = tag == stckTag
-                if bFlag:
-                    tagSpan = (stckTagSpan[0], posfin)
-                else:
-                    tagSpan = stckTagSpan
-                self.tagList.append([tagSpan, stckTag, None])
-                if bFlag: break
-        self.factory.end_tag((posini, posfin), tag)
-
-    def handle_startendtag(self, tag, attrs):
-        posini, posfin = self.getSpan(self.get_starttag_text())
-        # self.stackPath += '.' + tag
-        self.tagList.append([(posini, posfin), tag, -1])
-        self.factory.start_end_tag((posini, posfin), tag, attrs)
-
-    def storeDataStr(self, dataIn):
-        dSpanIn = self.getSpan(dataIn)
-        if self.tagList and self.tagList[-1][1] == '*':
-            dataSpan = self.tagList[-1][0]
-            if dataSpan[1] == dSpanIn[0]:
-                self.tagList[-1][0] = (dataSpan[0], dSpanIn[1])
-                return
-        if not dataIn.strip(' \t\n\r\f\v'): return
-        self.tagList.append([dSpanIn, '*', None])
-        self.factory.process_data(dSpanIn, dataIn)
-
-    def handle_data(self, data):
-        self.storeDataStr(data)
-
-    def handle_entityref(self, name):  # startswith('&')
-        data = '&%s;' % name
-        self.storeDataStr(data)
-
-    def handle_charref(self, name):  # startswith("&#")
-        data = '&#%s;' % name
-        self.storeDataStr(data)
-
-    def handle_comment(self, data):  # startswith("<!--")
-        posini, posfin = self.getSpan('<!--%s-->' % data)
-
-    def handle_decl(self, data):  # startswith("<!")
-        posini, posfin = self.getSpan('<!%s>' % data)
-
-    def handle_pi(self, data):  # startswith("<?")
-        posini, posfin = self.getSpan('<?%s>' % data)
-
-    def unknown_decl(self, data):
-        posini, posfin = self.getSpan('<![%s]>' % data)
-
-
-# equis = """<img itemprop="contentURL" src="http://www.eltiempo.com/contenido/colombia/medellin/IMAGEN/IMAGEN-16428112-1.jpg" data-real-type='image' data-real-src2=""  alt=''Nada vale tanto como la paz': José Mujica en Medellín'>"""
-# equis = """<img itemprop="contentURL'>"""
-# equis = '<table>'
-# newx = maskAttrib(equis)
-
-# tag, attrD = NewGetAttrDict(equis, noTag = False)
-# attrP = attrD.pop('*ParamPos*')
-# print tag
-# for key in sorted(attrD):
-#     print key, attrD[key], attrP[key]
-
-
-Token = namedtuple('Token', ['type', 'value'])
-
-PREFIX = r'(?P<PREFIX>(?s).+(?=<!DOCTYPE))'
-GENSELFTAG = r'(?P<GENSELFTAG><[a-zA-Z\d]+[^>]+/>)'
-GENTAG = r'(?P<GENTAG><[a-zA-Z\d]+[^>]*>)'
-DOCSTR = r'(?P<DOCSTR><!--.*?-->|<!D[^>]*>)'
-BLANKTEXT = r'(?P<BLANKTEXT>(?<=>)\s+(?=<[a-z/]))'
-GENTEXT = r'(?P<GENTEXT>(?<=>).+?(?=<[!a-z/]))'
-ENDTAG = r'(?P<ENDTAG></[^>]+>)'
-SUFFIX = r'(?P<SUFFIX>(?s)(?<=</html>).+)'
+    def attr_span(self, key=None):
+        attr_spans = self.attrs.get(PARAM_POS, {})
+        if key is None:
+            return attr_spans
+        return attr_spans.get(key, None)
 
 
 class ExtRegexObject:
@@ -441,7 +197,7 @@ class ExtRegexObject:
         varNames = []
         self.groupindex = {}
         for element_path, attr_name in var_list:
-            itemName = attr_name.strip('_') if attr_name != '__TAG__' else attr_name
+            itemName = attr_name.strip('_') if attr_name != TAG else attr_name
             if itemName in varNames: continue
             varNames.append(itemName)
             self.groupindex[itemName] = len(varNames)
@@ -459,7 +215,7 @@ class ExtRegexObject:
         optional_paths = [
             attr_path.rsplit('.', 1)
             for attr_path, var in self.var_list
-            if var != '__TAG__' and var != var.strip('_')
+            if var != TAG and var != var.strip('_')
         ]
         optional_elems = set()
         for element_path, attr_name in optional_paths:
@@ -474,8 +230,7 @@ class ExtRegexObject:
             if not req_tags[element_path]:
                 req_tags.pop(element_path)
 
-        match_factory = MatchObjectFactory(tag_pattern, srch_attrs, var_list)
-        self.regex_parser = ExtRegexParser(self.var_list, self.req_attrs, self.opt_attrs, match_factory)
+        # match_factory = MatchObjectFactory(tag_pattern, srch_attrs, var_list)
         self._seeker = None
         pass
 
@@ -490,16 +245,16 @@ class ExtRegexObject:
 
     def get_seeker(self):
         if self._seeker is None:
-            root_tag = 'tagpholder'
+            root_tag = TAGPHOLDER
             # Atributos no utilizables para encontrar candidato a solución
-            exc_attr = ['*', '__TAG__']
+            exc_attr = PSEUDO_ATTRS.copy()
             # Adicionalmente debemos retirar los atributos opcionales
             opt_attrs = [
                 attr.rsplit(ATTRSEP, 1)[-1]
                 for attr, var in self.var_list
-                if attr.startswith(root_tag) and var != '__TAG__' and var != var.strip('_')
+                if attr.startswith(root_tag) and var != var.strip('_')
             ]
-            exc_attr.extend(opt_attrs)
+            exc_attr.update(opt_attrs)
             diff_set = self.req_attrs.get(root_tag, {}).keys() - exc_attr
             if diff_set:
                 myfunc = lambda x: rf'<{self.tag_pattern}\s[^>]*{"=[^>]+".join(x)}=[^>]+[/]*>'
@@ -510,12 +265,13 @@ class ExtRegexObject:
         return self._seeker
 
     def match(self, html_string, pos=-1, endpos=-1, parameters=None):
-        pos = max(pos, 0)
-        endpos = endpos if endpos != -1 else len(html_string)
+        pos, max_pos = max(pos, 0), len(html_string)
+        end_pos = endpos if endpos != -1 else max_pos
 
-        varPos = self.regex_parser.initParse(html_string[pos: endpos], pos)
+        parser = MarkupParser(self.var_list, self.req_attrs, self.opt_attrs)
+        varPos = parser.check_match(html_string, pos, end_pos)
         if varPos:
-            if self.var_list and 'tagpholder..*' in self.var_list[0][0]:
+            if self.var_list and f'{TAGPHOLDER}..*' in self.var_list[0][0]:
                 self.groups = len(varPos) - 1
                 self.groupindex = dict(('grp%s' % k, k) for k in range(1, len(varPos)))
             return ExtMatchObject(self, html_string, pos, endpos, varPos, parameters)
@@ -538,11 +294,10 @@ class ExtRegexObject:
                     beg_pos, end_pos = next(span_gen)
                 except StopIteration:
                     break
-                m = self.match(html_string, beg_pos, endpos, parameters=parameters)
+                m = self.match(html_string, beg_pos, end_pos, parameters=parameters)
                 if m:
                     span_gen.send(m.end())
                     yield m
-            # raise StopIteration
 
         return match_gen(html_string, pointer_pos)
 
@@ -658,17 +413,17 @@ class CompoundRegexObject(ExtRegexObject):
             tag_pattern = srchRegexObj.tag_pattern
             req_attrs = srchRegexObj.req_attrs
             spattern = srchRegexObj.pattern[4:-2]
-            bflag = 'tagpholder' not in req_attrs or '__TAG__' not in req_attrs['tagpholder']
+            bflag = TAGPHOLDER not in req_attrs or TAG not in req_attrs[TAGPHOLDER]
             if bflag:
-                req_tagpholder = req_attrs.setdefault('tagpholder')
+                req_tagpholder = req_attrs.setdefault(TAGPHOLDER)
                 spattern = spattern.split(' ', 1)[-1]
                 if tag_pattern != TAG_PATTERN_DEFAULT:
                     spattern = f'__TAG__ __TAG__="{tag_pattern}" {spattern}'
-                    req_tagpholder['__TAG__'] = re.compile(tag_pattern + '\\Z', re.DOTALL)
+                    req_tagpholder[TAG] = re.compile(tag_pattern + '\\Z', re.DOTALL)
                     tag_pattern = TAG_PATTERN_DEFAULT
                 else:
                     spattern = f'__TAG__ {spattern}'
-                    req_tagpholder['__TAG__'] = ''
+                    req_tagpholder[TAG] = ''
             srchRegexObj.tag_pattern = tag_pattern
             # req_attrs = srchRegexObj.req_attrs
             srchRegexObj.pattern = f'(?#<{spattern}>)'
@@ -731,10 +486,17 @@ class CompoundRegexObject(ExtRegexObject):
                         )
                     case CPatterns.NXTTAG | CPatterns.PRECEDES:
                         beg_pos = html_string[span_end_pos + 1: endpos].find('<')
-                        method_name = 'match' if self.cpattern == CPatterns.NXTTAG else 'search'
-                        method = getattr(self.srchRegexObj, method_name)
                         if beg_pos > 0:
+                            method_name = 'match' if self.cpattern == CPatterns.NXTTAG else 'search'
+                            method = getattr(self.srchRegexObj, method_name)
                             beg_pos += span_end_pos + 1
+                            # if self.cpattern == CPatterns.NXTTAG:
+                            #     tag = re.split('[\s>]', html_string[beg_pos:], 1)[0].strip('<')
+                            #     end_tag = f'</{tag}>'
+                            #     end_pos = html_string[beg_pos:].find(end_tag) + beg_pos + len(end_tag)
+                            # else:
+                            #     end_pos = len(html_string)
+                            # m = method(html_string, beg_pos, end_pos, parameters=params)
                             m = method(html_string, beg_pos, parameters=params)
                         else:
                             m = None
@@ -769,22 +531,33 @@ class ExtMatchObject:
         pass
 
     def group(self, *grouplist):
-        if not grouplist: grouplist = [0]
+        grouplist = grouplist or [0]
         answer = []
         for group in grouplist:
-            posIni, posFin = self.span(group)
-            answer.append(self.string[posIni:posFin])
+            span = self.span(group)
+            if span == (-1, -1):
+                answer.append(None)
+            elif isinstance(span, tuple):
+                posIni, posFin = span
+                answer.append(self.string[posIni:posFin])
+            else:
+                texto = '' if span == [] else ' '.join(
+                    map(lambda posIni, posFin: self.string[posIni:posFin], *zip(*span))
+                )
+                answer.append(texto)
         return answer if len(answer) > 1 else answer[0]
 
     def groups(self, default=None):
-        trn = lambda x: (self.string[x[0]:x[1]], None)[1 * (x == (-1, -1))]
-        return tuple(map(trn, self.varpos[1:]))
-        # return tuple(self.string[tpl[0]:tpl[1]] or None for tpl in self.varpos[1:])
+        answ = tuple()
+        if len(self.varpos) > 1:
+            grp_ids = [k for k in range(len(self.varpos))]
+            answ = tuple(grp_str if grp_str is not None else default for grp_str in self.group(*grp_ids)[1:])
+        return answ
 
     def groupdict(self, default=None):
         keys = sorted(list(self.groupindex.keys()), key=lambda x: self.groupindex[x])
-        values = self.groups()
-        return dict(list(zip(keys, values)))
+        values = self.groups(default=default)
+        return {key: value for key, value in zip(keys, values)}
 
     def start(self, group=0):
         return self.span(group)[0]
@@ -795,55 +568,6 @@ class ExtMatchObject:
     def span(self, group=0):
         nPos = self._varIndex(group)
         return self.varpos[nPos]
-
-
-ATTRSEP = '.'
-COMMSEP = '*'
-
-
-def ExtDecorator(func):
-    def wrapper(*args, **kwords):
-        pattern, flagsvalue = args[0], 1 * ('flags' in kwords) and kwords.pop('flags')
-        compPat = compile(pattern, flags=flagsvalue)
-        callfunc = getattr(compPat, func.__name__)
-        return callfunc(*args[1:], **kwords)
-
-    return wrapper
-
-
-@ExtDecorator
-def search(pattern, string, flags=0):
-    pass
-
-
-@ExtDecorator
-def match(pattern, string, flags=0):
-    pass
-
-
-@ExtDecorator
-def split(pattern, string, maxsplit=0, flags=0):
-    pass
-
-
-@ExtDecorator
-def findall(pattern, string, flags=0):
-    pass
-
-
-@ExtDecorator
-def finditer(pattern, string, flags=0):
-    pass
-
-
-@ExtDecorator
-def sub(pattern, repl, string, count=0, flags=0):
-    pass
-
-
-@ExtDecorator
-def subn(pattern, repl, string, count=0, flags=0):
-    pass
 
 
 class HTMLPointer:
@@ -892,8 +616,14 @@ class HTMLPointer:
             bflag = html_str[beg_pos:end_inner].endswith('/>') or html_str[beg_pos:end_inner].endswith('-->')
             if not bflag:  # No start-end tag o comentario
                 tag = re.match('<(.+?)(?:\s|>)', html_str[beg_pos:end_inner]).group(1)
-                cp_pattern = re.compile(rf'</\s*{tag}\s*>', re.IGNORECASE | re.DOTALL)
-                beg_inner = self.find(cp_pattern, use_sectors=False)
+                pattern = fr'(?:<{tag}(\s[^>]+?)*(?<!/)>)|(?:</{tag}>)'
+                cp_pattern = re.compile(pattern, re.IGNORECASE | re.DOTALL)
+                ene = 1
+                while ene:
+                    beg_inner = self.find(cp_pattern, use_sectors=False)
+                    if not beg_inner:
+                        break
+                    ene += 1 if html_str[beg_inner:self.pos][:2] != '</' else -1
                 if not beg_inner:
                     continue
             end_pos = self.pos
@@ -1046,7 +776,7 @@ class MatchObjectFactory:
     def start_tag(self, span, tag, attribs):
         root = self.path
         self.path = path = self.get_path(tag)
-        attribs.append(('__N_CHILD__', self.n_children[root]))
+        attribs.append((N_CHILD, self.n_children[root]))
         self.stack.append([tag, path, span, attribs])
         pass
 
@@ -1056,7 +786,7 @@ class MatchObjectFactory:
             stck_tag, stck_path, stck_span, stck_attribs = self.stack.pop()
             bflag = tag == stck_tag
             tag_span = (stck_span[0], posfin) if bflag else stck_span
-            stck_attribs.append(('__N_CHILDREN__', self.n_children.get(self.path, 0)))
+            stck_attribs.append((N_CHILDREN, self.n_children.get(self.path, 0)))
             self.path = self.path.rsplit('.', 1)[0]
             self.bd_tags.append([tag_span, stck_path, stck_attribs, None])
             if bflag:
@@ -1067,83 +797,419 @@ class MatchObjectFactory:
     def start_end_tag(self, span, tag, attribs):
         root = self.path
         path = self.get_path(tag)
-        attribs.append(['__N_CHILD__', self.n_children[root]])
-        attribs.append(['__N_CHILDREN__', 0])
+        attribs.append([N_CHILD, self.n_children[root]])
+        attribs.append([N_CHILDREN, 0])
         self.bd_tags.append([span, path, attribs, -1])
         pass
 
     def process_data(self, span, data):
-        if self.bd_tags and self.bd_tags[-1][1] == '*':
+        if self.bd_tags and self.bd_tags[-1][1] == TEXTO:
             data_span = self.bd_tags[-1][0]
             if data_span[1] == span[0]:
                 self.bd_tags[-1][0] = (data_span[0], span[1])
                 return
         if not data.strip(' \t\n\r\f\v'):
             return
-        self.bd_tags.append([span, '*', None, None])
+        self.bd_tags.append([span, TEXTO, None, None])
 
 
-REGEX_SCANNER = re.compile(r'''
-    (?P<SEPARATOR>(?:
-       (?:<\*<) |                       # Inicio Pattern
-         (?:><) |                       # Inicio Pattern
-       (?:>\*<) |                       # Inicio Pattern
-       (?:>\*>) |                       # Inicio Pattern
-         (?:>>) |                       # Inicio Pattern
-          (?:<) |                       # Inicio Pattern
-          (?:>)                         # Inicio Pattern
-    )) |
-    (?P<WHITESPACE>\s+) |           # string
-    (?P<SPECIAL_ATTR>(?:                            # Atributo del sistema
-        __                                          # Prefix = __
-        [A-Z]+?                                     # Nombre de atributo, en mayúscula
-        __                                          # Suffix = __
-        (?==)                                    # Siempre seguida por =
-     )) |           
-    (?P<TAG_PATTERN>(?:
-        (?<=<)\s*?                   # Precedida por < y posiblemente espacios
-        \(*(?:__TAG__|[A-Za-z].*?)\)*   # Pattern tag
-        (?!=)
-        (?=\s|>|<)                 # La sigue uno o mas espacios o >
-     )) |           
-    (?P<VAR>(?:
-        (?<=\=)                 # Precedida por el signo igual
-        (?:_{,2}|&)*           # Indica variable opcional(_) o clean var (&)
-        [a-zA-Z][a-zA-Z\d_]*?        # Nombre de la variable
-        (?:_{,2}|&)*           # Indica variable opcional(_) o clean var (&)
-        (?=\s|>|<|\})             # Siempre seguida por ' ', > o }
-     )) |           
-    (?P<ATTRIBUTE>(?:
-        [a-zA-Z\*\.\d][a-zA-Z\d\.\[\]\*]*?        # Nombre de atributo
-        (?=\=|>|<|\s)
-     )) |           
-    (?P<PREFIX>(?:
-        [a-zA-Z\.\d][a-zA-Z\d\.\[\]]*?        # Nombre de la variable
-        (?=\{)
-     )) |           
-    (?P<IMPLICIT>(?:        # Encerrado entre parentesis
-        \(                  # Prefix
-        [a-zA-Z\*\.\d][a-zA-Z\d\.\[\]\*]*?          # Pattern
-        \)                  # Suffix
-    )) |    
-    (?P<ATTR_PATTERN>(?:
-        (?<=\=)          # Debe estar precedido por el = 
-        (?P<quote>["'])     # Prefix
-        (.*?)               # Pattern, puede ser nula
-        (?P=quote)          # Suffix
-        (?=\s|>|<|=)          # Nota: Esto no acepta espacios en el pattern luego de un scape quote
-    )) |
-    (?P<ASIGNATION>(?:
-        =                   # Igual
-    )) | 
-    (?P<OPEN_TAG>(?:
-        \{      # parenthesis
-    )) | 
-    (?P<CLOSE_TAG>(?:
-        \}      # parenthesis
-    )) | 
-    (?P<ERROR>.)                    # an error
-    ''', re.DOTALL | re.VERBOSE)
+class MarkupParser(HTMLParser):
+    CDATA_CONTENT_ELEMENTS = tuple()
+
+    def __init__(self, var_list=None, req_attrs=None, opt_attrs=None):
+        super().__init__()
+        self.var_list = var_list = var_list or []
+        self.req_attrs = req_attrs = req_attrs or {}
+        self.opt_attrs = opt_attrs = opt_attrs or {}
+
+        self.pathIndex = []
+        self.var_map = {}
+        var_names = []
+        for item_path, item_key in var_list:
+            self.pathIndex.append(item_path)
+            item_name = item_key.strip('_') if item_key != TAG else item_key
+            if item_name in var_names:
+                k = var_names.index(item_name) + 1
+            else:
+                var_names.append(item_name)
+                k = len(var_names)
+            self.var_map[item_path] = k
+        self.var_pos = [(-1, -1) for x in range(len(var_names) + 1)]
+
+        self.pos = 0
+        self.data_offset = 0
+        self.totLen = 0
+        self.stackPath = ''
+        self.tagStack = []
+        self.tagList = []
+        self.n_children = {}
+        self.path_dict = {}
+
+    @staticmethod
+    def abs_coord(span_in, offset):
+        if not span_in:
+            return span_in
+        x, y = span_in
+        offset = offset if span_in != (-1, -1) else 0
+        answ = (x + offset, y + offset)
+        return answ
+
+    @staticmethod
+    def get_attrs_pos(str_in, out_offset=0):
+        def store_tuple(pini, pfin):
+            dini = 1 if str_in[pini] in '\'"' else 0
+            dfin = -1 if str_in[pfin - 1] in '\'"' else 0
+            answ.append((pini + dini + out_offset, pfin + dfin + out_offset))
+            return dini, dfin
+
+        regex_str = f'<{str_in.strip(" </>")}>'
+        offset = str_in.find(regex_str[:-1])
+        tokens = tokenizer.Tokenizer(ATTR_SCANNER, skipTokens=tuple())
+        tokens_it = tokens.tokenize(regex_str)
+        answ = []
+        dini = dfin = 0
+        for token in tokens_it:
+            # print(token)
+            match token.tag:
+                case 'TAG_PATTERN':
+                    pini = offset
+                    pfin = tokens.pos + offset
+                    answ.append(TAG)
+                    dini, dfin = store_tuple(pini + 1, pfin)
+                case 'ATTR_PATTERN':
+                    pfin = tokens.pos + offset
+                    dini, dfin = store_tuple(pini, pfin)
+                case 'ATTRIBUTE':
+                    attr = token.value
+                    bflag = dini == -dfin
+                    if bflag:
+                        answ.append(attr)
+                        if tokens.peek().tag in ['WHITESPACE', 'SEPARATOR']:
+                            answ.append(tuple())
+                case 'ASIGNATION':
+                    pini = tokens.pos + offset
+                case 'WHITESPACE' | 'SEPARATOR':
+                    if tokens.getPrevToken().tag == 'ERROR' and tokens.peek().tag != 'ERROR':
+                        if isinstance(answ[-1], tuple):
+                            answ.pop()
+                        dini, dfin = store_tuple(pini, pfin)
+                case 'ERROR':
+                    pfin = tokens.pos + offset
+                    pass
+        answ = dict(zip(answ[::2], answ[1::2]))
+        return answ
+
+    @staticmethod
+    def adjust_end_points(data: str, beg_pos: int, end_pos: int) -> Tuple[int, int]:
+        '''
+
+        :param data: str. String a verificar.
+        :param beg_pos: int. Posición inicial a verificar.
+        :param end_pos: int. Posición final a verificar.
+        :return: Tuple[int, int]. Posiciones ajustadas.
+        '''
+        message = f'adjust_end_points: Not a markup type string'
+        try:
+            x_dmy = data[beg_pos:end_pos].index('<') + beg_pos
+            y_dmy = data[beg_pos:end_pos].rindex('>') + beg_pos + 1
+        except ValueError:
+            raise MarkupReError(message)
+        return x_dmy, y_dmy
+
+    def parse(self, data: str, beg_pos: int, max_pos: int, efilter: callable=None):
+        beg_pos, max_pos = self.adjust_end_points(data, beg_pos, max_pos)
+        efilter = efilter or (lambda x: False)
+        pos = beg_pos
+        end_pos = data[pos:].find('>') + pos + 1  # Con esto se asegura que se inicializa el tagStack
+        offset = pos
+        while pos < max_pos:
+            self.feed(data[pos:end_pos], offset)
+            if not self.tagStack:
+                break
+            pos = end_pos
+            end_tag = f'</{self.tagStack[0].tag}>'
+            end_pos = data[pos:].find(end_tag)
+            if end_pos == -1:
+                break
+            end_pos += pos + len(end_tag) + 1
+            offset += self.pos
+        if self.tagStack:
+            raise MarkupReError(f'{self.__class__.__name__}: Incomplete parsing')
+        root = self.tagList[-1]
+        root.tag = TAGPHOLDER
+        root.root_path = ''
+
+        stack = deque([('', root)])
+        to_process = []
+        while stack:
+            root_path, elem = stack.pop()
+            elem.root_path = root_path
+            elem.attrs[N_CHILDREN] = len(elem.children)
+            if efilter(elem):
+                to_process.append(elem)
+            n_child = defaultdict(int)
+            for k, child in enumerate(elem.children):
+                n_child[child.tag] += 1
+                child.attrs[N_TAG] = n_child[child.tag]
+                child.attrs[N_CHILD] = k + 1
+                stack.insert(0, (elem.full_path, child))
+        return to_process or root
+
+    def feed(self, data, offset=0):
+        self.data_offset = offset
+        self.pos = 0
+        super().feed(data)
+
+    def check_tagpholder(self, data, beg_pos, end_pos):
+        beg = data[beg_pos:].find('<') + beg_pos  # Con esto se asegura que se inicializa el tagStack
+        end = data[beg:].find('>') + beg + 1  # Con esto se asegura que se inicializa el tagStack
+        bflag = end <= end_pos
+        if bflag:
+            param_pos = self.get_attrs_pos(data[beg:end], beg)
+            attrs = {key: data[x:y] for key, (x, y) in param_pos.items()}
+            attrs[PARAM_POS] = param_pos
+            req_attrs = self.req_attrs.get(TAGPHOLDER, {}).copy()
+            # Se eliminan los atributos que no se encuentran en la declaración del tag,
+            # por ejemplo TEXTO que se encuentra luego de procesar el tag.
+            non_req_attrs = tuple(
+                req_attrs.pop(key) for key in (TEXTO,) if req_attrs.get(key, None) is not None
+            )
+            bflag = self.haveTagAllAttrReq(TAGPHOLDER, attrs, req_attrs)
+            cflag = not (self.req_attrs.keys() - (TAGPHOLDER, )) and len(non_req_attrs) == 0
+            cflag = cflag and f'{TAGPHOLDER}..*' not in self.var_map
+            if bflag and cflag:
+                return TreeElement((beg_pos, end_pos), TAGPHOLDER, attrs)
+        return bflag
+
+    def check_match(self, data: str, beg_pos: int, end_pos: int):
+        # Se verifica que el tag inicial (tagpholder) tenga los atributos requeridos
+        pholder = self.check_tagpholder(data, beg_pos, end_pos)
+        match pholder:
+            case False:
+                return
+            case TreeElement(full_path=fpath):
+                to_process = [pholder]
+            case _:
+                req_set = set(self.req_attrs.keys())
+                opt_set = set(self.opt_attrs.keys()).difference(req_set)
+                req_set = req_set.union(opt_set)
+                rel_path = sorted(
+                    [x for x in req_set if x.find('..') != -1], key=lambda x: x.count('.')
+                )
+                efilter = functools.partial(self.is_req_path, req_set=req_set, rel_path=rel_path)
+                to_process = self.parse(data, beg_pos, end_pos, efilter)
+                if req_set or rel_path:
+                    return
+        if f'{TAGPHOLDER}..*' in self.var_map:
+            var_pos = [to_process[0].span]
+            while to_process:
+                elem = to_process.pop()
+                var_pos.extend(elem.attr_span(TEXTO))
+                to_process.extend(elem.children)
+            self.var_pos = sorted(var_pos)
+            self.var_map = dict(('grp%s' % k, k) for k in range(1, len(self.var_pos)))
+        else:
+            self.var_pos = [(-1, -1) for x in range(len(self.var_pos))]
+            optValues = {}
+            self.var_pos[0] = to_process[0].span
+            for element_info in to_process:
+                element_attrs = element_info.attrs
+                element_path = element_info.full_path
+                if not self.haveTagAllAttrReq(element_path, element_attrs):
+                    return None
+                self.storeReqVars(element_path, element_attrs, optValues)
+            for key in self.pathIndex:
+                value = optValues.get(key, None)
+                if value is None:
+                    continue
+                k = self.var_map[key]
+                self.var_pos[k] = value
+        return self.var_pos
+
+    def storeReqVars(self, element_path, element_attrs, optValues):
+        paramPos = element_attrs.pop(PARAM_POS)
+        req_attrs = self.req_attrs.get(element_path, {})
+        for attr in req_attrs:
+            fullAttr = element_path + ATTRSEP + attr
+            if fullAttr not in self.var_map:
+                continue
+            if req_attrs[attr] and req_attrs[attr].groups:
+                m = req_attrs[attr].match(element_attrs[attr])
+                optValues[fullAttr] = self.abs_coord(m.span(1), paramPos[attr][0])
+            else:
+                optValues[fullAttr] = paramPos[attr]
+
+        opt_attrs = self.opt_attrs.get(element_path, {})
+        for attr in opt_attrs:
+            fullAttr = element_path + ATTRSEP + attr
+            if attr not in paramPos:
+                continue
+            if opt_attrs[attr]:
+                m = opt_attrs[attr].match(element_attrs[attr])
+                if not m:
+                    continue
+                if not opt_attrs[attr].groups:
+                    optValues[fullAttr] = paramPos[attr]
+                else:
+                    offset = paramPos[attr][0]
+                    optValues[fullAttr] = self.abs_coord(m.span(1), offset)
+            else:
+                optValues[fullAttr] = paramPos[attr]
+
+    def haveTagAllAttrReq(self, element_path, element_attrs, req_attrs=-1):
+        '''
+        Verifica que elemento tenga en sus atributos todos los elementos requeridos y
+        que cumplan con el pattern solicitado.
+        :param element_path: str. Full path del elemento a revisar.
+        :param element_attrs: dict. Atributs asociados al elemento.
+        :param req_attrs: dict or -1. Dict de attributos requeridos, si es -1 se utilizan los
+                          required tags.
+        :return: bool. (cumple/no cumple) con lo solicitado.
+        '''
+        if req_attrs == -1:
+            req_attrs = self.req_attrs.get(element_path, {})
+        diff_set = req_attrs.keys() - element_attrs.keys()
+        if diff_set:
+            return False
+        bflag = all(
+            [
+                req_attrs[key].match(element_attrs[key])
+                for key in req_attrs if req_attrs[key]
+            ]
+        )
+        return bflag
+
+    def getAllTagData(self, tagPos, data, tagList):
+        posBeg, posEnd = tagList[tagPos][0]
+        tagAttr = self.getAttrDict(data[:posEnd], posBeg)
+        n = tagList[tagPos][2]
+        if n is None:
+            tagAttr[TEXTO] = ''
+            tagName = tagAttr[TAG]
+            posBeg = posEnd = posEnd - len('</' + tagName + '>')
+            tagAttr[PARAM_POS][TEXTO] = (posBeg, posEnd)
+        elif n > 0:
+            posBeg, posEnd = tagList[n][0]
+            tagAttr[TEXTO] = data[posBeg:posEnd]
+            tagAttr[PARAM_POS][TEXTO] = tagList[n][0]
+        return tagAttr
+
+    def get_path(self, tag):
+        path = self.stackPath
+        self.n_children[path] = self.n_children.get(path, 0) + 1
+        path += f'.{tag}'
+        self.path_dict[path] = n = self.path_dict.setdefault(path, 0) + 1
+        answ = path + ('' if n == 1 else f'[{n}]')
+        return answ
+
+    def is_req_path(self, element: TreeElement, req_set: set, rel_path: list):
+        pathTag = element.full_path
+        efe = lambda x, path_tag: not (
+                path_tag.startswith(x.split('..')[0]) and path_tag.endswith(x.split('..')[1]))
+        if pathTag in req_set:
+            req_set.difference_update([pathTag])
+            return True
+        if rel_path:
+            rpos = list(itertools.takewhile(lambda x: efe(x, pathTag), rel_path))
+            rpos = len(rpos) + 1
+            if rpos <= len(rel_path):
+                pathTag = rel_path.pop(rpos - 1)
+                req_set.difference_update([pathTag])
+                return True
+        return False
+
+    def getSpan(self, entityStr):
+        posini = self.pos
+        self.pos = posfin = posini + len(entityStr)
+        self.totLen += len(entityStr)
+        return posini + self.data_offset, posfin + self.data_offset
+
+    def handle_starttag(self, tag, attrs):  # startswith('<')
+        attrs = dict(attrs)
+        starttag_text = self.get_starttag_text()
+        posini, posfin = self.getSpan(starttag_text)
+        root = self.stackPath
+        self.stackPath = path = self.get_path(tag)
+        # attrs[N_CHILD] = self.n_children[root]
+        attrs[TAG] = tag
+        attrs.setdefault(TEXTO, '')
+        param_pos = self.get_attrs_pos(starttag_text, posini)
+        param_pos.setdefault(TEXTO, [])
+        attrs[PARAM_POS] = param_pos
+        self.tagStack.append(TreeElement((posini, posfin), tag, attrs))
+
+    def handle_endtag(self, tag):  # startswith("</")
+        posini, posfin = self.getSpan('</%s>' % tag)
+        while self.tagStack:
+            try:
+                stck_tag = self.tagStack.pop()
+                self.tagList.append(stck_tag)
+                bflag = stck_tag.tag == tag
+                if bflag:
+                    stck_tag.span = (stck_tag.span[0], posfin)
+                    self.tagStack[-1].add(stck_tag)
+                    break
+                # Transferimos los hijos al nivel superior
+                self.tagStack[-1].add(stck_tag, *stck_tag.children)
+                stck_tag.children = []
+            except:
+                break
+        if not bflag:
+            raise MarkupReError(f'{self.__class__.__name__}: Unexpected end tag')
+
+    def handle_startendtag(self, tag, attrs):
+        attrs = dict(attrs)
+        starttag_text = self.get_starttag_text()
+        posini, posfin = self.getSpan(starttag_text)
+        root = self.stackPath
+        # attrs[N_CHILD] = self.n_children[root]
+        # attrs[N_CHILDREN] = 0
+        attrs[TAG] = tag
+        attrs.setdefault(TEXTO, '')
+        param_pos = self.get_attrs_pos(starttag_text, posini)
+        param_pos.setdefault(TEXTO, [])
+        attrs[PARAM_POS] = param_pos
+        tag_path = self.get_path(tag)
+        # tag_path = self.get_req_path(tag_path, None)
+        self.tagList.append(te := TreeElement((posini, posfin), tag, attrs))
+        self.tagStack[-1].add(te)
+
+    def storeDataStr(self, dataIn):
+        dSpanIn = self.getSpan(dataIn)
+        dataIn = dataIn.strip(' \t\n\r\f\v')
+        if dataIn:
+            attrs = self.tagStack[-1].attrs
+            attrs_pos_map = attrs[PARAM_POS]
+            texto_span = attrs_pos_map.setdefault(TEXTO, [])
+            texto_span.append(dSpanIn)
+            texto = attrs.setdefault(TEXTO, '')
+            attrs[TEXTO] = ' '.join([texto, dataIn]).strip()
+
+    def handle_data(self, data):
+        b_pos = self.pos
+        e_pos = self.rawdata[b_pos:].find('<') + b_pos
+        new_data = self.rawdata[b_pos: e_pos]
+        self.storeDataStr(new_data)
+
+    def handle_entityref(self, name):  # startswith('&')
+        data = '&%s;' % name
+        self.storeDataStr(data)
+
+    def handle_charref(self, name):  # startswith("&#")
+        data = '&#%s;' % name
+        self.storeDataStr(data)
+
+    def handle_comment(self, data):  # startswith("<!--")
+        posini, posfin = self.getSpan('<!--%s-->' % data)
+
+    def handle_decl(self, data):  # startswith("<!")
+        posini, posfin = self.getSpan('<!%s>' % data)
+
+    def handle_pi(self, data):  # startswith("<?")
+        posini, posfin = self.getSpan('<?%s>' % data)
+
+    def unknown_decl(self, data):
+        posini, posfin = self.getSpan('<![%s]>' % data)
 
 
 def compile(regex_str_in, flags=0, etags_str='[!--|style|script]'):
@@ -1203,8 +1269,8 @@ def compile(regex_str_in, flags=0, etags_str='[!--|style|script]'):
             break
         if tokens.getPrevToken().tag == 'SEPARATOR' and token.tag != 'SEPARATOR':
             # Reset variables del regexobj
-            prefix_stack = ['tagpholder']
-            prefix = 'tagpholder'
+            prefix_stack = [TAGPHOLDER]
+            prefix = TAGPHOLDER
             attribute = ''
             n_implicit = 0
 
@@ -1244,7 +1310,7 @@ def compile(regex_str_in, flags=0, etags_str='[!--|style|script]'):
                         if separator_stack:
                             try:
                                 token = next(tokens_it)
-                                assert token.tag == 'SEPARATOR' # Se verifica que el próximo tag es un SEPARATOR
+                                assert token.tag == 'SEPARATOR'  # Se verifica que el próximo tag es un SEPARATOR
                             except StopIteration:
                                 raise MarkupReError(f'Incomplete pattern')
                             except AssertionError:
@@ -1260,18 +1326,18 @@ def compile(regex_str_in, flags=0, etags_str='[!--|style|script]'):
                         raise MarkupReError(f'{compile_type}: Unrecognizable compile type')
                 pini = pfin
             case 'TAG_PATTERN':
-                if token.value == '__TAG__':
+                if token.value == TAG:
                     pass
                 elif token.value != token.value.strip(')('):
                     tag_pattern = token.value[1:-1]
-                    attribute = '.'.join([prefix, '__TAG__'])
+                    attribute = '.'.join([prefix, TAG])
                     element, attr = attribute.rsplit('.', 1)
                     attr_dict = tags.setdefault(element, {})
                     attr_dict.setdefault(attr, '')
-                    varList.append([attribute, '__TAG__'])
+                    varList.append([attribute, TAG])
                 else:
                     tag_pattern = token.value
-                tags.setdefault('tagpholder', {})
+                tags.setdefault(TAGPHOLDER, {})
             case 'VAR':
                 var_name = token.value
                 var_name = var_name.strip('&')
@@ -1299,7 +1365,7 @@ def compile(regex_str_in, flags=0, etags_str='[!--|style|script]'):
             case 'SPECIAL_ATTR':
                 attribute = '.'.join([prefix, token.value])
                 element, attr = attribute.rsplit('.', 1)
-                if token.value == '__TAG__':
+                if token.value == TAG:
                     attr_dict = tags.setdefault(element, {})
                     attr_dict.setdefault(attr, '')
             case 'ATTRIBUTE':
@@ -1310,11 +1376,11 @@ def compile(regex_str_in, flags=0, etags_str='[!--|style|script]'):
                 attribute = re.sub(r'\.(\d+)\.', r'.[\1].', attribute)
                 attribute = attribute.replace('.[', '[').replace('[1]', '')
 
-                if attribute == 'tagpholder..*':
+                if attribute == f'{TAGPHOLDER}..*':
                     if varList:
                         raise MarkupReError('With required Tag ".*", no vars are allowed')
                     # Se hace varList un tuple para evitar que puedan agregarse variables.
-                    varList = (['tagpholder..*', 'text_tags'],)
+                    varList = ([f'{TAGPHOLDER}..*', 'text_tags'],)
                 else:
                     element, attr = attribute.rsplit('.', 1)
                     attr_dict = tags.setdefault(element, {})
@@ -1355,6 +1421,51 @@ def compile(regex_str_in, flags=0, etags_str='[!--|style|script]'):
     return regexobj_stack.pop()
 
 
+def ExtDecorator(func):
+    def wrapper(*args, **kwords):
+        pattern, flagsvalue = args[0], 1 * ('flags' in kwords) and kwords.pop('flags')
+        compPat = compile(pattern, flags=flagsvalue)
+        callfunc = getattr(compPat, func.__name__)
+        return callfunc(*args[1:], **kwords)
+
+    return wrapper
+
+
+@ExtDecorator
+def search(pattern, string, flags=0):
+    pass
+
+
+@ExtDecorator
+def match(pattern, string, flags=0):
+    pass
+
+
+@ExtDecorator
+def split(pattern, string, maxsplit=0, flags=0):
+    pass
+
+
+@ExtDecorator
+def findall(pattern, string, flags=0):
+    pass
+
+
+@ExtDecorator
+def finditer(pattern, string, flags=0):
+    pass
+
+
+@ExtDecorator
+def sub(pattern, repl, string, count=0, flags=0):
+    pass
+
+
+@ExtDecorator
+def subn(pattern, repl, string, count=0, flags=0):
+    pass
+
+
 if __name__ == '__main__':
     from rich.console import Console
     from rich.table import Table
@@ -1389,10 +1500,178 @@ if __name__ == '__main__':
     -->
     <span class="independiente">span3</span>
         """
+    htmlStr2 = """
+    <span id="1" class="independiente">span0</span>
+    <scripts id="2">
+        <span class="bloque1">span1</span>
+        <a href="http://www.eltiempo.com.co">El Tiempo</a>
+        <span class="bloque1">span2</span>
+    </scripts>
+    <bloque id="3">
+        <span class="independiente">bloque1</span>
+        <parent id="root">
+        <hijo id="hijo1">primer hijo</hijo>
+        <hijo id="hijo2" exp="hijo con varios comentarios">
+             <h1>El primer comentario</h1>
+             <h1>El segundo comentario</h1>
+             <h1>El tercer comentario</h1>
+        </hijo>
+        <hijo id="hijo3">tercer hijo</hijo>
+        </parent>
+        <span class="independiente">bloque2</span>
+    </bloque>
+    <!--
+        <span class="bloque2">span1</span>
+        <a href="http://www.elheraldo.com.co">El Heraldo</a>
+        <span class="bloque2">span2</span>
+    -->
+    <span id="4" class="independiente">span3</span>
+            """
 
     console.print('Inicio')
-    test = 'extcompile'
-    if test == 'zin':
+    test = 'ext_match'
+    if test == 'ext_match':
+        cmpobj = compile('(?#<__TAG__ __TAG__=mi_nametag_var id=id>)', etags_str='[<!--]')
+        answer = cmpobj.findall(htmlStr2)
+        required = [('span', '1'), ('scripts', '2'), ('bloque', '3'), ('span', '4')]
+        assert answer == required, 'Utilizando __TAG__ como tagpattern'
+    elif test == 'parse_attrs':
+        import random
+
+        cases = {
+            'caso3': """<a href0="el 'tiempo com" href1="el 'tiempo" com' href2='el 'tiempo' com' href3=''el tiempo' com' href4='el 'tiempo com''>""",
+            'caso1': """<a href2=eltiempo.com href1 href0="eltiempo.com">""",
+            'caso4': """<hijo id="hijo2" exp="hijo con varios comentarios">""",
+            'caso2': """<a href1="eltiempo.com' href0="eltiempo.com" href2='eltiempo.com' href3=eltiempo.com>""",
+            'caso0': """<a href1="eltiempo.com" href2="eltiempo.com" href0="eltiempo.com">""",
+        }
+        items = [
+            'href0',
+            'href1="el tiempo com"',
+            "href2='el tiempo com'",
+            """href3="el 'tiempo' com\"""",
+            """href4='el "tiempo" com'""",
+            """href5='el tiempo com\"""",
+            """href6="el tiempo com'""",
+            """href7=''el tiempo' com'""",
+            """href8='el tiempo 'com''""",
+        ]
+        caso = f'<a {" ".join(items)}>'
+
+        ATTR_SCANNER = re.compile(r'''
+            (?P<SEPARATOR>(?:
+                  (?:<) |                       # Inicio Pattern
+                  (?:>)                         # Inicio Pattern
+            )) |
+            (?P<WHITESPACE>\s+) |           # string
+            (?P<TAG_PATTERN>(?:
+                (?<=<)\s*?                   # Precedida por < y posiblemente espacios
+                \(*(?:__TAG__|[A-Za-z].*?)\)*   # Pattern tag
+                (?!=)
+                (?=\s|>|<)                 # La sigue uno o mas espacios o >
+             )) |           
+            (?P<ATTRIBUTE>(?:
+                (?<=\ )          # Debe estar precedido por el espacio 
+                [a-zA-Z\*\.\d][a-zA-Z\d\.\[\]\*-_]*?        # Nombre de atributo
+                (?=\=|>|<|\s)
+             )) |           
+            (?P<ATTR_PATTERN>(?:
+                (?<=\=)          # Debe estar precedido por el = 
+                (?:
+                    (?P<quote>["'])(.*?)(?P=quote) |      # standar attr pattern
+                    ([^=]+?)                                 # No quote attr pattern
+                )
+                (?=\s|>|<|=)          # Nota: Esto no acepta espacios en el pattern luego de un scape quote
+            )) |
+            (?P<ASIGNATION>(?:
+                =                   # Igual
+            )) | 
+            (?P<ERROR>.)                    # an error
+            ''', re.DOTALL | re.VERBOSE)
+
+
+        def get_attrs_pos(str_in):
+            def store_tuple(pini, pfin):
+                dini = 1 if str_in[pini] in '\'"' else 0
+                dfin = -1 if str_in[pfin - 1] in '\'"' else 0
+                answ.append((pini + dini, pfin + dfin))
+                return dini, dfin
+
+            regex_str = f'<{str_in.strip(" </>")}>'
+            offset = str_in.find(regex_str[:-1])
+            tokens = tokenizer.Tokenizer(ATTR_SCANNER, skipTokens=tuple())
+            tokens_it = tokens.tokenize(regex_str)
+            answ = []
+            dini = dfin = 0
+            for token in tokens_it:
+                print(token)
+                match token.tag:
+                    case 'TAG_PATTERN':
+                        pini = offset
+                        pfin = tokens.pos + offset
+                        answ.append(TAG)
+                        dini, dfin = store_tuple(pini + 1, pfin)
+                    case 'ATTR_PATTERN':
+                        pfin = tokens.pos + offset
+                        dini, dfin = store_tuple(pini, pfin)
+                    case 'ATTRIBUTE':
+                        attr = token.value
+                        bflag = dini == -dfin
+                        if bflag:
+                            answ.append(attr)
+                            if tokens.peek().tag in ['WHITESPACE', 'SEPARATOR']:
+                                answ.append(tuple())
+                    case 'ASIGNATION':
+                        pini = tokens.pos + offset
+                    case 'WHITESPACE' | 'SEPARATOR':
+                        if tokens.getPrevToken().tag == 'ERROR' and tokens.peek().tag != 'ERROR':
+                            if isinstance(answ[-1], tuple):
+                                answ.pop()
+                            dini, dfin = store_tuple(pini, pfin)
+                    case 'ERROR':
+                        pfin = tokens.pos + offset
+                        pass
+            answ = dict(zip(answ[::2], answ[1::2]))
+            return answ.items()
+
+
+        # for case, elem in list(cases.items()):
+        # for k in range(500):
+        for k in range(1):
+            # case, elem = f'caso{k}', f'<a {" ".join(random.sample(items, len(items)))}>'
+            case, elem = f'caso{k}', '<meta content="width=device-width, initial-scale=1.0" name="viewport"/>'
+            case, elem = f'caso{k}', """<a href7=''el tiempo' com' href0 href5='el tiempo com" href2='el tiempo com' href4='el "tiempo" com' href8='el tiempo 'com'' href1="el tiempo com" href3="el 'tiempo' com" href6="el tiempo com'>"""
+            answ = dict(get_attrs_pos(elem))
+            answ.pop(TAG)
+            error = 'href0' not in answ
+            for key, value in answ.items():
+                if value:
+                    beg, end = value
+                    attr_val_raw = elem[beg:end]
+                    attr_val = attr_val_raw.replace('"', '').replace('\'', '')
+                    error = error or attr_val != 'el tiempo com'
+                    # console.print(key, elem[beg:end])
+                else:
+                    # console.print(key, value)
+                    error = error or key != 'href0'
+            if error:
+                console.rule(f'{case}, valid={not error}')
+                console.print(elem)
+                for key, (beg, end) in answ.items():
+                    console.print(f'{key}={elem[beg:end]}')
+        pass
+    elif test == 'new_match_factory':
+        new_fact = MarkupParser()
+        new_fact.feed(htmlStr1)
+        new_fact.close()
+        sl = sorted(new_fact.tagList)
+        console.print(
+            [
+                (n, m[N_CHILD], m[N_CHILDREN]) for n, m in
+                [(x[3], dict(x[4])) for x in sl if x[1] != TEXTO]
+            ]
+        )
+    elif test == 'zin':
         htmlStr = """
         <span class="independiente">span0</span>
         <script>
@@ -1615,7 +1894,7 @@ if __name__ == '__main__':
         </uno>
         '''
         m = search('(?#<uno .*>)', htmlstr)
-        console.print(m)
+        console.print(m.groups())
     elif test == 'htmlpointer':
         htmlstr = '''
     <!DOCTYPE html>

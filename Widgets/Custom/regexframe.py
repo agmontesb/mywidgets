@@ -2,7 +2,7 @@
 import tkinter as tk
 import tkinter.ttk as ttk
 import tkinter.simpledialog
-import tkinter.messagebox
+import tkinter.messagebox as tkMessageBox
 import tkinter.filedialog as tkFileDialog
 
 import _thread
@@ -10,16 +10,16 @@ import tkinter.ttk
 import tkinter.font
 import urllib.request, urllib.parse, urllib.error
 
-import CollapsingFrame as collapsingFrame
+from . import CollapsingFrame as collapsingFrame
 import urllib.parse
 import re
 import Tools.uiStyle.MarkupRe as MarkupRe
 from Tools.uiStyle.uicss import Selector
-import network
+from . import network
 import queue
 from Widgets.kodiwidgets import CustomDialog
 import threading
-import ImageProcessor as imgp
+from . import ImageProcessor as imgp
 from functools import reduce
 
 
@@ -636,8 +636,12 @@ class RegexpBar(tk.Frame):
         list(map(self.textWidget.mark_unset, items))
 
     def setTag(self, tag, baseIndex, match, grpIndx):
-        tagIni = baseIndex + ' + %d chars' % match.start(grpIndx)
-        tagFin = baseIndex + ' + %d chars' % match.end(grpIndx)
+        # start, end = match.span(grpIndx)
+        # tagIni = f'{baseIndex} + {start} chars'
+        # tagFin = f'{baseIndex} + {end} chars'
+
+        f = lambda x: f'{baseIndex} + {x} chars'
+        tagIni, tagFin = tuple(map(f, match.span(grpIndx)))
         try:
             self.textWidget.tag_add(tag, tagIni, tagFin)
         except:
@@ -647,16 +651,14 @@ class RegexpBar(tk.Frame):
 
         ngroups = len(match.groups())
         for key in range(1, ngroups + 1):
-            tagIni = baseIndex + ' + %d chars' % match.start(key)
-            tagFin = baseIndex + ' + %d chars' % match.end(key)
+            tagIni, tagFin = tuple(map(f, match.span(key)))
             self.textWidget.tag_add('group', tagIni, tagFin)
 
         urlkeys = [key for key in list(match.groupdict().keys()) if key.lower().endswith('url')]
         if not urlkeys and 'label' in match.groupdict():
             urlkeys = ['label']
         for key in urlkeys:
-            tagIni = baseIndex + ' + %d chars' % match.start(key)
-            tagFin = baseIndex + ' + %d chars' % match.end(key)
+            tagIni, tagFin = tuple(map(f, match.span(key)))
             self.textWidget.tag_add('hyper', tagIni, tagFin)
 
     def updateGUI(self):
@@ -676,12 +678,12 @@ class RegexpBar(tk.Frame):
                 tagColor = ['evenMatch', 'oddMatch']
                 matchColor = tagColor[k % 2]
                 self.setTag(matchColor, baseIndex, match, 0)
-                tagIni = self.textWidget.index(baseIndex + ' + %d chars' % match.start(0))
+                tagValues = match.span()        # (match.start(0), match.end(0))
+                tagIni = self.textWidget.index(baseIndex + ' + %d chars' % tagValues[0])
                 iid = 'I{:03x}'.format(k)
                 self.textWidget.mark_set(iid, tagIni)
 
                 max_cols = len(self.tree['columns'])
-                tagValues = (match.start(0), match.end(0))
                 if hasattr(match, 'parameters') and match.parameters:
                     tagValues += match.parameters
                 tagValues += match.groups() + max_cols * ('',)
@@ -1152,8 +1154,8 @@ class PythonEditor(tk.Frame):
             return None
 
     def colorMatch(self, baseIndex, match, matchColor, frstMatch=False):
-        tagIni = baseIndex + ' + %d chars' % match.start(0)
-        tagFin = baseIndex + ' + %d chars' % match.end(0)
+        tagIni, tagFin = tuple(map(lambda x: f'{baseIndex} + {x} chars', match.span()))
+
         try:
             self.textw.tag_add(matchColor, tagIni, tagFin)
         except:
@@ -1299,14 +1301,12 @@ class RegexpFrame(tk.Frame):
     def zoom(self, btnText):
         if btnText == 'ZoomIn':
             selRange = self.txtEditor.getSelRange() or self.txtEditor.getSelRange('actMatch')
-            if not selRange: return False
+            if not selRange:
+                return False
             zinBuff = [self.txtEditor.scrbar.get(), selRange]
             textw = self.txtEditor.textw
             height = textw.winfo_height()
             zinBuff.append((textw.index(tk.INSERT), textw.index('@0,%s' % (height // 2))))
-            rgxFlag = not self.txtEditor.getSelRange()
-            texto = self.txtEditor.getContent(*selRange)
-            self.setContent(texto, False)
             regExPat = self.getRegexpPattern()
             prefix = self.regexBar.cbIndex.get()
             zinBuff.append((prefix, regExPat))
@@ -1314,6 +1314,16 @@ class RegexpFrame(tk.Frame):
             self.regexBar.butAnchor['state'] = tk.DISABLED
             if regExPat.startswith('(?#<SPAN>)'):
                 self.setActiveUrl()
+            texto = self.txtEditor.getContent(*selRange)
+            try:
+                htmlParse = MarkupRe.ExtRegexParser({}, []).htmlStruct(texto)
+            except:
+                tkMessageBox.showinfo('Actual match HTMLstruct', 'Not HTML conform')
+            else:
+                for (pins, _), path, _ in reversed(htmlParse):
+                    texto = texto[:pins] + f'<!-- {path} -->' + texto[pins:]
+            self.setContent(texto, False)
+            self.setRegexpPattern('<!-- .+? -->')
             return True
         else:
             self.urlFrame.returnKey()
