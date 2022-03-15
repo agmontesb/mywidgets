@@ -1,4 +1,4 @@
-
+import time
 import tkinter as tk
 import tkinter.ttk as ttk
 import tkinter.simpledialog
@@ -187,6 +187,7 @@ class RegexpBar(tk.Frame):
         self.queue = queue.Queue(maxsize=0)
         self.activeCallBack = []
         self.threadFlag = 'stop'
+        self.keyboard_delay = None
 
         self.messageVar = messageVar
         self.setGUI()
@@ -253,7 +254,18 @@ class RegexpBar(tk.Frame):
         self.butKeyMaker = tk.Button(frame1, text="ZoomIn", command=self.zoomInOut)
         self.butKeyMaker.pack(side=tk.LEFT, padx=4, fill=tk.Y)
         self.cbIndex = tk.StringVar()
-        tk.Label(frame1, textvariable=self.cbIndex).pack(side=tk.LEFT)
+        lbl = tk.Label(frame1, textvariable=self.cbIndex)
+        lbl.pack(side=tk.LEFT)
+
+        self.regex_type = tk.StringVar()
+        for elem in ['selector', 'markupre']:
+            chkbutt = tk.Checkbutton(
+                frame1, text=elem[0].upper(), variable=self.regex_type,
+                indicatoron=False, font=self.customFont, onvalue=elem
+            )
+            chkbutt.pack(side=tk.RIGHT)
+        self.regex_type.set('markupre')
+        self.regex_type.trace('w', self.getPatternMatch)
         self.regexPattern = tk.StringVar()
         cbStyle = tkinter.ttk.Style()
         cbStyle = cbStyle.configure('red.TCombobox', foreground='red')
@@ -263,7 +275,7 @@ class RegexpBar(tk.Frame):
             textvariable=self.regexPattern
         )
         self.entry.configure(postcommand=self.fillDropDownLst)
-        self.entry.pack(side=tk.LEFT, fill=tk.X, expand=1)
+        self.entry.pack(after=lbl,side=tk.LEFT, fill=tk.X, expand=1)
 
         self.entry.event_add('<<re_escape>>', '<Control-E>', '<Control-e>')
         self.entry.bind('<<re_escape>>', self.selPasteWithReEscape)
@@ -517,10 +529,22 @@ class RegexpBar(tk.Frame):
                 if self.cbIndex.get() + pattern not in cbValues:
                     self.cbIndex.set('')
         self.setRegexpPattern(pattern)
-        self.formatContent()
-        if self.cbIndex.get():
-            self.textWidget.focus_force()
-        pass
+        if self.keyboard_delay is None:
+            # print('inicio delay buffer')
+            self.after(500, self.delay_buffer)
+        self.keyboard_delay = time.time_ns() // 1_000_000
+
+    def delay_buffer(self):
+        now = time.time_ns() // 1_000_000
+        delta = now - self.keyboard_delay
+        if delta >= 500:
+            self.formatContent()
+            if self.cbIndex.get():
+                self.textWidget.focus_force()
+            self.keyboard_delay = None
+        else:
+            self.after(500 - delta, self.delay_buffer)
+
 
     def formatContent(self, index1='1.0', index2='end'):
         mutex = self.mutex
@@ -560,13 +584,17 @@ class RegexpBar(tk.Frame):
             return None
         self.entry.configure(style='red.TCombobox')
         try:
-            sel = Selector(no_flags_pattern)
-            if sel.is_valid:
-                reg = sel.compiled_selector
-                # Para que se presente el span de los aciertos.
-                regexPattern = '(?#<SPAN>)' + no_flags_pattern
-            else:
-                reg = MarkupRe.compile(no_flags_pattern, compFlags)
+            match self.regex_type.get():
+                case 'selector':
+                    sel = Selector(no_flags_pattern)
+                    if sel.is_valid:
+                        reg = sel.compiled_selector
+                        # Para que se presente el span de los aciertos.
+                        regexPattern = '(?#<SPAN>)' + no_flags_pattern
+                    else:
+                        reg = None
+                case _:
+                    reg = MarkupRe.compile(no_flags_pattern, compFlags)
         except Exception as inst:
             self.queue.put([None, (str(inst),)])
             return self.updateGUI()
