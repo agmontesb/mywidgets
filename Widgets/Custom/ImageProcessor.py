@@ -127,21 +127,18 @@ def _getThemeColour(srchcolor, theme='confluence'):
     #         colors = _parseXml(filename)
     #         color = colors.find('.//color[@name="%s"]' % srchcolor)
     #         if color is not None: break
-    #     if color is None:
-    #         try:
-    #             colorTuple = ImageColor.getrgb(srchcolor)
-    #         except ValueError:
-    #             pass
-    #             # color = colors.find('.//color[@name="invalid"]')
-    #         else:
-    #             if len(colorTuple) == 3: colorTuple += (255, )
-    #             return colorTuple
-    #
-    #     srchcolor = color.text if color is not None else 'FFFF0000'
-    # color = [int(srchcolor[k:k+2], 16) for k in range(0, 8, 2)]
-    # transp, red, green, blue = color
-    transp, red, green, blue = 1, 256, 256, 256
-    return (red, green, blue, transp)
+    if not re.match(r'[0-9ABCDEF]{8}\Z', srchcolor.upper()):
+        try:
+            colorTuple = ImageColor.getrgb(srchcolor)
+            if len(colorTuple) == 3:
+                colorTuple += (255, )
+        except ValueError:
+            srchcolor = 'FFFF0000'
+        else:
+            return colorTuple
+    color = [int(srchcolor[k:k+2], 16) for k in range(0, 8, 2)]
+    transp, red, green, blue = color
+    return red, green, blue, transp
 
 
 def _imageFile(imageFile):
@@ -179,11 +176,13 @@ def _imageFile(imageFile):
 #     return ImageFont.truetype(filename, size)
 
 
-@memoize
+# @memoize
+# He decidido transformar a getCacheTexture la versión memoize de esta función
 def getTexture(imageFile, Width, Height, aspectratio='stretch', **options):
     if isinstance(imageFile, (bytes, str)):
         imageFile = _imageFile(imageFile)
-        if not imageFile: return None
+        if not imageFile:
+            return None
         imageFile = Image.open(imageFile)
     im = imageFile
     bbox = im.getbbox()
@@ -246,7 +245,7 @@ def getTexture(imageFile, Width, Height, aspectratio='stretch', **options):
 
     srcSectors = brdSectors(iw, ih)
     dstSectors = brdSectors(width, height)
-    for srcBox, dstBox in  zip(srcSectors, dstSectors):
+    for srcBox, dstBox in zip(srcSectors, dstSectors):
         dstSize = (dstBox[2] - dstBox[0], dstBox[3] - dstBox[1])
         if dstSize[0] <= 0 or dstSize[1] <= 0: continue
         region = im.crop(srcBox)
@@ -291,6 +290,8 @@ def getTexture(imageFile, Width, Height, aspectratio='stretch', **options):
     region = dstIm.crop((x1s, y1s, x2s, y2s))
     retIm.paste(region, (x1d, y1d, x2d, y2d))
     return retIm
+
+getCacheTexture = memoize(getTexture)
 
 
 def getLabel(label, font, textcolor, background=None, xpos=0, ypos=0, **options):
@@ -396,7 +397,7 @@ def fontAwesomeIcon(iconStr, **styleRequested):
         toProcess = map(lambda x: (x[0].strip(' \n'), x[1].strip(' \n')), toProcess)
         cssDict.update(toProcess)
 
-    style = dict([('size', 240), ('color', 'ffff0000'), ('aspectratio','keep'),
+    style = dict([('size', 240), ('color', 'ffff0000'), ('aspectratio', 'keep'),
                     ('isPhotoImage', False)])
 
     iconStr = 'fa-file fa-9x fa-ul fa-li fa-pulse'

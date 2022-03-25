@@ -1028,7 +1028,8 @@ class FormFrame(tk.Frame):
                            None si se quieren todos los widgets.
         :return: list. basicWidgets
         '''
-        widgetsIds = widgetsIds or self.widgetMapping.keys()
+        if widgetsIds is None:
+            widgetsIds = self.widgetMapping.keys()
         return [self.__getattr__(key) for key in widgetsIds]
 
     def getGroupVar(self, groupName):

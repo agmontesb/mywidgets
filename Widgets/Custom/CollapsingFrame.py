@@ -368,22 +368,24 @@ if __name__ == '__main__':
     def leftPaneChg(pane):
         global leftPane
         labels[leftPane - 1].pack_forget()
-        labels[pane - 1].pack(side = tk.TOP, fill = tk.BOTH, expand = tk.YES)
+        labels[pane - 1].pack(side=tk.TOP, fill=tk.BOTH, expand=tk.YES)
         leftPane = pane
     root = tk.Tk()
-    motherFrame = collapsingFrame(root, tk.VERTICAL, inisplit = 0.3,buttconf = 'RM')
+    lbl = tk.Label(root, text='BAR', bg='red')
+    lbl.pack(side=tk.RIGHT, fill=tk.Y)
+    motherFrame = collapsingFrame(root, tk.VERTICAL, inisplit=0.3, buttconf='RM')
     motherFrame.config(height=200, width=200)
-    motherFrame.pack(side = tk.TOP, fill = tk.BOTH, expand = tk.YES)
+    motherFrame.pack(side=tk.TOP, fill=tk.BOTH, expand=tk.YES)
     labels = []
     for k in range(5):
-        label = tk.Label(motherFrame.frstWidget, text = 'Panel IZQUIERDO No. %s\nEl boton solo presenta o oculta el panel' % (k+1))
+        label = tk.Label(motherFrame.frstWidget, text='Panel IZQUIERDO No. %s\nEl boton solo presenta o oculta el panel' % (k+1))
         labels.append(label)
-    labels[leftPane - 1].pack(side = tk.TOP, fill = tk.BOTH, expand = tk.YES)
+    labels[leftPane - 1].pack(side=tk.TOP, fill=tk.BOTH, expand=tk.YES)
     test = collapsingFrame(motherFrame.scndWidget, tk.HORIZONTAL)
-    test.pack(side = tk.TOP, fill = tk.BOTH, expand = tk.YES)
-    tk.Button(test.frstWidget, text = 'Panel de ARRIBA').pack(side = tk.TOP, fill = tk.BOTH, expand = tk.YES)
+    test.pack(side=tk.TOP, fill=tk.BOTH, expand=tk.YES)
+    tk.Button(test.frstWidget, text='Panel de ARRIBA').pack(side=tk.TOP, fill=tk.BOTH, expand=tk.YES)
     for k in range(5):
-        button = tk.Button(test.scndWidget, command=lambda x=k+1:leftPaneChg(x), text = 'Frame No. ' + str(k + 1))
-        button.pack(side = tk.TOP, fill = tk.BOTH, expand = tk.YES)
+        button = tk.Button(test.scndWidget, command=lambda x=k+1:leftPaneChg(x), text='Frame No. ' + str(k + 1))
+        button.pack(side=tk.TOP, fill=tk.BOTH, expand=tk.YES)
     pass
     root.mainloop()

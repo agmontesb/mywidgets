@@ -217,13 +217,13 @@ class RegexpBar(tk.Frame):
         frame1.pack(fill=tk.X)
 
         iconImage = imgp.getFontAwesomeIcon
-        commOptions = dict(size=24, isPhotoImage=True, color='black', aspectratio='stretch')
+        commOptions = dict(size=24, isPhotoImage=True, color='green', aspectratio='stretch')
 
-        self.lstIcon = lstIcon = iconImage('fa-angle-double-right', **commOptions)
         self.frstIcon = frstIcon = iconImage('fa-angle-double-left', **commOptions)
-        self.nxtIcon = nxtIcon = iconImage('fa-angle-right', **commOptions)
         self.prvIcon = prvIcon = iconImage('fa-angle-left', **commOptions)
         self.anchorIcon = anchorIcon = iconImage('fa-anchor', **commOptions)
+        self.lstIcon = lstIcon = iconImage('fa-angle-double-right', **commOptions)
+        self.nxtIcon = nxtIcon = iconImage('fa-angle-right', **commOptions)
 
         self.anchor = tk.IntVar()
         self.anchorPos = []

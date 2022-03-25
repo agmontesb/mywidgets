@@ -12,7 +12,7 @@ from Widgets.kodiwidgets import formFrameGen, CustomDialog
 from Tools.WidgetsExplorer import WidgetExplorer
 from equations import equations_manager
 
-# Este es una especie de manejador de recursos que quiero implementar
+# Este es una especie de administrador de recursos que quiero implementar
 R = type('Erre', (object,), {})
 
 
@@ -107,7 +107,7 @@ class UIeditor(tk.Toplevel):
             self.ui_view,
             filename=os.path.join('../data/kodi/', 'WidgetParams.xml')
         )
-        widgetParams.pack(side=tk.RIGHT, fill=tk.Y, expand=tk.YES, anchor=tk.E)
+        widgetParams.pack(side=tk.RIGHT, fill=tk.Y, anchor=tk.E)
         widgetParams.widget_attrs.bind('<<OptionList_Edit>>', self.doOptionListEdit)
 
         self.testFrame = CollapsingFrame.collapsingFrame(
@@ -115,7 +115,6 @@ class UIeditor(tk.Toplevel):
             tk.VERTICAL,
             inisplit=0.2,
             buttconf='RM',
-            # bg='yellow',
         )
         self.testFrame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=tk.YES)
         self.testFrame.pack_propagate(0)
@@ -537,8 +536,10 @@ class UIeditor(tk.Toplevel):
         self.currentFile = name
         self.title(self.currentFile)
 
-        self.init_XMl_View(xmlstr)
-        self.init_UI_View(xmlstr)
+        if self.activeViewIndx.get() == 0:
+            self.init_XMl_View(xmlstr)
+        else:
+            self.init_UI_View(xmlstr)
 
     def init_XMl_View(self, xmlstr):
         self.codeFrame.setContent(
@@ -546,7 +547,7 @@ class UIeditor(tk.Toplevel):
             inspos='1.0',
             sintaxArray=SintaxEditor.XMLSINTAX
         )
-        self.codeFrame.textw.edit_modified(0)
+        self.codeFrame.textw.edit_modified(1)
 
     def init_UI_View(self, xmlstr):
         treeview = self.treeview
@@ -561,7 +562,7 @@ class UIeditor(tk.Toplevel):
             self.setupForms(panel, treeview, ui_pane)
         except Exception as e:
             tk.Label(ui_pane, text=str(e)).pack()
-        self.treeview.edit_modified(0)
+        self.treeview.edit_modified(1)
 
     def mapWidgetToTree(self, master, xmlwidget, widget, tree, indx='end'):
         # En este momento no se hace nada con las variables
