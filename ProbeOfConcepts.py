@@ -143,72 +143,97 @@ def nameElements(htmlstr, k=-1):
 
 
 if __name__ == '__main__':
-    nameElements('')
-    top = tk.Tk()
     caso = 'test_newPaneFactory'
-    if caso == 'tkinter':
-        layoutfile = os.path.join('./data/tkinter/', 'tkUiEditor.xml')
-        selPane = getLayout(layoutfile)
-        fframe = newPanelFactory(top, selPane)
-        # fframe.pack(side=tk.TOP, fill=tk.BOTH, expand=tk.YES)
-    elif caso == 'configure_widget':
-        def configWidget(event):
-            widget = event.widget
-            ifocus = widget.tree.focus()
-            kwargs = dict([widget.tree.item(ifocus, 'values')])
-            boton.config(**kwargs)
-            pass
-        fframe = formFrameGen(
-            top,
-            filename=os.path.join('./data/', 'WidgetParams.xml')
-        )
-        fframe.pack(side=tk.RIGHT, fill=tk.Y, expand=tk.YES)
-        fframe.widget_attrs.bind('<<OL_Edit>>', configWidget)
-        boton = ttk.Button(top, text='Boton de Prueba')
-        boton.pack(side=tk.RIGHT, fill=tk.BOTH, expand=tk.YES)
+    if caso == 'type_hinting':
+        from typing import Protocol, runtime_checkable
+        from typing import Iterable, Iterator, MutableMapping
 
-        params = boton.config()
-        # Se eliminan los alias que pudieran existir de algunas claves
-        keys = sorted(key for key in params if len(params[key]) == 5)
-        # Se establece el tipo de widget
-        getattr(fframe, 'widget_tag').setValue(str(type(boton)))
-        # Se calculan los pares (attribute, value)
-        values = '$'.join(['&'.join((x, str(boton.cget(x)))) for x in keys])
-        # Se transfieren los atributos al fframe.
-        getattr(fframe, 'widget_attrs').setValue(values, sep=('$', '&'))
-        pass
+        @runtime_checkable
+        class TreeLike(Iterable['TreeLike'], Protocol):
+            tag: str
+            attrib: MutableMapping[str, str]
 
-    elif caso == 'traverse':
-        file_path = 'Data/kodi/BasicViewsShowCase.xml'
-        pairs = traverseTree(top, file_path)
-    elif caso == 'test_newPaneFactory':
-        file_path = 'Data/kodi/MultiCategoryExample.xml'
-        file_path = 'Data/mixing/mxShowcase.xml'
-        file_path = 'Data/tkinter/tkGeometricManagers.xml'
-        xmlObj = getLayout(file_path)
-        settings = {}
-        fframe = formFrame(master=top, settings=settings, selPane=xmlObj)
-        dummy = fframe
-        fframe.pack(side=tk.TOP, fill=tk.BOTH, expand=tk.YES, anchor=tk.NE)
-        pass
-    elif caso == 'widgetFactory':
-        file_path = 'Data/kodi/ApplicationLayout.xml'
-        xmlObj = getLayout(file_path)
-        settings = {}
-        fframe = formFrame(master=top, settings=settings, selPane=xmlObj)
-        dummy = fframe
-        fframe.pack(side=tk.TOP, fill=tk.BOTH, expand=tk.YES, anchor=tk.NE)
+        class MyTree(TreeLike):
+            def __init__(self, tag: str, **kwargs: str) -> None:
+                self.tag = tag
+                self.attrib = kwargs
+
+            def __iter__(self) -> Iterator['MyTree']:
+                item = 0
+                while item < 10:
+                    yield self.__class__(str(item))
+                    item += 1
+
+        dmy = MyTree('alex', uno='1', dos='3')
+        assert isinstance(dmy, Iterable)
+        assert isinstance(dmy, TreeLike)
+
     else:
-        def motion(event):
-            widget, x, y = event.widget, event.x, event.y
-            try:
-                if widget.name.isdigit():
-                    print('{}, {}, {}'.format(widget.name, x, y))
-                    dummy = 2
-            except:
+        nameElements('')
+        top = tk.Tk()
+        if caso == 'tkinter':
+            layoutfile = os.path.join('./data/tkinter/', 'tkUiEditor.xml')
+            selPane = getLayout(layoutfile)
+            fframe = newPanelFactory(top, selPane)
+            # fframe.pack(side=tk.TOP, fill=tk.BOTH, expand=tk.YES)
+        elif caso == 'configure_widget':
+            def configWidget(event):
+                widget = event.widget
+                ifocus = widget.tree.focus()
+                kwargs = dict([widget.tree.item(ifocus, 'values')])
+                boton.config(**kwargs)
                 pass
-        fframe.bind_all("<Enter>", motion)
+            fframe = formFrameGen(
+                top,
+                filename=os.path.join('./data/', 'WidgetParams.xml')
+            )
+            fframe.pack(side=tk.RIGHT, fill=tk.Y, expand=tk.YES)
+            fframe.widget_attrs.bind('<<OL_Edit>>', configWidget)
+            boton = ttk.Button(top, text='Boton de Prueba')
+            boton.pack(side=tk.RIGHT, fill=tk.BOTH, expand=tk.YES)
+
+            params = boton.config()
+            # Se eliminan los alias que pudieran existir de algunas claves
+            keys = sorted(key for key in params if len(params[key]) == 5)
+            # Se establece el tipo de widget
+            getattr(fframe, 'widget_tag').setValue(str(type(boton)))
+            # Se calculan los pares (attribute, value)
+            values = '$'.join(['&'.join((x, str(boton.cget(x)))) for x in keys])
+            # Se transfieren los atributos al fframe.
+            getattr(fframe, 'widget_attrs').setValue(values, sep=('$', '&'))
+            pass
+
+        elif caso == 'traverse':
+            file_path = 'Data/kodi/BasicViewsShowCase.xml'
+            pairs = traverseTree(top, file_path)
+        elif caso == 'test_newPaneFactory':
+            file_path = 'Data/kodi/MultiCategoryExample.xml'
+            file_path = 'Data/mixing/mxShowcase.xml'
+            file_path = 'Data/tkinter/tkUiEditor.xml'
+            xmlObj = getLayout(file_path)
+            settings = {}
+            fframe = formFrame(master=top, settings=settings, selPane=xmlObj)
+            dummy = fframe
+            fframe.pack(side=tk.TOP, fill=tk.BOTH, expand=tk.YES, anchor=tk.NE)
+            pass
+        elif caso == 'widgetFactory':
+            file_path = 'Data/kodi/ApplicationLayout.xml'
+            xmlObj = getLayout(file_path)
+            settings = {}
+            fframe = formFrame(master=top, settings=settings, selPane=xmlObj)
+            dummy = fframe
+            fframe.pack(side=tk.TOP, fill=tk.BOTH, expand=tk.YES, anchor=tk.NE)
+        else:
+            def motion(event):
+                widget, x, y = event.widget, event.x, event.y
+                try:
+                    if widget.name.isdigit():
+                        print('{}, {}, {}'.format(widget.name, x, y))
+                        dummy = 2
+                except:
+                    pass
+            fframe.bind_all("<Enter>", motion)
 
 
-        Example(fframe).pack(fill="both", expand=True)
-    top.mainloop()
+            Example(fframe).pack(fill="both", expand=True)
+        top.mainloop()

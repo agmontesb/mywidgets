@@ -7,16 +7,26 @@
 import importlib
 import tkinter as tk
 import xml.etree.ElementTree as ET
+from typing import Callable, Sequence, Mapping, Any, MutableMapping, Iterable, Tuple, Literal
+from typing_extensions import Protocol, runtime_checkable
+from types import ModuleType
 
 from equations import equations_manager
 import cbwidgetstate
+
+
+@runtime_checkable
+class TreeLike(Iterable['TreeLike'], Protocol):
+    tag: str
+    attrib: MutableMapping[str, str]
+
 
 pack_params = ["after", "anchor", "before", "expand", "fill", "in", "ipadx", "ipady", "padx", "pady", "side"]
 grid_params = ["column", "columnspan", "in", "ipadx", "ipady", "padx", "pady", "row", "rowspan", "sticky"]
 place_params = ["anchor", "bordermode", "height", "in", "relheight", "relwidth", "relx", "rely", "width", "x", "y"]
 
 
-def getLayout(layoutfile):
+def getLayout(layoutfile: str) -> ET.Element:
     # restype = directory_indx('layout')
     # layoutfile = self._unpack_pointer(id, restype)
     with open(layoutfile, 'rb') as f:
@@ -24,7 +34,7 @@ def getLayout(layoutfile):
     return ET.XML(xmlstr)
 
 
-def findGeometricManager(tag):
+def findGeometricManager(tag: Literal['grid', 'place', 'pack']) -> Sequence[str]:
     if tag == 'grid':
         return grid_params
     if tag == 'place':
@@ -32,7 +42,10 @@ def findGeometricManager(tag):
     return pack_params
 
 
-def getWidgetInstance(master, widgetname, attributes, panelModule=None):
+def getWidgetInstance(master: tk.Tk | tk.Widget,
+                      widgetname: str,
+                      attributes: MutableMapping[str, str],
+                      panelModule: list[Tuple[int, ModuleType]] | None = None) -> tk.Widget:
     '''
 
     :param master: widget. De ser derivado de basicWidget.
@@ -44,10 +57,13 @@ def getWidgetInstance(master, widgetname, attributes, panelModule=None):
 
     # Tratamiento de las variables
     if widgetname == 'var':
-        _type = f"{attributes.pop('type', 'string').title()}Var"
+        _type = attributes.pop('type', 'string')
+        var_type = f"{_type.title()}Var"
         parent = equations_manager.default_root()
-        tk_var = getattr(tk, _type)(master=parent, **attributes)
-        equations_manager.var_values[str(tk_var)] = tk_var.get()
+
+        tk_var = getattr(tk, var_type)(master=parent, **attributes)
+        equations_manager.state_equations[(var_name := str(tk_var))] = tk_var
+        equations_manager.var_values[var_name] = tk_var.get()
         return tk_var
     # Si no se tiene panelModule se asume que es tkinter
     # panelModule = panelModule or tk
@@ -67,13 +83,18 @@ def getWidgetInstance(master, widgetname, attributes, panelModule=None):
     # En este punto se tiene un parche para no romper con los Kodiwidgets que utilizan
     # el attributo 'id' y que desactivan algunas características dependiendo si tienen id o no.
     if module.__name__ == 'Widgets.kodiwidgets':
-        attributes.pop(id, None)
+        attributes.pop('id', None)
     widget = widgetClass(master, **attributes)
 
     return widget
 
 
-def widgetFactory(master, selPane, panelModule=None, setParentTo='master', registerWidget=None, k=-1):
+def widgetFactory(master: tk.Tk | tk.Widget,
+                  selPane: ET.Element,
+                  panelModule: list[Tuple[int, ModuleType]] | None = None,
+                  registerWidget: Callable[[tk.Tk | tk.Widget, ET.Element, tk.Widget], Any] | None = None,
+                  setParentTo: Literal['master', 'category', 'root'] = 'master',
+                  k: int = -1) -> int:
     '''
     Crea la jerarquia de widgets que conforman una tkinter form.
     :param master: tkinter Form. Padre de la Form a generar.
@@ -96,7 +117,7 @@ def widgetFactory(master, selPane, panelModule=None, setParentTo='master', regis
     if selPane.get('lib'):
         # El contenedor declara que sus widgets están definidos en "lib" por lo cual se agrega
         # al camino de definiciones de los widgets.
-        module_path = selPane.get('lib')
+        module_path = selPane.get('lib', '')
         module = importlib.import_module(module_path, __package__)
         panelModule.append((kini, module))
     elif not panelModule:
@@ -119,7 +140,9 @@ def widgetFactory(master, selPane, panelModule=None, setParentTo='master', regis
             # Cuando se elige la opción sameParent=True significa que todos los widgets que están
             # bajo una misma categoría serán creados como hijos del frame correspondiente a
             # la categoría pero puestos bajo el widget master
-            options.setdefault('in', master.winfo_name())
+            in_default = master.winfo_name()
+            if options.setdefault('in', in_default).startswith('.') and setParentTo != 'master':
+                options['in'] = in_default + options['in']
             parent = master.nametowidget(master.winfo_parent())
 
         options.pop('geomanager', None)
@@ -148,22 +171,25 @@ def widgetFactory(master, selPane, panelModule=None, setParentTo='master', regis
 
         if 'in' in geomngr_opt and isinstance(geomngr_opt['in'], (bytes, str)):
             parent_name = geomngr_opt.pop('in').lstrip('.')
-            if setParentTo:
-                parent_path = dummy.winfo_parent()
-            else:
-                # Se hace necesario hacer esto porque es posible que se despliegue el widget en
-                # un conatenedor con el que comparte el padre en algún punto.
-                parent_path = None
-                items = dummy.parent.winfo_children()
-                while items:
-                    item = items.pop(0)
-                    if item.winfo_name() == parent_name:
-                        parent_path = str(item)
-                        break
-                    items.extend(item.winfo_children())
-                if parent_path is None:
-                    raise Exception(f"Can't pack {dummy.winfo_name()} inside {parent_name}")
+            parent_path = dummy.winfo_parent()
             geomngr_opt['in_'] = '.'.join((parent_path, parent_name))
+
+            # if setParentTo:
+            #     parent_path = dummy.winfo_parent()
+            # else:
+            #     # Se hace necesario hacer esto porque es posible que se despliegue el widget en
+            #     # un contenedor con el que comparte el padre en algún punto.
+            #     parent_path = None
+            #     items = dummy.parent.winfo_children()
+            #     while items:
+            #         item = items.pop(0)
+            #         if item.winfo_name() == parent_name:
+            #             parent_path = str(item)
+            #             break
+            #         items.extend(item.winfo_children())
+            #     if parent_path is None:
+            #         raise Exception(f"Can't pack {dummy.winfo_name()} inside {parent_name}")
+            # geomngr_opt['in_'] = '.'.join((parent_path, parent_name))
 
         if is_widget and 'visible' not in states_eq:
             getattr(dummy, geometric_manager)(**geomngr_opt)
@@ -194,12 +220,15 @@ def widgetFactory(master, selPane, panelModule=None, setParentTo='master', regis
     return k
 
 
-def newPanelFactory(master, selpane, genPanelModule=None, registerWidget=None):
+def newPanelFactory(master: tk.Tk | tk.Widget,
+                    selpane: ET.Element,
+                    genPanelModule: list[Tuple[int, ModuleType]] | None = None,
+                    registerWidget: Callable | None = None) -> int:
     '''
     Crea la jerarquia de widgets que conforman una tkinter form.
     :param registerWidget:
     :param master:      tkinter Form. Padre de la Form a generar.
-    :param selPane:     element tree nade. Nodo raiz definido por el archivo de layout.
+    :param selpane:     element tree nade. Nodo raiz definido por el archivo de layout.
     :param genPanelModule: modulo. Define los widgets definidos por el usuario.
     :param registerWidget: callable. Callback function para registrar los widgets creados.
     :return:            2 members tuple. Posición 0: Valor consecutivo del últimmo widget agregado.
@@ -210,8 +239,10 @@ def newPanelFactory(master, selpane, genPanelModule=None, registerWidget=None):
     categories = selpane.findall('category')
     n = -1
     if len(categories) <= 1:
-        if selpane.tag != 'category':
-            selpane = selpane.find('category')
+        try:
+            selpane = categories[0]     # Case cateegories = [category]
+        except IndexError:
+            pass
         n = widgetFactory(
             master,
             selpane,
@@ -232,18 +263,18 @@ def newPanelFactory(master, selpane, genPanelModule=None, registerWidget=None):
         for k, elem in enumerate(categories):
             boton = tk.Radiobutton(
                 leftPane,
-                text=elem.get('label'),
+                text=elem.get('label', ''),
                 value=k,
-                indicatoron=0
+                indicatoron=False
             )
             boton.pack(side=tk.TOP, fill=tk.X)
             frstboton = frstboton or boton
             pane = tk.Frame(master, relief=tk.RIDGE, bd=5, bg='white', padx=3, pady=3)
-            pane.form = master
+            pane.form = master      # type: ignore
             paneArray.append(pane)
         for child in leftPane.winfo_children():
-            child.config(command=lambda x=child['value'], y=tuple(paneArray): selectPane(x, y))
-
+            child.config(command=lambda x=child['value'], y=tuple(paneArray): selectPane(x, y)) # type: ignore
+        assert isinstance(frstboton, tk.Radiobutton)
         frstboton.invoke()
         for root, selPane in zip(paneArray, categories):
             n = widgetFactory(
@@ -253,5 +284,4 @@ def newPanelFactory(master, selpane, genPanelModule=None, registerWidget=None):
                 registerWidget=registerWidget,
                 k=n)
     return n
-
 

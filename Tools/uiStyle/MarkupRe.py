@@ -9,26 +9,25 @@ from builtins import StopIteration, ValueError
 from collections import namedtuple, defaultdict, deque
 import re
 import itertools
-from typing import Tuple, List
+from typing import Tuple, List, Callable, Any
 from html.parser import HTMLParser
 from enum import Enum
 
 import tokenizer
-from Tools.uiStyle.CustomRegEx import ExtCompile
 
-TAG_PATTERN_DEFAULT = '[a-zA-Z][^\s>]*'
+TAG_PATTERN_DEFAULT = r'[a-zA-Z][^\s>]*'
 
-ATTRSEP = '.'
-COMMSEP = '*'
-TAGPHOLDER = 'tagpholder'
+ATTRSEP = r'.'
+COMMSEP = r'*'
+TAGPHOLDER = r'tagpholder'
 
 # Tipo de pseudo attributos
-TEXTO = '*'
-PARAM_POS = '*ParamPos*'
-TAG = '__TAG__'
-N_CHILDREN = '__N_CHILDREN__'
-N_CHILD = '__N_CHILD__'
-N_TAG = '__N_TAG__'
+TEXTO = r'*'
+PARAM_POS = r'*ParamPos*'
+TAG = r'__TAG__'
+N_CHILDREN = r'__N_CHILDREN__'
+N_CHILD = r'__N_CHILD__'
+N_TAG = r'__N_TAG__'
 
 PSEUDO_ATTRS = set([TEXTO, PARAM_POS, TAG, N_CHILDREN, N_CHILD, N_TAG])
 
@@ -814,7 +813,7 @@ class MatchObjectFactory:
 
 
 class MarkupParser(HTMLParser):
-    CDATA_CONTENT_ELEMENTS = tuple()
+    CDATA_CONTENT_ELEMENTS: tuple[str, ...] = tuple()
 
     def __init__(self, var_list=None, req_attrs=None, opt_attrs=None):
         super().__init__()
@@ -916,7 +915,7 @@ class MarkupParser(HTMLParser):
             raise MarkupReError(message)
         return x_dmy, y_dmy
 
-    def parse(self, data: str, beg_pos: int, max_pos: int, efilter: callable=None):
+    def parse(self, data: str, beg_pos: int, max_pos: int, efilter: Callable[[Any], bool] = None):
         beg_pos, max_pos = self.adjust_end_points(data, beg_pos, max_pos)
         efilter = efilter or (lambda x: False)
         pos = beg_pos
@@ -947,7 +946,7 @@ class MarkupParser(HTMLParser):
             elem.attrs[N_CHILDREN] = len(elem.children)
             if efilter(elem):
                 to_process.append(elem)
-            n_child = defaultdict(int)
+            n_child: dict[str, int] = defaultdict(int)
             for k, child in enumerate(elem.children):
                 n_child[child.tag] += 1
                 child.attrs[N_TAG] = n_child[child.tag]
@@ -1010,7 +1009,7 @@ class MarkupParser(HTMLParser):
             self.var_map = dict(('grp%s' % k, k) for k in range(1, len(self.var_pos)))
         else:
             self.var_pos = [(-1, -1) for x in range(len(self.var_pos))]
-            optValues = {}
+            optValues: dict[str, tuple[int, int]] = {}
             self.var_pos[0] = to_process[0].span
             for element_info in to_process:
                 element_attrs = element_info.attrs
@@ -1111,9 +1110,9 @@ class MarkupParser(HTMLParser):
             return True
         if rel_path:
             rpos = list(itertools.takewhile(lambda x: efe(x, pathTag), rel_path))
-            rpos = len(rpos) + 1
-            if rpos <= len(rel_path):
-                pathTag = rel_path.pop(rpos - 1)
+            npos = len(rpos) + 1
+            if npos <= len(rel_path):
+                pathTag = rel_path.pop(npos - 1)
                 req_set.difference_update([pathTag])
                 return True
         return False

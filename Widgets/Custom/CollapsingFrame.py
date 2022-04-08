@@ -8,8 +8,8 @@ BAND_COLOR = 'light sea green'
 
 
 class collapsingFrame(tk.Frame):
-    def __init__(self, master, orientation=tk.HORIZONTAL, inisplit=0.8, buttconf='RMm'):
-        tk.Frame.__init__(self, master)
+    def __init__(self, master, orientation=tk.HORIZONTAL, inisplit=0.8, buttconf='RMm', name=None):
+        tk.Frame.__init__(self, master, name=name)
         self.buttIcon = {}
         iconImage = imgp.getFontAwesomeIcon
         commOptions = dict(size=BAND_WIDTH, isPhotoImage=True, color='00000000')
@@ -41,10 +41,10 @@ class collapsingFrame(tk.Frame):
         self.cursor = 'sb_v_double_arrow' if orientation == tk.HORIZONTAL else 'sb_h_double_arrow'
         self.dim = 'height' if orientation == tk.HORIZONTAL else 'width'
         self.bind('<Configure>', self.configure, add='+')
-        self.split = inisplit
+        self.split = float(inisplit)
         self.bandRelDim = 0
-        self.frstWidget = tk.Frame(self)
-        self.scndWidget = tk.Frame(self)
+        self.frstWidget = tk.Frame(self, name='frstwidget')
+        self.scndWidget = tk.Frame(self, name='scndwidget')
         self.setGUI()
         self.setWidgetLayout(buttconf[0])
 

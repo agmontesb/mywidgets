@@ -1,5 +1,3 @@
-import collections
-import importlib
 import os
 import tkinter as tk
 import tkinter.messagebox as tkMessageBox
@@ -170,35 +168,6 @@ class UIeditor(tk.Toplevel):
         values[attr_key] = attr_value
         treeview.item(nodeid, values=(name, str(values)))
         self.setSaveFlag(True)
-
-    # def xmlTreeRep(self):
-    #     xml_str = '<?xml version="1.0" encoding="utf-8" standalone="yes"?>\n<setting>\n'
-    #     treeview = self.treeview
-    #     to_process = collections.deque()
-    #     indent_stack = [('', 'setting')]
-    #     to_process.extend(treeview.get_children())
-    #     while to_process:
-    #         nodeid = to_process.popleft()
-    #         attribs = eval(treeview.item(nodeid, 'values')[1])
-    #         tag = attribs.pop('tag')
-    #         attribs = ' '.join(f'{key}="{value}"' for key, value in attribs.items())
-    #         parentid = treeview.parent(nodeid)
-    #         children = treeview.get_children(nodeid)
-    #         if children:
-    #             to_process.extendleft(reversed(children))
-    #             end_str = '>'
-    #         else:
-    #             end_str = '/>'
-    #         while parentid != indent_stack[-1][0]:
-    #             _, end_tag = indent_stack.pop()
-    #             xml_str += f'{len(indent_stack) * "    "}</{end_tag}>\n'
-    #         xml_str += f'{len(indent_stack) * "    "}<{tag} {attribs}{end_str}\n'
-    #         if end_str == '>':
-    #             indent_stack.append((nodeid, tag))
-    #     while indent_stack:
-    #         _, end_tag = indent_stack.pop()
-    #         xml_str += f'{len(indent_stack) * "    "}</{end_tag}>\n'
-    #     return xml_str
 
     def monitorMouseClick(self, event):
         widget = event.widget
@@ -540,6 +509,8 @@ class UIeditor(tk.Toplevel):
             self.init_XMl_View(xmlstr)
         else:
             self.init_UI_View(xmlstr)
+        self.update()
+        self.setSaveFlag(False)
 
     def init_XMl_View(self, xmlstr):
         self.codeFrame.setContent(
@@ -567,7 +538,9 @@ class UIeditor(tk.Toplevel):
     def mapWidgetToTree(self, master, xmlwidget, widget, tree, indx='end'):
         # En este momento no se hace nada con las variables
         if xmlwidget.tag == 'var':
-            return
+            child_id = str(widget)
+        else:
+            child_id = widget.winfo_name()
         widget_attribs = xmlwidget.attrib
         widget_attribs['tag'] = xmlwidget.tag
         widget_attribs.pop('name', None)
@@ -579,8 +552,7 @@ class UIeditor(tk.Toplevel):
             # parent = getattr(widget, geomanager + '_info')()['in']
             parent_id = master.winfo_name()
             caption = xmlwidget.tag
-        child_id = widget.winfo_name()
-        child_id = tree.insert(
+        tree.insert(
             parent_id,
             indx,
             iid=child_id,
@@ -763,8 +735,11 @@ class UIeditor(tk.Toplevel):
 
 def main():
     root = tk.Tk()
+    w, h = root.winfo_screenwidth(), root.winfo_screenheight()
+    root.geometry("%dx%d+0+0" % (w, h))
     root.withdraw()
     mainWin = UIeditor()
+    mainWin.attributes('-zoomed', True)
     root.wait_window(mainWin)
 
 

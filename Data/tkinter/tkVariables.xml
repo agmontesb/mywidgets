@@ -25,7 +25,7 @@
         </frame>
         <label textvariable="cat1_var1" text="Este es el texto" side="top" fill="both" expand="yes"/>
     </category>
-    <category label="enabled/visible variables">
+    <category label="enabled variables">
         <var name="cat2_var2" type="string" value="panel1" />
         <var name="cat2_var3" type="int" value="1" />
         <checkbutton text="enable panel1" variable="cat2_var3" onvalue="1" width="10" indicatoron="1" side="top"/>
@@ -35,5 +35,15 @@
             <radiobutton text="panel2" variable="cat2_var2" value="panel2" width="10" indicatoron="0" side="left"/>
         </frame>
         <label textvariable="cat2_var2" enable="ne(cat2_var2, 'panel1') + eq(cat2_var3, 1)" side="top" fill="both" expand="yes"/>
+    </category>
+    <category label="visible variables">
+        <var name="vis_var" type="string" value="panel1" />
+        <frame side="top" fill="x">
+            <label text="Views: " side="left" />
+            <radiobutton text="panel1" variable="vis_var" value="panel1" width="10" indicatoron="0" side="left"/>
+            <radiobutton text="panel2" variable="vis_var" value="panel2" width="10" indicatoron="0" side="left"/>
+        </frame>
+        <frame side="top" fill="both" expand="yes" visible="eq(vis_var, 'panel1')" bg="red"/>
+        <frame side="top" fill="both" expand="yes" visible="eq(vis_var, 'panel2')" bg="blue"/>
     </category>
 </settings>
