@@ -203,6 +203,6 @@ class NavigationBar(tk.Canvas):
 if __name__ == '__main__':
     top = tk.Tk()
     base_dir = '/mnt/c/Users/Alex Montes/PycharmProjects/'
-    initial_dir = '/mnt/c/Users/Alex Montes/PycharmProjects/mywidgets/Widgets/Custom/navigationbar.py'
+    initial_dir = '/src/Widgets/Custom/navigationbar.py'
     nbar = NavigationBar(top, base_dir, initial_dir)
     top.mainloop()

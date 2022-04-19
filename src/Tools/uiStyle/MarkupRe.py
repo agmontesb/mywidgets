@@ -9,11 +9,11 @@ from builtins import StopIteration, ValueError
 from collections import namedtuple, defaultdict, deque
 import re
 import itertools
-from typing import Tuple, List, Callable, Any
+from typing import Tuple, Callable, Any
 from html.parser import HTMLParser
 from enum import Enum
 
-import tokenizer
+from src import tokenizer
 
 TAG_PATTERN_DEFAULT = r'[a-zA-Z][^\s>]*'
 
@@ -614,7 +614,7 @@ class HTMLPointer:
             assert (html_str[beg_pos], html_str[end_inner - 1]) == ('<', '>'), 'No se tiene tag completo'
             bflag = html_str[beg_pos:end_inner].endswith('/>') or html_str[beg_pos:end_inner].endswith('-->')
             if not bflag:  # No start-end tag o comentario
-                tag = re.match('<(.+?)(?:\s|>)', html_str[beg_pos:end_inner]).group(1)
+                tag = re.match(r'<(.+?)(?:\s|>)', html_str[beg_pos:end_inner]).group(1)
                 pattern = fr'(?:<{tag}(\s[^>]+?)*(?<!/)>)|(?:</{tag}>)'
                 cp_pattern = re.compile(pattern, re.IGNORECASE | re.DOTALL)
                 ene = 1
@@ -1535,7 +1535,6 @@ if __name__ == '__main__':
         required = [('span', '1'), ('scripts', '2'), ('bloque', '3'), ('span', '4')]
         assert answer == required, 'Utilizando __TAG__ como tagpattern'
     elif test == 'parse_attrs':
-        import random
 
         cases = {
             'caso3': """<a href0="el 'tiempo com" href1="el 'tiempo" com' href2='el 'tiempo' com' href3=''el tiempo' com' href4='el 'tiempo com''>""",

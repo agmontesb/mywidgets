@@ -8,7 +8,7 @@ import random
 import pytest
 import re
 
-from . import MarkupRe
+from src.Tools.uiStyle import MarkupRe
 
 TAGPHOLDER = MarkupRe.TAGPHOLDER
 
@@ -196,7 +196,7 @@ class TestExtcompile:
         first = MarkupRe.compile(
             '(?#<table id td.*=grp1 td[2].b.*=grp2 td[2].a.href=grp2a td[2].a.src=grp2b td[3].*=grp3 td[4].*=grp4>)', 0)
         scnd = MarkupRe.compile('(?#<table id td{1.*=grp1 2{b.*=grp2 a{href=grp2a src=grp2b}} 3.*=grp3 4.*=grp4}>)',
-                                   0)
+                                0)
         assert ExtCompObjEquality(first, scnd)
 
     def test_tripleAsignation(self):
@@ -468,7 +468,7 @@ class TestExtMatch:
 
         cmpobj = MarkupRe.compile('(?#<__TAG__ *="[sb].+?"=label>)')
         answer = cmpobj.findall(self.htmlStr)
-        assert answer == required1, 'Al utilizar __TAG__ como tag attribute se hace el tagpattern = "[a-zA-Z][^\s>]*", para con el primer resultado se asigna "[sb].+?" al *'
+        assert answer == required1, r'Al utilizar __TAG__ como tag attribute se hace el tagpattern = r"[a-zA-Z][^\s>]*", para con el primer resultado se asigna "[sb].+?" al *'
 
         cmpobj = MarkupRe.compile('(?#<(__TAG__) *=".+?"=label>)')
         answer = list(cmpobj.groupindex.keys())
@@ -563,7 +563,7 @@ class TestOptionalVars:
 
         for var in ['_url_', '_url', 'url_']:
             pattern = '(?#<son id=id href=%s *=label>)' % var
-            m = MarkupRe.ExtCompile(pattern)
+            m = MarkupRe.compile(pattern)
             required = {'id': 1, 'label': 3, 'url': 2}
             assert m.groupindex == required, 'Los guiones bajos(_) solo denotan que la variable es opcional'
 

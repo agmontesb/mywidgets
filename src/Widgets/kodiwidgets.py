@@ -16,8 +16,8 @@ import importlib
 import fnmatch
 import operator
 
-from userinterface import newPanelFactory, widgetFactory
-from equations import equations_manager
+from src.userinterface import newPanelFactory
+from src.equations import equations_manager
 
 
 def getWidgetClass(widgetName):
@@ -243,7 +243,7 @@ class settFileenum(baseWidget):
                                                                                          expand=1)
 
     def getFileList(self, options):
-        basepath = os.path.abspath('..')
+        basepath = os.path.abspath('../..')
         values = options.get('values', '')
         mypath = os.path.join(basepath, values)
         if not os.path.exists(mypath):
@@ -1085,6 +1085,7 @@ def formFrameGen(master, filename=None, selPane=None, settings=None):
     :param settings: dict. Valores diferentes a default para las variables de la forma.
     :return: formFrame or object define in user library.
     '''
+    libname_root = 'src.'
     if not any((filename, selPane)):
         raise AttributeError('You must specify filename or selPane')
     if filename:
@@ -1097,7 +1098,7 @@ def formFrameGen(master, filename=None, selPane=None, settings=None):
     formclass = formFrame
     formModule = None
     if selPane.get('lib'):
-        libname = selPane.get('lib')
+        libname = libname_root + selPane.get('lib')
         try:
             parentname = re.match(r'(\.0x[0-9a-f]+)\.?', str(master))
             baseframe = master.nametowidget(parentname.group(1))

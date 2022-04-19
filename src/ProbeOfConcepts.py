@@ -4,8 +4,10 @@ import os
 import tkinter as tk
 import tkinter.ttk as ttk
 import xml.etree.ElementTree as ET
+
 from userinterface import newPanelFactory, getWidgetInstance
-from Widgets.kodiwidgets import formFrame
+from src.Widgets import formFrame
+from equations import equations_manager
 
 
 def getLayout(layoutfile):
@@ -91,7 +93,7 @@ class Example(tk.Frame):
         print("main widget binding")
 
 def nameElements(htmlstr, k=-1):
-    import Tools.uiStyle.CustomRegEx as CustomRegEx
+    import src.Tools.uiStyle.CustomRegEx as CustomRegEx
     htmlstr = '''<!DOCTYPE html>
     <html>
     <head>
@@ -143,8 +145,27 @@ def nameElements(htmlstr, k=-1):
 
 
 if __name__ == '__main__':
-    caso = 'test_newPaneFactory'
-    if caso == 'type_hinting':
+    caso = 'test_css'
+    if caso == 'test_css':
+        top = tk.Tk()
+        file_path = 'Data/tkinter/tkUiEditor.xml'
+        file_path = 'Data/tkinter/tkGeometricManagers.xml'
+        xmlObj = getLayout(file_path)
+        settings = {}
+        # fframe = formFrame(master=top, settings=settings, selPane=xmlObj)
+        fframe = tk.Frame(top, name='fframe')
+        regWidget = lambda x, y, z: None
+        newPanelFactory(
+            master=fframe,
+            selpane=xmlObj,
+            genPanelModule=None,
+            setParentTo='root',
+            registerWidget=regWidget,
+        )
+        equations_manager.set_initial_widget_states()
+        fframe.pack(side=tk.TOP, fill=tk.BOTH, expand=tk.YES, anchor=tk.NE)
+        top.mainloop()
+    elif caso == 'type_hinting':
         from typing import Protocol, runtime_checkable
         from typing import Iterable, Iterator, MutableMapping
 
@@ -167,7 +188,6 @@ if __name__ == '__main__':
         dmy = MyTree('alex', uno='1', dos='3')
         assert isinstance(dmy, Iterable)
         assert isinstance(dmy, TreeLike)
-
     else:
         nameElements('')
         top = tk.Tk()
@@ -236,4 +256,4 @@ if __name__ == '__main__':
 
 
             Example(fframe).pack(fill="both", expand=True)
-        top.mainloop()
+            top.mainloop()

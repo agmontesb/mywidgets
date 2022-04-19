@@ -10,14 +10,13 @@ import tkinter.ttk
 import tkinter.font
 import urllib.request, urllib.parse, urllib.error
 
-from . import CollapsingFrame as collapsingFrame
 import urllib.parse
 import re
-import Tools.uiStyle.MarkupRe as MarkupRe
-from Tools.uiStyle.uicss import Selector
+import src.Tools.uiStyle.MarkupRe as MarkupRe
+from src.Tools.uiStyle.uicss import Selector
 from . import network
 import queue
-from Widgets.kodiwidgets import CustomDialog
+from src.Widgets.kodiwidgets import CustomDialog
 import threading
 from . import ImageProcessor as imgp
 from functools import reduce
@@ -841,7 +840,7 @@ class NavigationBar(tk.Frame):
         entryUrl.bind('<Control-o>', self.controlleftKey)
 
     def settingComm(self):
-        file_name = '/mnt/c/Users/Alex Montes/PycharmProjects/mywidgets/Data/kodi/browserSettings.xml'
+        file_name = '/Data/kodi/browserSettings.xml'
         settingObj = CustomDialog(
             self, title='Application Settings', xmlFile=file_name, isFile=True, settings=self.browserParam.copy()
         )
@@ -1011,7 +1010,7 @@ class NavigationBar(tk.Frame):
         cookielib = None
 
         import http.cookiejar
-        import urllib.request, urllib.error, urllib.parse
+        import urllib.request, urllib.parse
         cj = http.cookiejar.LWPCookieJar()  # This is a subclass of FileCookieJar that has useful load and save methods
         opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(cj))
 
@@ -1304,7 +1303,7 @@ class RegexpFrame(tk.Frame):
         self.regexBar.pack(fill=tk.X)
         self.regexBar.setZoomManager(self.zoom)
 
-        frame2 = collapsingFrame.collapsingFrame(self, buttconf='mRM')
+        frame2 = CollapsingFrame.collapsingFrame(self, buttconf='mRM')
         frame2.pack(fill=tk.BOTH, expand=1)
         self.txtEditor = PythonEditor(frame2.frstWidget)
         self.tree = TreeList(

@@ -10,7 +10,7 @@
 import re
 import itertools
 
-import Tools.uiStyle.MarkupRe as MarkupRe
+import src.Tools.uiStyle.MarkupRe as MarkupRe
 
 THOUSANDS = 0
 HUNDRES = 1
@@ -452,7 +452,7 @@ if __name__ == '__main__':
                 selector = Selector(sel_str)
                 print(f'{sel_str}, {selector.pattern}')
     elif test == 'CssWrapper':
-        filename = '/mnt/c/Users/Alex Montes/PycharmProjects/mywidgets/Tools/uiStyle/test.css'
+        filename = '/tests/test.css'
         parser = CssWrapper(filename, isfile=True)
         for selector in parser.selectors:
             print(selector.selector_str, selector.specificity, selector.regex_pattern_str)

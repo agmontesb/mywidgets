@@ -1,5 +1,5 @@
 
-import Tools.uiStyle.uicss as uicss
+import src.Tools.uiStyle.uicss as uicss
 
 
 class TestSelector:

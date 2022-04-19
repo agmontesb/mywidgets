@@ -407,7 +407,7 @@ def fontAwesomeIcon(iconStr, **styleRequested):
 
 
     rootdir = os.path.dirname(__file__)
-    css_url = os.path.join(rootdir,'FontAwesome','fontawesome-all.css')
+    css_url = os.path.join(rootdir, 'FontAwesome', 'fontawesome-all.css')
     css_url = staticFile(css_url)
     with open(css_url, 'r') as f:
         css_content = f.read()
@@ -434,7 +434,7 @@ def fontAwesomeIcon(iconStr, **styleRequested):
     sources = dict(map(lambda x: (x[1], x[0]), re.findall(pattern, css_params['src'])))
     ttf_file = os.path.basename(sources['truetype'])
 
-    ttf_url = os.path.join(rootdir,'FontAwesome',ttf_file)
+    ttf_url = os.path.join(rootdir, 'FontAwesome', ttf_file)
     ttf_url = staticFile(ttf_url)
 
     style.update(styleRequested)

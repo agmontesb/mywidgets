@@ -7,19 +7,29 @@
 import importlib
 import tkinter as tk
 import xml.etree.ElementTree as ET
-from typing import Callable, Sequence, Mapping, Any, MutableMapping, Iterable, Tuple, Literal
+from typing import Callable, Sequence, Any, MutableMapping, Iterable, Tuple, Literal, TypeAlias, Optional
 from typing_extensions import Protocol, runtime_checkable
 from types import ModuleType
 
-from equations import equations_manager
-import cbwidgetstate
+from .equations import equations_manager
+from . import cbwidgetstate
+
 
 
 @runtime_checkable
 class TreeLike(Iterable['TreeLike'], Protocol):
     tag: str
-    attrib: MutableMapping[str, str]
+    attrib: dict[str, Optional[str]]
 
+    def get(self, item: str, default: Optional[str] = None) -> Optional[str]:
+        return self.attrib.get(item, default)
+
+    def findall(self, name: str) -> Iterable['TreeLike']:
+        ...
+
+
+RegWidgetCb: TypeAlias = Optional[Callable[[tk.Tk | tk.Widget, TreeLike, tk.Widget], Any]]
+GeoManager_Type = Literal['grid', 'place', 'pack']
 
 pack_params = ["after", "anchor", "before", "expand", "fill", "in", "ipadx", "ipady", "padx", "pady", "side"]
 grid_params = ["column", "columnspan", "in", "ipadx", "ipady", "padx", "pady", "row", "rowspan", "sticky"]
@@ -34,7 +44,7 @@ def getLayout(layoutfile: str) -> ET.Element:
     return ET.XML(xmlstr)
 
 
-def findGeometricManager(tag: Literal['grid', 'place', 'pack']) -> Sequence[str]:
+def findGeometricManager(tag: GeoManager_Type) -> list[str]:
     if tag == 'grid':
         return grid_params
     if tag == 'place':
@@ -90,9 +100,9 @@ def getWidgetInstance(master: tk.Tk | tk.Widget,
 
 
 def widgetFactory(master: tk.Tk | tk.Widget,
-                  selPane: ET.Element,
+                  selPane: TreeLike,
                   panelModule: list[Tuple[int, ModuleType]] | None = None,
-                  registerWidget: Callable[[tk.Tk | tk.Widget, ET.Element, tk.Widget], Any] | None = None,
+                  registerWidget: RegWidgetCb = None,
                   setParentTo: Literal['master', 'category', 'root'] = 'master',
                   k: int = -1) -> int:
     '''
@@ -117,19 +127,21 @@ def widgetFactory(master: tk.Tk | tk.Widget,
     if selPane.get('lib'):
         # El contenedor declara que sus widgets están definidos en "lib" por lo cual se agrega
         # al camino de definiciones de los widgets.
-        module_path = selPane.get('lib', '')
+        module_path = 'src.' + selPane.get('lib', '')
+        assert module_path is not None
         module = importlib.import_module(module_path, __package__)
         panelModule.append((kini, module))
     elif not panelModule:
         # Nos aseguramos que tkinter es la librería por defecto por lo cual lo agregamos
         # en la raiz del camino de búsqueda de los widgets.
         panelModule.append((kini, tk))
-    geometric_manager = selPane.get('geomanager', 'pack')
+    geometric_manager: GeoManager_Type = selPane.get('geomanager', 'pack')
+    assert geometric_manager in ['grid', 'place', 'pack']
     for xmlwidget in selPane:
         k += 1
         has_children = bool(len(list(xmlwidget)))
         is_widget = xmlwidget.tag != 'var'
-        options = dict.copy(xmlwidget.attrib)
+        options: dict[str, Optional[str]] = dict.copy(xmlwidget.attrib)
         # Se asigna como id del widget el último segmento del id definido.
         name_default = options.get('id', '').rsplit('/')[-1] or str(k)
         options.setdefault('name', name_default)    # Se asigna el consecutivo como nombre del widget.
@@ -221,15 +233,16 @@ def widgetFactory(master: tk.Tk | tk.Widget,
 
 
 def newPanelFactory(master: tk.Tk | tk.Widget,
-                    selpane: ET.Element,
+                    selpane: TreeLike,
                     genPanelModule: list[Tuple[int, ModuleType]] | None = None,
-                    registerWidget: Callable | None = None) -> int:
+                    setParentTo: Literal['master', 'category', 'root'] = 'master',
+                    registerWidget: RegWidgetCb = None) -> int:
     '''
     Crea la jerarquia de widgets que conforman una tkinter form.
-    :param registerWidget:
     :param master:      tkinter Form. Padre de la Form a generar.
     :param selpane:     element tree nade. Nodo raiz definido por el archivo de layout.
     :param genPanelModule: modulo. Define los widgets definidos por el usuario.
+    :param setParentTo:       str. One of ['master', 'category', 'root'].
     :param registerWidget: callable. Callback function para registrar los widgets creados.
     :return:            2 members tuple. Posición 0: Valor consecutivo del últimmo widget agregado.
                         Posición 1: Lista de tuples que muestra el id del widget y
@@ -240,7 +253,7 @@ def newPanelFactory(master: tk.Tk | tk.Widget,
     n = -1
     if len(categories) <= 1:
         try:
-            selpane = categories[0]     # Case cateegories = [category]
+            selpane = categories[0]     # Case categories = [category]
         except IndexError:
             pass
         n = widgetFactory(
@@ -248,6 +261,7 @@ def newPanelFactory(master: tk.Tk | tk.Widget,
             selpane,
             panelModule=genPanelModule,
             registerWidget=registerWidget,
+            setParentTo=setParentTo,
             k=n
         )
     else:
@@ -282,6 +296,7 @@ def newPanelFactory(master: tk.Tk | tk.Widget,
                 selPane,
                 panelModule=genPanelModule,
                 registerWidget=registerWidget,
+                setParentTo=setParentTo,
                 k=n)
     return n
 

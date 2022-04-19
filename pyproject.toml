@@ -1,0 +1,26 @@
+[tool.poetry]
+name = "mywidgets"
+version = "0.1.0"
+description = "Conjunto de herramientas para el desarrollo de aplicaciones en python"
+authors = ["agmontesb <agmontesb@gmail.com>"]
+license = "MIT"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+Pillow = "^9.1.0"
+
+[tool.poetry.dev-dependencies]
+jupyter = "^1.0.0"
+pytest = "^7.1.1"
+mypy = "^0.942"
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = "-ra"          # -ra = report all, -q = decrease verbosity
+testpaths = [
+    "tests",
+]
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"

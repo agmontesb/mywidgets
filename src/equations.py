@@ -3,7 +3,7 @@ import re
 import tkinter as tk
 import functools
 
-import tokenizer
+from . import tokenizer
 
 SCANNER = re.compile(r'''
 (?P<FUNCTION>(?:

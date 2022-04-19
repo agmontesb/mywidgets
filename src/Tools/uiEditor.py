@@ -4,11 +4,11 @@ import tkinter.messagebox as tkMessageBox
 import tkinter.filedialog as tkFileDialog
 import xml.etree.ElementTree as ET
 
-from Widgets.Custom import CollapsingFrame, SintaxEditor
-from userinterface import getWidgetInstance, widgetFactory, findGeometricManager
-from Widgets.kodiwidgets import formFrameGen, CustomDialog
-from Tools.WidgetsExplorer import WidgetExplorer
-from equations import equations_manager
+from src.Widgets.Custom import SintaxEditor, CollapsingFrame
+from src.userinterface import getWidgetInstance, widgetFactory, findGeometricManager
+from src.Widgets.kodiwidgets import formFrameGen, CustomDialog
+from src.Tools.WidgetsExplorer import WidgetExplorer
+from src.equations import equations_manager
 
 # Este es una especie de administrador de recursos que quiero implementar
 R = type('Erre', (object,), {})
@@ -305,7 +305,7 @@ class UIeditor(tk.Toplevel):
         self.__openFile(name=default_name)
 
     def programSettingDialog(self):
-        file_name = '/mnt/c/Users/Alex Montes/PycharmProjects/mywidgets/Data/kodi/uiEditorSettings.xml'
+        file_name = '/Data/kodi/uiEditorSettings.xml'
         settingObj = CustomDialog(self, title='Application Settings', xmlFile=file_name, isFile=True, settings={})
         all_settings = settingObj.allSettings
         if all_settings:

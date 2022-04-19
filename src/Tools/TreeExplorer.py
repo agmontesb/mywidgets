@@ -557,7 +557,7 @@ class TreeForm(FilteredTree):
                 self.insertTreeElem(dirname, addonzipfile, 'file', False, fileSource, refreshFlag=True)
             pass
         elif addonresource == 'addondir':
-            addondir = tkFileDialog.askdirectory(title='Addon Directory', initialdir=os.path.abspath('.'),
+            addondir = tkFileDialog.askdirectory(title='Addon Directory', initialdir=os.path.abspath(''),
                                                  mustexist=True)
             if not addondir: return
             addonxmlfile = os.path.join(addondir, 'addon.xml')
