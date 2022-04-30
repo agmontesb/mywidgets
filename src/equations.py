@@ -3,7 +3,7 @@ import re
 import tkinter as tk
 import functools
 
-from . import tokenizer
+import tokenizer
 
 SCANNER = re.compile(r'''
 (?P<FUNCTION>(?:
@@ -203,8 +203,12 @@ class Equations:
         # Se inhabilita la ejecución de los trace-write functions
         self.enable_callbacks = False
         for var_name in self.independent_vars:
+            var = self.state_equations[var_name]
             var_value = self.var_values[var_name]
-            self.state_equations[var_name].set(var_value)
+            if var._default != var_value:
+                self.var_values[var_name] = var.get()
+            else:
+                var.set(var_value)
         # # Se habilita la ejecución de los trace-write functions
         self.enable_callbacks = True
 

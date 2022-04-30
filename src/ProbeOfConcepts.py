@@ -2,11 +2,13 @@
 import collections
 import os
 import tkinter as tk
+import tkinter.messagebox as tkMessage
 import tkinter.ttk as ttk
 import xml.etree.ElementTree as ET
 
-from userinterface import newPanelFactory, getWidgetInstance
-from src.Widgets import formFrame
+import userinterface
+from userinterface import newPanelFactory, getWidgetInstance, menuFactory
+from Widgets.kodiwidgets import formFrame
 from equations import equations_manager
 
 
@@ -145,8 +147,44 @@ def nameElements(htmlstr, k=-1):
 
 
 if __name__ == '__main__':
-    caso = 'test_css'
-    if caso == 'test_css':
+    caso = 'test_newPaneFactory'
+    if caso == 'menu_factory':
+        class TopClass(tk.Tk):
+            def __init__(self):
+                super().__init__()
+                self.event_add('<<MENUCLICK>>', 'None')
+                self.bind_all('<<MENUCLICK>>', self.on_menuclick)
+                # file_path = 'src/Data/menu/file_menu.xml'
+                # selpane = userinterface.getLayout(file_path)
+                # menuBar = menuFactory(self, selpane)
+                # menuBar.config(title=os.path.basename(os.path.splitext(file_path)[0]))
+                # self['menu'] = menuBar
+                self.setGui()
+                self.attributes('-zoomed', True)
+                pass
+
+            def setGui(self):
+                file_path = 'Data/tkinter/tkUiEditor.xml'
+                xmlObj = userinterface.getLayout(file_path)
+                settings = {}
+                fframe = formFrame(master=self, settings=settings, selPane=xmlObj)
+                equations_manager.set_initial_widget_states()
+                fframe.pack(side=tk.TOP, fill=tk.BOTH, expand=tk.YES, anchor=tk.NE)
+
+            def callback1(self):
+                msg = 'Hello from callback1'
+                print(msg)
+                tkMessage.showinfo(title='callback1', message=msg)
+
+            def on_menuclick(self, event):
+                menu_master, indx = event.widget, event.data
+                msg = f'MENUCLICK fire. Menu: {menu_master.cget("title")}, Menu_item:{menu_master.entrycget(indx, "label")}'
+                print(msg)
+                tkMessage.showinfo(title='on_menuclick', message=msg)
+
+        top = TopClass()
+        top.mainloop()
+    elif caso == 'test_css':
         top = tk.Tk()
         file_path = 'Data/tkinter/tkUiEditor.xml'
         file_path = 'Data/tkinter/tkGeometricManagers.xml'
@@ -230,10 +268,10 @@ if __name__ == '__main__':
             file_path = 'Data/kodi/MultiCategoryExample.xml'
             file_path = 'Data/mixing/mxShowcase.xml'
             file_path = 'Data/tkinter/tkUiEditor.xml'
-            xmlObj = getLayout(file_path)
+            xmlObj = userinterface.getLayout(file_path)
             settings = {}
             fframe = formFrame(master=top, settings=settings, selPane=xmlObj)
-            dummy = fframe
+            equations_manager.set_initial_widget_states()
             fframe.pack(side=tk.TOP, fill=tk.BOTH, expand=tk.YES, anchor=tk.NE)
             pass
         elif caso == 'widgetFactory':
@@ -256,4 +294,5 @@ if __name__ == '__main__':
 
 
             Example(fframe).pack(fill="both", expand=True)
-            top.mainloop()
+        top.attributes('-zoomed', True)
+        top.mainloop()

@@ -16,8 +16,7 @@ import importlib
 import fnmatch
 import operator
 
-from src.userinterface import newPanelFactory
-from src.equations import equations_manager
+from equations import equations_manager
 
 
 def getWidgetClass(widgetName):
@@ -65,8 +64,8 @@ class baseWidget(tk.Frame, object):
                         de los cuales acepta "id", "name", "varType"
         '''
         wdgName = options.get('name', '').lower()
-        self._id = options.pop('id', wdgName)       # Atributo _id = 'id' propio.
         self.id = options.get('id').lower() if options.get('id') else None # Atributo id definido por el usuario
+        self._id = options.pop('id', wdgName)       # Atributo _id = 'id' propio.
 
         varType = options.pop('varType', None)
         self.value = None
@@ -964,6 +963,8 @@ class FormFrame(tk.Frame):
                             por el usuario.
         :return: None.
         '''
+        from userinterface import newPanelFactory
+
         # En este punto se debe incluir la lógica para la visibleEc
         newPanelFactory(self, selPane, genPanelModule=formModule, registerWidget=self.regWidget)
         self.nameToId = {value.rsplit('.', 1)[-1]: key for key, value in self.widgetMapping.items()}
@@ -1085,7 +1086,6 @@ def formFrameGen(master, filename=None, selPane=None, settings=None):
     :param settings: dict. Valores diferentes a default para las variables de la forma.
     :return: formFrame or object define in user library.
     '''
-    libname_root = 'src.'
     if not any((filename, selPane)):
         raise AttributeError('You must specify filename or selPane')
     if filename:
@@ -1098,7 +1098,7 @@ def formFrameGen(master, filename=None, selPane=None, settings=None):
     formclass = formFrame
     formModule = None
     if selPane.get('lib'):
-        libname = libname_root + selPane.get('lib')
+        libname = selPane.get('lib')
         try:
             parentname = re.match(r'(\.0x[0-9a-f]+)\.?', str(master))
             baseframe = master.nametowidget(parentname.group(1))

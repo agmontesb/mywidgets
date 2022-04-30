@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<menu label="master">
+    <cascade label="File" tearoff="false">
+        <command label="New" accelerator="Ctrl+N" command="newFile" />
+        <command label="Open" accelerator="Ctrl+O" command="openFile" />
+        <command label="Save" accelerator="Ctrl+S" command="saveFile"/>
+        <command label="Save as" command="saveAsFile"/>
+        <separator />
+        <command label="Settings" accelerator="Ctrl+Alt+S" command="programSettingDialog"/>
+        <command label="Close" accelerator="Alt+Q" command="destroy"/>
+    </cascade>
+    <cascade label="Submenu" tearoff="false">
+        <checkbutton label="uno" />
+        <checkbutton label="dos" />
+        <separator />
+        <radiobutton label="tres" />
+        <radiobutton label="cuatro" />
+    </cascade>
+    <cascade label="Get" tearoff="false" />
+    <cascade label="Set" tearoff="false" />
+    <cascade label="View" tearoff="false" />
+    <cascade label="Knoth" tearoff="false" />
+    <cascade label="Coding" tearoff="false" />
+    <cascade label="Tools" tearoff="false" />
+</menu>
+

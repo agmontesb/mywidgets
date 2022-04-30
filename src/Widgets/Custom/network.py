@@ -5,23 +5,20 @@ Created on 4/12/2015
 
 @author: Alex Montes Barrios
 '''
+import gzip
+import http.client
+import http.cookiejar
+import io
+import json
+import mimetypes
+import optparse
 import os
 import re
-import urllib.request, urllib.parse, urllib.error
-import urllib.request, urllib.error, urllib.parse
-import http.client
-import urllib.parse
 import socket
-import http.cookiejar
-import operator
-import io
-# import mimetools
-import mimetypes
 import tkinter.simpledialog as tkSimpleDialog
-import optparse
-import json
-
-import gzip
+import urllib.error
+import urllib.parse
+import urllib.request
 
 MOBILE_BROWSER = "Mozilla/5.0 (Linux; U; Android 4.0.3; ko-kr; LG-L160L Build/IML74K) AppleWebkit/534.30 (KHTML, like Gecko) Version/4.0 Mobile Safari/534.30"
 DESKTOP_BROWSER = "Mozilla/5.0 (Windows NT 6.0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/47.0.2526.80 Safari/537.36"
@@ -548,8 +545,6 @@ def unCompressMethods(data, compMethod):
 
 
 if __name__ == '__main__':
-    import CustomRegEx
-
     initConf = 'curl --user-agent "Mozilla/5.0 (Windows NT 6.0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/47.0.2526.80 Safari/537.36" --cookie-jar "cookies.lwp" --location'
     net = network(initConf, defDirectory='c:/testFiles')
     print()

@@ -5,15 +5,22 @@
 
 
 import importlib
+import os.path
 import tkinter as tk
 import xml.etree.ElementTree as ET
 from typing import Callable, Sequence, Any, MutableMapping, Iterable, Tuple, Literal, TypeAlias, Optional
 from typing_extensions import Protocol, runtime_checkable
 from types import ModuleType
+import urllib.request
+import urllib.parse
+import functools
 
-from .equations import equations_manager
-from . import cbwidgetstate
+from Widgets import specialwidgets
+from Widgets.Custom.network import network
+from equations import equations_manager
+import cbwidgetstate
 
+MODULE_STACK = [(-1, tk), (-1, specialwidgets)]
 
 
 @runtime_checkable
@@ -37,11 +44,15 @@ place_params = ["anchor", "bordermode", "height", "in", "relheight", "relwidth",
 
 
 def getLayout(layoutfile: str) -> ET.Element:
-    # restype = directory_indx('layout')
-    # layoutfile = self._unpack_pointer(id, restype)
-    with open(layoutfile, 'rb') as f:
-        xmlstr = f.read()
-    return ET.XML(xmlstr)
+    if not urllib.parse.urlparse(layoutfile).scheme:
+        basepath = os.path.dirname(__file__)
+        layoutpath = os.path.join(basepath, layoutfile)
+        layoutfile = os.path.abspath(layoutpath)
+        layoutfile = f'file://{urllib.request.pathname2url(layoutfile)}'
+    initConf = 'curl --user-agent "Mozilla/5.0 (Windows NT 6.0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/47.0.2526.80 Safari/537.36" --cookie-jar "cookies.lwp" --location'
+    net = network(initConf)
+    content, _ = net.openUrl(layoutfile)
+    return ET.XML(content)
 
 
 def findGeometricManager(tag: GeoManager_Type) -> list[str]:
@@ -65,19 +76,9 @@ def getWidgetInstance(master: tk.Tk | tk.Widget,
     :return: widget.
     '''
 
-    # Tratamiento de las variables
-    if widgetname == 'var':
-        _type = attributes.pop('type', 'string')
-        var_type = f"{_type.title()}Var"
-        parent = equations_manager.default_root()
-
-        tk_var = getattr(tk, var_type)(master=parent, **attributes)
-        equations_manager.state_equations[(var_name := str(tk_var))] = tk_var
-        equations_manager.var_values[var_name] = tk_var.get()
-        return tk_var
     # Si no se tiene panelModule se asume que es tkinter
     # panelModule = panelModule or tk
-    panelModule = panelModule or [(-1, tk)]
+    panelModule = panelModule or MODULE_STACK
     for indx in range(len(panelModule) - 1, -1, -1):
         _, module = panelModule[indx]
         getWdgClass = getattr(module, 'getWidgetClass', lambda x: getattr(module, x, None))
@@ -90,10 +91,6 @@ def getWidgetInstance(master: tk.Tk | tk.Widget,
         # ERROR: No se encontró definición del widget
         raise AttributeError(f'{widgetname} is not a tkinter widget or a user defined class. ')
 
-    # En este punto se tiene un parche para no romper con los Kodiwidgets que utilizan
-    # el attributo 'id' y que desactivan algunas características dependiendo si tienen id o no.
-    if module.__name__ == 'Widgets.kodiwidgets':
-        attributes.pop('id', None)
     widget = widgetClass(master, **attributes)
 
     return widget
@@ -122,19 +119,15 @@ def widgetFactory(master: tk.Tk | tk.Widget,
                         Posición 1: Lista de tuples que muestra el id del widget y
                         la ecuación que activa (enable) el widget.
     '''
-    panelModule = panelModule or []
     kini = k
+    panelModule = panelModule or [(kini, m) for _, m in MODULE_STACK]
     if selPane.get('lib'):
         # El contenedor declara que sus widgets están definidos en "lib" por lo cual se agrega
         # al camino de definiciones de los widgets.
-        module_path = 'src.' + selPane.get('lib', '')
+        module_path = selPane.get('lib', '')
         assert module_path is not None
         module = importlib.import_module(module_path, __package__)
         panelModule.append((kini, module))
-    elif not panelModule:
-        # Nos aseguramos que tkinter es la librería por defecto por lo cual lo agregamos
-        # en la raiz del camino de búsqueda de los widgets.
-        panelModule.append((kini, tk))
     geometric_manager: GeoManager_Type = selPane.get('geomanager', 'pack')
     assert geometric_manager in ['grid', 'place', 'pack']
     for xmlwidget in selPane:
@@ -185,23 +178,6 @@ def widgetFactory(master: tk.Tk | tk.Widget,
             parent_name = geomngr_opt.pop('in').lstrip('.')
             parent_path = dummy.winfo_parent()
             geomngr_opt['in_'] = '.'.join((parent_path, parent_name))
-
-            # if setParentTo:
-            #     parent_path = dummy.winfo_parent()
-            # else:
-            #     # Se hace necesario hacer esto porque es posible que se despliegue el widget en
-            #     # un contenedor con el que comparte el padre en algún punto.
-            #     parent_path = None
-            #     items = dummy.parent.winfo_children()
-            #     while items:
-            #         item = items.pop(0)
-            #         if item.winfo_name() == parent_name:
-            #             parent_path = str(item)
-            #             break
-            #         items.extend(item.winfo_children())
-            #     if parent_path is None:
-            #         raise Exception(f"Can't pack {dummy.winfo_name()} inside {parent_name}")
-            # geomngr_opt['in_'] = '.'.join((parent_path, parent_name))
 
         if is_widget and 'visible' not in states_eq:
             getattr(dummy, geometric_manager)(**geomngr_opt)
@@ -300,3 +276,45 @@ def newPanelFactory(master: tk.Tk | tk.Widget,
                 k=n)
     return n
 
+def menuFactory(
+        parent: tk.Tk | tk.Widget,
+        selPane: TreeLike,
+        menu_map: dict[str, tk.Menu] = None, ) -> tk.Menu:
+    def menu_closure(widget=parent, data=None):
+        def menu_cb():
+            tk.Event.data = data
+            widget.event_generate('<<MENUCLICK>>')
+        return menu_cb
+    master = parent.winfo_toplevel()
+    menu_map = menu_map or {}
+    options = selPane.attrib.copy()
+    label = options.pop('label')
+    options['title'] = label
+    menu_map[label] = menu_master = tk.Menu(parent, **options)
+    for k, item in enumerate(selPane):
+        menu_type = item.tag
+        options = item.attrib.copy()
+        if menu_type not in ['separator', 'cascade']:
+            try:
+                command = options['command']
+                cb = getattr(master, command)
+            except (AttributeError, KeyError):
+                cb = menu_closure(widget=menu_master, data=k)
+            options['command'] = cb
+            if 'accelerator' in options:
+                accelerator = options['accelerator'].lower()
+                accelerator = accelerator.replace('+', '-')
+                try:
+                    modifiers, key = accelerator.rsplit('-', 1)
+                    modifiers_map = [('ctrl', 'Control'), ('alt', 'Alt'), ('shift', 'Shift')]
+                    modifiers = functools.reduce(lambda t, x: t.replace(x[0], x[1]), modifiers_map, modifiers)
+                    accelerator = f'{modifiers}-KeyPress-{key}'
+                except ValueError:
+                    accelerator = f'KeyPress-{accelerator}'
+                master.bind(f'<{accelerator}>', lambda x, y=cb: y())
+        elif menu_type == 'cascade':
+            menu_wdg = menuFactory(master, item, menu_map)
+            options['menu'] = menu_wdg
+            options.pop('tearoff', None)
+        menu_master.add(menu_type, **options)
+    return menu_master

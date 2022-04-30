@@ -3,13 +3,7 @@
     <category label="Category uno">
         <var type="string" name="view_sel" value="xml"/>
         <frame side="top" fill="x">
-            <menubutton text="File" name="file" side="left" />
-            <menubutton text="Get" name="get" side="left" />
-            <menubutton text="Set" name="set" side="left" />
-            <menubutton text="View" name="view" side="left" />
-            <menubutton text="Knoth" name="knoth" side="left" />
-            <menubutton text="Coding" name="coding" side="left" />
-            <menubutton text="Tools" name="tools" side="left" />
+            <menubar lib="Widgets.Custom" name="main_menu" src="Data/menu/file_menu.xml" side="left" />
             <frame side="right">
                 <label text="Views: " side="left" />
                 <radiobutton name="btn0" variable="view_sel" text="XML" value="xml" width="10" indicatoron="0" side="left"/>
@@ -17,11 +11,14 @@
             </frame>
         </frame>
         <frame side="top" fill="both" expand="yes">
-            <sintaxeditor lib="Widgets.Custom" hrzslider="true" vrtslider="true" visible="eq(view_sel, 'xml')" side="top" fill="both" expand="yes"/>
-            <collapsingframe lib="Widgets.Custom" orientation="vertical" inisplit="0.2" buttconf="RM" visible="eq(view_sel, 'ui')" side="top" fill="both" expand="yes">
-                <label text="Left panel" side="left" fill="both" expand="yes" in=".frstwidget"/>
-                <label text="Right panel" side="right" fill="both" expand="yes" in=".scndwidget"/>
-            </collapsingframe>
+            <sintaxeditor name="codeFrame" lib="Widgets.Custom" hrzslider="true" vrtslider="true" visible="eq(view_sel, 'xml')" side="top" fill="both" expand="yes"/>
+            <frame visible="eq(view_sel, 'ui')" side="top" fill="both" expand="yes">
+                <form name="widgetParams" src="Data/kodi/WidgetParams.xml" side="right" fill="y" anchor="e" />
+                <collapsingframe lib="Widgets.Custom" orientation="vertical" inisplit="0.2" buttconf="RM" side="top" fill="both" expand="yes">
+                    <widgetexplorer name="treeview" lib="Widgets.Custom" side="top" fill="both" expand="yes" in=".frstwidget"/>
+                    <frame name="parent_frame" fill="both" expand="yes" in=".scndwidget"/>
+                </collapsingframe>
+            </frame>
         </frame>
     </category>
 </settings>
