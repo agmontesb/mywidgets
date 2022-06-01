@@ -8,12 +8,14 @@ import importlib
 import os.path
 import tkinter as tk
 import xml.etree.ElementTree as ET
-from typing import Callable, Sequence, Any, MutableMapping, Iterable, Tuple, Literal, TypeAlias, Optional
-from typing_extensions import Protocol, runtime_checkable
-from types import ModuleType
 import urllib.request
 import urllib.parse
 import functools
+from contextlib import contextmanager
+from typing import Callable, Sequence, Any, MutableMapping, Iterable, Tuple, Literal, TypeAlias, Optional
+from typing_extensions import Protocol, runtime_checkable
+from types import ModuleType
+
 
 from Widgets import specialwidgets
 from Widgets.Custom.network import network
@@ -41,6 +43,21 @@ GeoManager_Type = Literal['grid', 'place', 'pack']
 pack_params = ["after", "anchor", "before", "expand", "fill", "in", "ipadx", "ipady", "padx", "pady", "side"]
 grid_params = ["column", "columnspan", "in", "ipadx", "ipady", "padx", "pady", "row", "rowspan", "sticky"]
 place_params = ["anchor", "bordermode", "height", "in", "relheight", "relwidth", "relx", "rely", "width", "x", "y"]
+
+# Este context manager se puede utilizar cuando se quiere adjuntar datos en la emision de un evento:
+#   with event_data as event:
+#       event.data = 'este es el mensaje'
+#       widget.event_generate('<<el_evento_name>>')
+#
+@contextmanager
+def event_data(attr_name=None):
+    attr_name = attr_name or 'data'
+    event = tk.Event
+    setattr(event, attr_name, None)
+    try:
+        yield event
+    finally:
+        delattr(event, attr_name)
 
 
 def getLayout(layoutfile: str) -> ET.Element:
@@ -82,7 +99,8 @@ def getWidgetInstance(master: tk.Tk | tk.Widget,
     for indx in range(len(panelModule) - 1, -1, -1):
         _, module = panelModule[indx]
         getWdgClass = getattr(module, 'getWidgetClass', lambda x: getattr(module, x, None))
-        widgetname = widgetname if module.__name__ != 'tkinter' else (widgetname.title() if widgetname != 'labelframe' else 'LabelFrame')
+        widgetname = widgetname if module.__name__ != 'tkinter' else (
+            widgetname.title() if widgetname != 'labelframe' else 'LabelFrame')
         widgetClass = getWdgClass(widgetname)
         if widgetClass:
             break
@@ -137,7 +155,7 @@ def widgetFactory(master: tk.Tk | tk.Widget,
         options: dict[str, Optional[str]] = dict.copy(xmlwidget.attrib)
         # Se asigna como id del widget el último segmento del id definido.
         name_default = options.get('id', '').rsplit('/')[-1] or str(k)
-        options.setdefault('name', name_default)    # Se asigna el consecutivo como nombre del widget.
+        options.setdefault('name', name_default)  # Se asigna el consecutivo como nombre del widget.
 
         parent = master
         bparent = is_widget and ((setParentTo == 'category' and selPane.tag != 'category') or setParentTo == 'root')
@@ -174,10 +192,17 @@ def widgetFactory(master: tk.Tk | tk.Widget,
         if bflag:
             panelModule.pop()
 
-        if 'in' in geomngr_opt and isinstance(geomngr_opt['in'], (bytes, str)):
-            parent_name = geomngr_opt.pop('in').lstrip('.')
-            parent_path = dummy.winfo_parent()
-            geomngr_opt['in_'] = '.'.join((parent_path, parent_name))
+        # if 'in' in geomngr_opt and isinstance(geomngr_opt['in'], (bytes, str)):
+        ref_labels = geomngr_opt.keys() & ('in', 'before', 'after')
+        if ref_labels:
+            for ref_label in ref_labels:
+                if not isinstance(geomngr_opt[ref_label], (bytes, str)):
+                    continue
+                parent_name = geomngr_opt.pop(ref_label).lstrip('.')
+                parent_path = dummy.winfo_parent()
+                geomngr_opt[ref_label] = '.'.join((parent_path, parent_name))
+            if 'in' in ref_labels:
+                geomngr_opt['in_'] = geomngr_opt.pop('in')
 
         if is_widget and 'visible' not in states_eq:
             getattr(dummy, geometric_manager)(**geomngr_opt)
@@ -229,7 +254,7 @@ def newPanelFactory(master: tk.Tk | tk.Widget,
     n = -1
     if len(categories) <= 1:
         try:
-            selpane = categories[0]     # Case categories = [category]
+            selpane = categories[0]  # Case categories = [category]
         except IndexError:
             pass
         n = widgetFactory(
@@ -246,6 +271,7 @@ def newPanelFactory(master: tk.Tk | tk.Widget,
                 pane.pack_forget()
             panels[id].pack(side=tk.LEFT, fill=tk.BOTH, expand=tk.YES)
             pass
+
         paneArray = []
         leftPane = tk.Frame(master, relief=tk.RIDGE, bd=5, bg='white', padx=3, pady=3)
         leftPane.pack(side=tk.LEFT, fill=tk.Y)
@@ -260,10 +286,10 @@ def newPanelFactory(master: tk.Tk | tk.Widget,
             boton.pack(side=tk.TOP, fill=tk.X)
             frstboton = frstboton or boton
             pane = tk.Frame(master, relief=tk.RIDGE, bd=5, bg='white', padx=3, pady=3)
-            pane.form = master      # type: ignore
+            pane.form = master  # type: ignore
             paneArray.append(pane)
         for child in leftPane.winfo_children():
-            child.config(command=lambda x=child['value'], y=tuple(paneArray): selectPane(x, y)) # type: ignore
+            child.config(command=lambda x=child['value'], y=tuple(paneArray): selectPane(x, y))  # type: ignore
         assert isinstance(frstboton, tk.Radiobutton)
         frstboton.invoke()
         for root, selPane in zip(paneArray, categories):
@@ -276,21 +302,25 @@ def newPanelFactory(master: tk.Tk | tk.Widget,
                 k=n)
     return n
 
+
 def menuFactory(
         parent: tk.Tk | tk.Widget,
         selPane: TreeLike,
-        menu_map: dict[str, tk.Menu] = None, ) -> tk.Menu:
-    def menu_closure(widget=parent, data=None):
+        menu_map: dict[str, tk.Menu] = None,
+        registerMenu: RegWidgetCb = None) -> tk.Menu:
+    def menu_closure(widget, data=None):
         def menu_cb():
-            tk.Event.data = data
-            widget.event_generate('<<MENUCLICK>>')
+            with event_data() as event:
+                event.data = data
+                widget.event_generate('<<MENUCLICK>>')
         return menu_cb
+
     master = parent.winfo_toplevel()
     menu_map = menu_map or {}
     options = selPane.attrib.copy()
     label = options.pop('label')
     options['title'] = label
-    menu_map[label] = menu_master = tk.Menu(parent, **options)
+    menu_map[label] = menu_master = tk.Menu(parent, name=label.lower(), **options)
     for k, item in enumerate(selPane):
         menu_type = item.tag
         options = item.attrib.copy()
@@ -313,8 +343,12 @@ def menuFactory(
                     accelerator = f'KeyPress-{accelerator}'
                 master.bind(f'<{accelerator}>', lambda x, y=cb: y())
         elif menu_type == 'cascade':
-            menu_wdg = menuFactory(master, item, menu_map)
+            menu_wdg = menuFactory(master, item, menu_map, registerMenu)
             options['menu'] = menu_wdg
             options.pop('tearoff', None)
         menu_master.add(menu_type, **options)
+    try:
+        registerMenu(parent, selPane, menu_master)
+    except:
+        pass
     return menu_master

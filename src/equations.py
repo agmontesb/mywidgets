@@ -4,6 +4,7 @@ import tkinter as tk
 import functools
 
 import tokenizer
+import userinterface
 
 SCANNER = re.compile(r'''
 (?P<FUNCTION>(?:
@@ -256,6 +257,9 @@ class Equations:
             return
         default_root = equations_manager.default_root()
         value = default_root.getvar(var_name)
+        with userinterface.event_data('attr_data') as event:
+            event.attr_data = var_name, value
+            default_root.event_generate('<<VAR_CHANGE>>')
         try:
             self.var_values[var_name] = eval(value)
         except:

@@ -19,11 +19,6 @@ class UiEditor(tk.Tk):
         super().__init__()
         self.event_add('<<MENUCLICK>>', 'None')
         self.bind_all('<<MENUCLICK>>', self.on_menuclick)
-        # file_path = 'src/Data/menu/file_menu.xml'
-        # selpane = userinterface.getLayout(file_path)
-        # menuBar = menuFactory(self, selpane)
-        # menuBar.config(title=os.path.basename(os.path.splitext(file_path)[0]))
-        # self['menu'] = menuBar
 
         self.currentFile = ''
         self.fileHistory = []
@@ -83,7 +78,7 @@ class UiEditor(tk.Tk):
         insert_indx = self.file_menu.index(tk.END) - 2
         self.file_menu.config(postcommand=lambda x=insert_indx: fileHist(x))
 
-    def register_widget(self,master, xmlwidget, widget):
+    def register_widget(self, master, xmlwidget, widget):
         attribs = xmlwidget.attrib
         name = attribs.get('name')
         if name:

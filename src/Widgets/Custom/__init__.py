@@ -4,6 +4,7 @@ from . import SintaxEditor
 from . import CollapsingFrame
 from . import WidgetsExplorer
 from . import MenuBar
+from . import navigationbar
 
 
 def getWidgetClass(widgetName):
@@ -12,5 +13,6 @@ def getWidgetClass(widgetName):
         collapsingframe=CollapsingFrame.collapsingFrame,
         widgetexplorer=WidgetsExplorer.WidgetExplorer,
         menubar=MenuBar.MenuBar,
+        navigationbar=navigationbar.navigationFactory,
     )
     return widgetTypes.get(widgetName, None)

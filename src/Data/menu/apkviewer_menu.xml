@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<menu label="master" tearoff="false">
+    <command label="Open" accelerator="Ctrl+O" command="openFile" />
+    <!-- File -->
+    <cascade label="V" tearoff="false">
+        <command label="Settings" accelerator="Ctrl+Alt+S" />
+        <command label="Close" accelerator="Alt+Q" command="destroy"/>
+    </cascade>
+    <cascade label="Submenu" tearoff="false">
+        <checkbutton label="uno" />
+        <checkbutton label="dos" />
+        <separator />
+        <radiobutton label="tres" />
+        <radiobutton label="cuatro" />
+    </cascade>
+</menu>
+

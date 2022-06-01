@@ -1,6 +1,6 @@
 import tkinter as tk
 
-from . import ImageProcessor as imgp
+from Widgets.Custom import ImageProcessor as imgp
 
 
 BAND_WIDTH = 18
@@ -53,6 +53,22 @@ class collapsingFrame(tk.Frame):
         boton = getattr(self, 'b' + str(nButt))
         btTxt = boton.cget('text')
         self.comButton(btTxt)
+
+    def hide_band(self, side):
+        if side.lower() in ('left', 'top'):
+            self.frstWidget.place_forget()
+            self.band.place_forget()
+            for k in range(len(self.buttConf) - 1):
+                widget = getattr(self, 'b' + str(k + 1))
+                widget.place_forget()
+            self.scndWidget.place(**self.trn(rely=0, y=0, relheight=1.0, relwidth=1.0))
+        else:   # side.lower() in ('right', 'bottom')
+            self.scndWidget.place_forget()
+            self.band.place_forget()
+            self.frstWidget.place(**self.trn(rely=0, relheight=1, relwidth=1.0))
+
+    def show_band(self):
+        self.wdef()
 
     def setWidgetLayout(self, btnTxt):
         if btnTxt == 'M': return self.wmax()
@@ -371,11 +387,25 @@ if __name__ == '__main__':
         labels[pane - 1].pack(side=tk.TOP, fill=tk.BOTH, expand=tk.YES)
         leftPane = pane
     root = tk.Tk()
-    lbl = tk.Label(root, text='BAR', bg='red')
-    lbl.pack(side=tk.RIGHT, fill=tk.Y)
+
+    def hide_show(*args, **kwargs):
+        if bVar.get():
+            motherFrame.show_band()
+        else:
+            motherFrame.hide_band('left')
+    bVar = tk.BooleanVar()
+    bVar.set(True)
+    bVar.trace_add('write', hide_show)
+    btn1 = tk.Checkbutton(
+        root, text='H\ni\nd\ne', indicatoron=0, bg='red', variable=bVar
+    )
+    btn1.pack(side=tk.LEFT)
     motherFrame = collapsingFrame(root, tk.VERTICAL, inisplit=0.3, buttconf='RM')
     motherFrame.config(height=200, width=200)
     motherFrame.pack(side=tk.TOP, fill=tk.BOTH, expand=tk.YES)
+    btn = tk.Button(motherFrame.frstWidget, text='Show', bg='blue', command=lambda: btn1.deselect())
+    btn.pack(side=tk.TOP, anchor='ne')
+
     labels = []
     for k in range(5):
         label = tk.Label(motherFrame.frstWidget, text='Panel IZQUIERDO No. %s\nEl boton solo presenta o oculta el panel' % (k+1))
