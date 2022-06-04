@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes"?>
-<menu label="master">
+<menu label="master" tearoff="false">
     <cascade label="File" tearoff="false">
         <command label="New" accelerator="Ctrl+N" command="newFile" />
         <command label="Open" accelerator="Ctrl+O" command="openFile" />

@@ -85,8 +85,8 @@ class UiEditor(tk.Tk):
             if name in ('codeFrame', 'widgetParams', 'treeview', 'parent_frame'):
                 setattr(self, name, widget)
             elif name == 'main_menu':
-                file_menubutton = widget.children['file']
-                file_menu = widget.nametowidget(file_menubutton.cget('menu'))
+                menu_name = widget.children['master'].entrycget(0, 'menu')
+                file_menu = widget.nametowidget(menu_name)
                 setattr(self, 'file_menu', file_menu)
 
     def setActiveView(self, *args, **kwargs):

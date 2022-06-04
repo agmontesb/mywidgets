@@ -10,7 +10,7 @@ import userinterface
 
 MENU_WINDOW = 20
 DOWN_ARROW = 'ᐁ'  #     '▼'    # 'ᐯ'
-UP_ARROW = 'ᐃ'    #'▲'      # 'ᐱ'
+UP_ARROW = 'ᐃ'    #     '▲'    # 'ᐱ'
 
 ActivePath = collections.namedtuple('ActivePath', ('index', 'path', 'isDir'))
 
@@ -25,26 +25,30 @@ class RollingMenu:
 
         kw = cnf or kw
         self.postcommand = kw.pop('postcommand', None)
+        kw['postcommand'] = self.inner_postcommand
         kw.setdefault('tearoff', 0)
+        kw.setdefault('font', tkFont.Font(family='Consolas', size=10))
         self.popup_menu = tk.Menu(master=master, **kw)
         self.popup_menu.bind('<<MenuSelect>>', self.onMenuSelect)
 
     def tk_popup(self, x, y, entry=""):
-        try:
-            self.postcommand()
-        except:
-            pass
         self.popup_menu.focus_set()
-        active_index = self.active_index
-        linf = max(0, active_index - MENU_WINDOW // 2)
-        lsup = min(len(self.menu_list), active_index + MENU_WINDOW // 2 + MENU_WINDOW % 2)
-        self.loadMenuOptions(linf, lsup)
         try:
             self.popup_menu.tk_popup(x, y, entry=entry)
         except Exception as e:
             print(e)
         finally:
             self.popup_menu.grab_release()
+
+    def inner_postcommand(self):
+        try:
+            self.postcommand()
+        except:
+            pass
+        active_index = self.active_index
+        linf = max(0, active_index - MENU_WINDOW // 2)
+        lsup = min(len(self.menu_list), active_index + MENU_WINDOW // 2 + MENU_WINDOW % 2) - 1
+        self.loadMenuOptions(linf, lsup)
 
     def activate(self, index):
         self.active_index = index
@@ -63,7 +67,10 @@ class RollingMenu:
         del self.menu_list[num_index1:num_index2]
 
     def entrycget(self, index, option):
-        return self.menu_list[index][1].get(option, None)
+        try:
+            return self.menu_list[index][1].get(option, None)
+        except:
+            pass
 
     def entryconfigure(self, index, cnf=None, **kw):
         kw = cnf or kw
@@ -75,7 +82,10 @@ class RollingMenu:
         if index == tk.END:
             return len(self.menu_list)
         if index == tk.ACTIVE:
-            return (self.popup_menu.index(tk.ACTIVE) or 0) + self.menu_offset
+            npos = (self.popup_menu.index(tk.ACTIVE) or 0) + self.menu_offset
+            if len(self.menu_list) > MENU_WINDOW:
+                npos -= 1
+            return npos
 
     def invoke(self, index):
         cb = self.menu_list[index][1].get('command', None)
@@ -104,44 +114,42 @@ class RollingMenu:
         # <<MenuSelect>> virtual event generado por el widget
         menu = event.widget
         ndx = menu.index(tk.ACTIVE)
-        print(f'{ndx=}')
-        if ndx == MENU_WINDOW + 1 or ndx == 0:
+        if len(self.menu_list) > MENU_WINDOW and ndx in (0, MENU_WINDOW + 1):
             self.after_idle(self.rollMenu)
         elif self.fidle is not None:
             self.after_cancel(self.fidle)
             self.fidle = None
 
     def loadMenuOptions(self, linf, lsup):
-        if lsup - linf < MENU_WINDOW:
+        if lsup - linf < MENU_WINDOW - 1:
             # Se rompe un límite
             if linf:
-                linf = lsup - MENU_WINDOW
+                linf = lsup - MENU_WINDOW + 1
             else:
-                lsup = linf + MENU_WINDOW
+                lsup = linf + MENU_WINDOW - 1
         self.menu_offset = linf
         self.popup_menu.delete(0, tk.END)
         [
             self.popup_menu.add(
                 x[0],
                 **x[1],
-            ) for x in self.menu_list[linf:lsup]
+            ) for x in self.menu_list[linf:lsup + 1]
         ]
-        active_index = max(0, self.active_index - self.menu_offset)
+        active_index = max(0, min(self.active_index - self.menu_offset, MENU_WINDOW - 1))
         if len(self.menu_list) > MENU_WINDOW:
-            # nlen = max(*[len(x) for x in self.menu_list])
             nlen = max(*[len(self.entrycget(x, 'label')) for x in range(len(self.menu_list))])
             active_index += 1
-            self.popup_menu.insert_command(0, label=f".{DOWN_ARROW.center(nlen, '_')}.")
-            self.popup_menu.insert_command(tk.END, label=f".{UP_ARROW.center(nlen, '_')}.")
+            self.popup_menu.insert_command(0, label=f"{DOWN_ARROW.center(nlen, ' ')}")
+            self.popup_menu.insert_command(tk.END, label=f"{UP_ARROW.center(nlen, ' ')}")
         self.popup_menu.activate(active_index)
 
     def rollMenu(self):
         ndx = self.popup_menu.index(tk.ACTIVE)
         bflag = ndx in (0, MENU_WINDOW + 1) and self.isMouseOver(ndx)
         if ndx == MENU_WINDOW + 1:
-            ndx += self.menu_offset
+            ndx += self.menu_offset - 1
             if ndx < len(self.menu_list):
-                next_item = self.menu_offset + MENU_WINDOW + 1
+                next_item = self.menu_offset + MENU_WINDOW
                 itemType, kw = self.menu_list[next_item]
                 self.popup_menu.insert(MENU_WINDOW + 1, itemType, **kw)
                 self.popup_menu.delete(1)
@@ -150,7 +158,7 @@ class RollingMenu:
                 if not bflag:
                     self.popup_menu.event_generate('<Up>')
             else:           # ndx == len(self.menu_list):
-                linf, lsup = 0, MENU_WINDOW
+                linf, lsup = 0, MENU_WINDOW - 1
                 self.loadMenuOptions(linf, lsup)
                 ndx = (MENU_WINDOW + 1) if bflag else 1
                 self.popup_menu.activate(ndx)
@@ -180,7 +188,8 @@ class RollingMenu:
         return getattr(self.popup_menu, item)
 
 
-class NavigationBar(tk.Canvas):
+class BreadCumb(tk.Canvas):
+
     def __init__(self, master, path_obj, name=None, **kwargs):
         height = kwargs.setdefault('height', 25)
         super().__init__(master, name=name, **kwargs)
@@ -192,10 +201,6 @@ class NavigationBar(tk.Canvas):
         self.pfocus = None
         self.polygon_ids = []
         self.text_ids = []
-
-        self.menu_offset = 0
-        self.menu_list = []
-        self.fidle = None
 
         path_obj.set_master(self)
         self.path_obj = path_obj
@@ -218,13 +223,10 @@ class NavigationBar(tk.Canvas):
         canvas.bind("<Down>", self.onCanvasDownArrowEvent)
         canvas.focus_set()
 
-        self.popup_menu = tk.Menu(self, name="breadcumb", tearoff=0, postcommand=self.build_popup, relief=tk.FLAT)
+        # self.popup_menu = tk.Menu(self, name="breadcumb", tearoff=0, postcommand=self.build_popup, relief=tk.FLAT)
+        self.popup_menu = RollingMenu(self, name="breadcumb", tearoff=0, postcommand=self.build_popup, relief=tk.FLAT)
         self.popup_menu.bind('<<HRZ_ARROWS>>', self.onMenuKeyboardEvent)
         self.popup_menu.bind('<Return>', self.onMenuKeyboardEvent)
-        self.popup_menu.bind('<<MenuSelect>>', self.onMenuSelect)
-
-        # self.setupCanvas()
-        # self.draw_focus(None, self.pfocus)
         pass
 
     def setupCanvas(self, *labels):
@@ -299,7 +301,10 @@ class NavigationBar(tk.Canvas):
         # todos los directorios que contienen un solo directorio hasta encontrar: 1 - un archivo o
         # 2 - Un directorio con más de un hijo.
         while self.path_obj.isdir(path):
-            label, *listLabelsDir = self.path_obj.listdir(path)
+            try:
+                label, *listLabelsDir = self.path_obj.listdir(path)
+            except:
+                break   # Directorio vacío
             if len(listLabelsDir):
                 break
             path = os.path.join(path, label)
@@ -339,39 +344,25 @@ class NavigationBar(tk.Canvas):
         if aPath.isDir:
             wdir = self.path_obj.walk(aPath.path)
             adir, dirs, files = next(wdir)
-            dirs = list(f'{item}/' for item in dirs if not item.startswith('__'))
+            # dirs = list(f'{item}/' for item in dirs if not item.startswith('__'))
+            dirs = list(item for item in dirs if not item.startswith('__'))
             next_index = aPath.index + 1
-            self.menu_list = menu_list = dirs + files
+            menu_list = dirs + files
+            # self.menu_list = menu_list = dirs + files
             try:
                 next_label = self.labels[next_index]
                 next_index = menu_list.index(next_label)
             except:
                 next_index = 0
-            linf = max(0, next_index - MENU_WINDOW // 2)
-            lsup = min(len(menu_list), next_index + MENU_WINDOW // 2 + MENU_WINDOW % 2)
-            self.loadMenuOptions(linf, lsup)
-            self.popup_menu.activate(next_index - self.menu_offset + 1)
-
-    def loadMenuOptions(self, linf, lsup):
-        if lsup - linf < MENU_WINDOW:
-            # Se rompe un límite
-            if linf:
-                linf = lsup - MENU_WINDOW
-            else:
-                lsup = linf + MENU_WINDOW
-        self.menu_offset = linf
-        self.popup_menu.delete(0, tk.END)
-        [
-            self.popup_menu.add(
-                'cascade' if x.endswith('/') else 'command',
-                label=x.rstrip('/'),
-                menu=None
-            ) for x in self.menu_list[linf:lsup]
-        ]
-        if len(self.menu_list) > MENU_WINDOW:
-            nlen = max(*[len(x) for x in self.menu_list])
-            self.popup_menu.insert_command(0, label=f".{DOWN_ARROW.center(nlen, '_')}.")
-            self.popup_menu.insert_command(tk.END, label=f".{UP_ARROW.center(nlen, '_')}.")
+            self.popup_menu.delete(0, tk.END)
+            [
+                self.popup_menu.add(
+                    'cascade' if x in dirs else 'command',
+                    label=x.rstrip('/'),
+                    menu=None
+                ) for x in menu_list
+            ]
+            self.popup_menu.activate(next_index)
 
     # Callbacks methods
 
@@ -381,7 +372,7 @@ class NavigationBar(tk.Canvas):
 
     def onCanvasDownArrowEvent(self, event=None):
         aPath = self.getActivePath()
-        if not aPath.isDir:
+        if not aPath.isDir or len(self.path_obj.listdir(aPath.path)) == 0:
             self.set_active_index(aPath.index - 1)
             aPath = self.getActivePath()
         pfocus = self.polygon_ids[aPath.index]
@@ -428,74 +419,6 @@ class NavigationBar(tk.Canvas):
         else:
             self.path_obj.actual_dir = aPath.path
             self.focus_get()
-
-    def rollMenu(self):
-        def isMouseOver(index):
-            menu = self.popup_menu
-            m1, m2 = menu.winfo_pointerxy()
-            x1, x2 = menu.winfo_rootx(), menu.winfo_rooty() + menu.yposition(index)
-            bflag = index == menu.index(tk.END)
-            width = (menu.winfo_height() if bflag else menu.yposition(index + 1)) - menu.yposition(index)
-            y1, y2 = x1 + menu.winfo_width(), x2 + width
-            return (x1 <= m1 <= y1) and (x2 <= m2 <= y2)
-
-        ndx = self.popup_menu.index(tk.ACTIVE)
-        bflag = ndx in (0, MENU_WINDOW + 1) and isMouseOver(ndx)
-        if ndx == MENU_WINDOW + 1:
-            ndx += self.menu_offset
-            if ndx < len(self.menu_list):
-                next_item = self.menu_offset + MENU_WINDOW + 1
-                label = self.menu_list[next_item]
-                if label.endswith('/'):
-                    label = label.rstrip('/')
-                    self.popup_menu.insert_cascade(MENU_WINDOW + 1, label=label)
-                else:
-                    self.popup_menu.insert_command(MENU_WINDOW + 1, label=label)
-                self.popup_menu.delete(1)
-                self.menu_offset += 1
-                self.popup_menu.activate(MENU_WINDOW + 1)
-                if not bflag:
-                    self.popup_menu.event_generate('<Up>')
-            else:           # ndx == len(self.menu_list):
-                linf, lsup = 0, MENU_WINDOW
-                self.loadMenuOptions(linf, lsup)
-                ndx = (MENU_WINDOW + 1) if bflag else 1
-                self.popup_menu.activate(ndx)
-            pass
-        elif ndx == 0:
-            if self.menu_offset > 0:
-                self.popup_menu.delete(MENU_WINDOW)
-                next_item = self.menu_offset - 1
-                label = self.menu_list[next_item]
-                if label.endswith('/'):
-                    label = label.rstrip('/')
-                    self.popup_menu.insert_cascade(1, label=label)
-                else:
-                    self.popup_menu.insert_command(1, label=label)
-                self.menu_offset -= 1
-                self.popup_menu.activate(0)
-                if not bflag:
-                    self.popup_menu.event_generate('<Down>')
-            else:           # self.menu_offset == 0:
-                linf, lsup = len(self.menu_list) - MENU_WINDOW, len(self.menu_list)
-                self.loadMenuOptions(linf, lsup)
-                if not bflag:
-                    self.popup_menu.activate(MENU_WINDOW)
-                else:
-                    self.popup_menu.activate(0)
-        self.update_idletasks()
-        if bflag:
-            self.fidle = self.after(800, self.rollMenu)
-
-    def onMenuSelect(self, event):
-        # <<MenuSelect>> virtual event generado por el widget
-        menu = event.widget
-        ndx = menu.index(tk.ACTIVE)
-        if ndx == MENU_WINDOW + 1 or ndx == 0:
-            self.after_idle(self.rollMenu)
-        elif self.fidle is not None:
-            self.after_cancel(self.fidle)
-            self.fidle = None
 
 
 class PathObj(ABC):
@@ -764,7 +687,8 @@ def navigationFactory(master, path_obj, **kwargs):
     except AttributeError:
         dmy = os.path.abspath('.')
         path_obj = DirectoryObj(dmy, dmy)
-    return NavigationBar(master, path_obj=path_obj, **kwargs)
+    # return NavigationBar(master, path_obj=path_obj, **kwargs)
+    return BreadCumb(master, path_obj=path_obj, **kwargs)
 
 
 def main():
@@ -773,7 +697,7 @@ def main():
     base_dir = '/mnt/c/Users/Alex Montes/PycharmProjects/mywidgets/'
     initial_dir = '/mnt/c/Users/Alex Montes/PycharmProjects/mywidgets/src/Widgets/Custom/navigationbar.py'
     path_obj = DirectoryObj(base_dir, initial_dir)
-    nbar = NavigationBar(top, path_obj)
+    nbar = BreadCumb(top, path_obj)
     top.mainloop()
 
 if __name__ == '__main__':
@@ -818,7 +742,7 @@ if __name__ == '__main__':
     top = tk.Tk()
     top.attributes('-zoomed', True)
 
-    case = 'rolling_menu'
+    case = 'directory'
     if case == 'tkktree':
         def onActiveSelection(event=None):
             treeview = event.widget
@@ -907,10 +831,20 @@ if __name__ == '__main__':
         top.base_dir = base_dir
         obj_name = 'base_dir'
     elif case == 'rolling_menu':
-        menu = RollingMenu(top)
-        for k in range(30):
-            menu.add('command', label=f'comm{k}')
-        btn = tk.Button(top, text='pop', command=lambda: menu.post(10,10))
+        def cb():
+            menu.focus_set()
+            menu.tk_popup(10, 10)
+
+        def post_cb():
+            menu.delete(0, tk.END)
+            for k in range(30):
+                menu.add('command', label=f'comm{k}')
+            menu.activate(5)
+
+        menu = RollingMenu(top, postcommand=post_cb)
+        # menu = tk.Menu(top, tearoff=0, postcommand=post_cb)
+        btn = tk.Button(top, text='pop menu')
         btn.pack(side=tk.TOP)
-    # nbar = navigationFactory(top, obj_name)
+        btn.config(command=lambda: cb())
+    nbar = navigationFactory(top, obj_name)
     top.mainloop()

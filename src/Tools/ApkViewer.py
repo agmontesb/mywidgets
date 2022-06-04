@@ -30,8 +30,7 @@ class ApkViewer(tk.Tk):
         filename = 'TeaTV-v9.9.6r_build_111-Mod_v2.apk'
         filename = os.path.join(initial_path, filename)
         self.init_UI_View(filename)
-        self.cframe.clickButton(1)
-        # self.apk_path.setActivePath('/AndroidManifest.xml')
+        self.cframe.show_band()
         pass
 
     def setGui(self):
@@ -48,7 +47,7 @@ class ApkViewer(tk.Tk):
         equations_manager.set_initial_widget_states()
         fframe.pack(side=tk.TOP, fill=tk.BOTH, expand=tk.YES, anchor=tk.NE)
 
-        self.cframe.clickButton(nButt=1)
+        self.cframe.hide_band('left')
 
         self.apktree.bind('<<ActiveSelection>>', self.onActiveSelection, add='+')
         self.apktree.tag_configure('selected', background='light green')
@@ -290,7 +289,7 @@ class ApkViewer(tk.Tk):
                 bflag = self.title() == 'tk'
                 self.title(filename)
                 if bflag:
-                    self.cframe.clickButton(1)
+                    self.cframe.hide_band('left')
             except:
                 pass
         else:
@@ -424,8 +423,10 @@ class ApkViewer(tk.Tk):
         _, case = os.path.splitext(path)
         if case in ('.arsc', '.xml'):
             self.crawl_resources_arsc(data, self.rawtree)
+            self.cframe.show_band()
+
         else:
-            self.cframe.clickButton(nButt=1)
+            self.cframe.hide_band('left')
         pass
 
     @staticmethod
