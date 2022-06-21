@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<settings>
+	<category label="getFontAwesomeIcon Parameters" lib="Widgets.kodiwidgets">
+		<ktext id="charname" label="Char name:   " default="fa-anchor"/>
+		<kcontainer label="Required Arguments" >
+            <ktext id="size" label="Size:   " default="24"/>
+			<kcolor id="color" label="Color:   " default="#FFFFFF"/>
+			<kenum id="aspectratio" label="Aspect Ratio:   " default="keep" values="stretch|keep|scale|center"/>
+			<kbool id="isphotoimage" label="isPhotoImage:   " default="true"/>
+		</kcontainer>
+		<kaction id="getfontawesome" label="getFontAwesomeIcon" enable="ne(charname, '')"/>
+	</category>
+</settings>
+
+
+

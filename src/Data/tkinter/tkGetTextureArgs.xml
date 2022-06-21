@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<settings>
+	<category label="getLabels Parameters" lib="Widgets.kodiwidgets">
+		<kcontainer label="Positional Arguments" >
+			<kfile id="imagefile" label="Image File:   " default="" initialdir="/mnt/c/Users/Alex Montes/OneDrive"/>
+			<knumber id="width" label="Width:   " default="400"/>
+			<knumber id="height" label="Height:   " default="400"/>
+			<kenum id="aspectratio" label="Aspect Ratio:   " default="keep" values="stretch|keep|scale|center"/>
+		</kcontainer>
+        <kcontainer label="Keyword Arguments" scrolled="true">
+			<kbool id="flipx" label="flipx:   " default="false"/>
+			<kbool id="flipy" label="flipy:   " default="false"/>
+            <kcolor id="colorkey" label="colorkey:   " default=""/>
+			<ktext id="border" label="border:   " default="0"/>
+			<ktext id="bordersize" label="bordersize:   " default="0"/>
+			<kfile id="bordertexture" label="bordertexture:   " default=""/>
+			<ktext id="diffuse" label="diffuse:   " default="0"/>
+            <kcolor id="colordiffuse" label="colordiffuse:   " default=""/>
+        </kcontainer>
+		<kaction id="gettexture" label="gettexture" enable="ne(imagefile, '')"/>
+	</category>
+</settings>
+
+

@@ -1067,6 +1067,10 @@ class MarkupParser(HTMLParser):
         '''
         if req_attrs == -1:
             req_attrs = self.req_attrs.get(element_path, {})
+        return self._haveTagAllAttrReq(element_attrs, req_attrs)
+
+    @staticmethod
+    def _haveTagAllAttrReq(element_attrs, req_attrs):
         diff_set = req_attrs.keys() - element_attrs.keys()
         if diff_set:
             return False

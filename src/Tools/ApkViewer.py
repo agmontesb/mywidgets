@@ -10,7 +10,6 @@ import zipfile
 import userinterface
 import Tools.aapt as aapt
 from equations import equations_manager
-import Widgets.Custom.navigationbar as navigationbar
 
 
 class ApkViewer(tk.Tk):
@@ -26,11 +25,13 @@ class ApkViewer(tk.Tk):
 
         self.attributes('-zoomed', True)
 
-        initial_path = '/mnt/c/Users/Alex Montes/PycharmProjects/TestFiles'
-        filename = 'TeaTV-v9.9.6r_build_111-Mod_v2.apk'
-        filename = os.path.join(initial_path, filename)
-        self.init_UI_View(filename)
-        self.cframe.show_band()
+        # Contenido habilitado solo para desarrolllo
+        #
+        # initial_path = '/mnt/c/Users/Alex Montes/PycharmProjects/TestFiles'
+        # filename = 'TeaTV-v9.9.6r_build_111-Mod_v2.apk'
+        # filename = os.path.join(initial_path, filename)
+        # self.init_UI_View(filename)
+        # self.cframe.show_band()
         pass
 
     def setGui(self):
@@ -47,7 +48,7 @@ class ApkViewer(tk.Tk):
         equations_manager.set_initial_widget_states()
         fframe.pack(side=tk.TOP, fill=tk.BOTH, expand=tk.YES, anchor=tk.NE)
 
-        self.cframe.hide_band('left')
+        # self.cframe.hide_band('left')
 
         self.apktree.bind('<<ActiveSelection>>', self.onActiveSelection, add='+')
         self.apktree.tag_configure('selected', background='light green')
@@ -117,7 +118,6 @@ class ApkViewer(tk.Tk):
             # Solo se presenta la info para nodos terminales (sin hijos)
             self.setFieldsTree(type_name, offset)
 
-
     def setFieldsTree(self, type_name, offset):
 
         self.data.seek(0)
@@ -147,7 +147,6 @@ class ApkViewer(tk.Tk):
                     d_offset += ctypes.sizeof(ctypeStruct_inst)
 
         self.setCtypeStructFields(table, offset)
-
 
     def setOutputTag(self, saddr, loff, size, tag='selected'):
         selected = self.textw.tag_ranges(tag)
@@ -191,34 +190,6 @@ class ApkViewer(tk.Tk):
 
         saddr, loff, size = int(saddr, 16) // 16, int(loff, 16), int(size)
         self.setOutputTag(saddr, loff, size)
-        # selected = self.textw.tag_ranges('selected')
-        # [
-        #     self.textw.tag_remove('selected', beg_ndx, end_ndx)
-        #     for beg_ndx, end_ndx in zip(selected[::2], selected[1::2])
-        # ]
-        #
-        # saddr += 5          # 5 es el número de líneas del encabezado mas 1
-        # lines = (loff + size) // 16
-        # nchar = (loff + size) % 16
-        # selected = []
-        # beg_ndx = f'{saddr}.{3 * loff + 9}'
-        # self.textw.see(beg_ndx)
-        # if lines == 0:
-        #     end_ndx = f'{saddr}.{3 * nchar + 9 - 1}'
-        #     selected.append((beg_ndx, end_ndx))
-        # else:
-        #     end_ndx = f'{saddr}.{3 * 16 + 9 - 1}'
-        #     selected.append((beg_ndx, end_ndx))
-        #     for line in range(1, lines):
-        #         beg_ndx = f'{saddr + line}.{9}'
-        #         end_ndx = f'{saddr + line}.{3*16 + 9 - 1}'
-        #         selected.append((beg_ndx, end_ndx))
-        #     beg_ndx = f'{saddr + lines}.{9}'
-        #     end_ndx = f'{saddr + lines}.{3 * nchar + 9 - 1}'
-        #     selected.append((beg_ndx, end_ndx))
-        #
-        # for beg_ndx, end_ndx in selected:
-        #     self.textw.tag_add('selected', beg_ndx, end_ndx)
 
     def onActiveSelection(self, event=None):
         apktree = event.widget
@@ -229,12 +200,15 @@ class ApkViewer(tk.Tk):
         apktree.item(nodeid, tags='selected')
 
         label = apktree.item(nodeid, 'text')
-        ext = '.' + label.rsplit('.', 1)[1]
+        try:
+            ext = '.' + label.rsplit('.', 1)[1]
+        except:
+            ext = ''
         self.setvar('show_var', 'true' if ext in ('.arsc', '.xml') else 'false')
+        view = self.getvar('vis_var')
+        self.fillOutputWidget(view)
 
-        self.fillOutputWidget()
-
-    def fillOutputWidget(self):
+    def fillOutputWidget(self, view):
         apk_path_obj = self.apk_path
         path = apk_path_obj.getActivePath().path
         path = path.lstrip('/')
@@ -243,18 +217,19 @@ class ApkViewer(tk.Tk):
         except:
             return
         out_string = []
-
-        case = self.getvar('vis_var')
-        _, ext = os.path.splitext(path)
-        if case == 'text':
+        if view == 'text':
+            _, ext = os.path.splitext(path)
             if ext == '.xml':
                 aapt.dumpXmlTree(data, to_string=out_string)
             elif ext == '.arsc':
                 assert path == 'resources.arsc'
                 aapt.dumpResources(data, what='resources', to_string=out_string)
             else:
-                out_string = ['CONTENIDO NO DISPONIBLE\n']
-        elif case == 'raw':
+                try:
+                    out_string = [x.decode('utf-8') for x in data.readlines()]
+                except:
+                    out_string = ['CONTENIDO NO DISPONIBLE\n']
+        elif view == 'raw':
             out_string = []
             aapt.dumpHexData(data, to_string=out_string)
             self.setUpRawTree(path, data)
@@ -265,10 +240,15 @@ class ApkViewer(tk.Tk):
 
     def onVarChange(self, event):
         var_name, value = event.attr_data
+        # print(f'var_change: var_name: {var_name}, value: {value}')
         if var_name == 'vis_var':
-            self.fillOutputWidget()
-        else:
-            print(f'var_change: var_name: {var_name}, value: {value}')
+            self.fillOutputWidget(value)
+        if var_name in ('vis_var', 'show_var'):
+            bflag = self.getvar('vis_var') == 'text' or self.getvar('show_var') == 'true'
+            if bflag:
+                self.cframe.show_band()
+            else:
+                self.cframe.hide_band('left')
 
     def onMenuClick(self, event):
         menu_master, indx = event.widget, event.data
@@ -281,17 +261,14 @@ class ApkViewer(tk.Tk):
             )
             if not filename:
                 return
-            filename = 'TeaTV-v9.9.6r_build_111-Mod_v2.apk'
             filename = os.path.join(initial_path, filename)
             try:
                 self.init_UI_View(filename)
                 self.recFile(filename)
-                bflag = self.title() == 'tk'
                 self.title(filename)
-                if bflag:
-                    self.cframe.hide_band('left')
             except:
                 pass
+            self.apk_path.setActivePath('/AndroidManifest.xml')
         else:
             msg = f'MENUCLICK fire. Menu: {menu_master.cget("title")}, Menu_item:{menu_label}'
             print(msg)
@@ -423,10 +400,11 @@ class ApkViewer(tk.Tk):
         _, case = os.path.splitext(path)
         if case in ('.arsc', '.xml'):
             self.crawl_resources_arsc(data, self.rawtree)
-            self.cframe.show_band()
-
+            self.setvar('show_var', 'true')
+            # self.cframe.show_band()
         else:
-            self.cframe.hide_band('left')
+            self.setvar('show_var', 'false')
+            # self.cframe.hide_band('left')
         pass
 
     @staticmethod

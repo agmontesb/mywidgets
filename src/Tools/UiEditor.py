@@ -512,7 +512,8 @@ class UiEditor(tk.Tk):
     # Menu methods
 
     def saveFile(self):
-        nameFile = self.currentFile
+        nameFile = self.currentFile.strip(' **')
+        nameFile = nameFile if nameFile != 'LayoutDefault.xml' else None
         self.saveAsFile(nameFile)
 
     def saveAsFile(self, nameFile=None):
@@ -568,7 +569,8 @@ class UiEditor(tk.Tk):
             default_name = os.path.join(initial_path, 'LayoutDefault.xml')
             if name != default_name:
                 self.recFile(name)
-
+            else:
+                name = 'LayoutDefault.xml'
             self.currentFile = name
             self.title(self.currentFile)
             self.init_XMl_View(xmlstr)

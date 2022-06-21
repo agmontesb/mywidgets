@@ -77,14 +77,18 @@ class Equations:
     def dependent_vars(self):
         return [ivar for ivar in self.state_equations.keys() if isinstance(self.state_equations[ivar], str)]
 
+    # @property
+    # def independent_vars(self):
+    #     independent_vars = functools.reduce(
+    #         lambda t, x: t | self.dependents[x],
+    #         self.dependent_vars,
+    #         set()
+    #     )
+    #     return independent_vars
+
     @property
     def independent_vars(self):
-        independent_vars = functools.reduce(
-            lambda t, x: t | self.dependents[x],
-            self.dependent_vars,
-            set()
-        )
-        return independent_vars
+        return [ivar for ivar in self.state_equations.keys() if isinstance(self.state_equations[ivar], tk.Variable)]
 
     def default_root(self):
         self._default_root = self._default_root or tk._default_root
@@ -176,7 +180,7 @@ class Equations:
         state = eval(python_expresion, locales)
         return state
 
-    def register_variable(self, var_name, callback):
+    def register_variable(self, var_name, callback=None):
         # Se establece el callback listener
         # tk crea una nueva variable cuando var_name no existe en caso contrario
         # entrega la variable ya existente.
@@ -194,6 +198,7 @@ class Equations:
                 pass
         else:
             value = None        # Acá se determina si la variable no existe
+        callback = callback or self.var_change
         cb = default_root.register(callback)
         tkApp.call('trace', 'add', 'variable', var_name, 'write', (cb,))
         # Se registra la variable.
@@ -205,7 +210,7 @@ class Equations:
         self.enable_callbacks = False
         for var_name in self.independent_vars:
             var = self.state_equations[var_name]
-            var_value = self.var_values[var_name]
+            var_value = self.var_values.get(var_name, None)
             if var._default != var_value:
                 self.var_values[var_name] = var.get()
             else:
@@ -256,14 +261,14 @@ class Equations:
         if not self.enable_callbacks:
             return
         default_root = equations_manager.default_root()
-        value = default_root.getvar(var_name)
-        with userinterface.event_data('attr_data') as event:
-            event.attr_data = var_name, value
-            default_root.event_generate('<<VAR_CHANGE>>')
+        # value = default_root.getvar(var_name)
+        value = self.state_equations[var_name].get()
         try:
             self.var_values[var_name] = eval(value)
         except:
             self.var_values[var_name] = value
+        with userinterface.event_data(attr_data=(var_name, value)) as event:
+            default_root.event_generate('<<VAR_CHANGE>>')
         to_verify = self.dependents.get(var_name, set())
         self.set_widget_state(to_verify)
 

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<settings>
+    <category label="Category uno">
+        <var name="vis_var" type="string" value="gettextureargs" />
+        <frame side="bottom" fill="x">
+            <label text="Views: " side="left" />
+            <radiobutton text="getLabel" variable="vis_var" value="getlabelargs" width="20" indicatoron="0" side="left"/>
+            <radiobutton text="getFontAwesomeIcon" variable="vis_var" value="fontawesome" width="20" indicatoron="0" side="left"/>
+            <radiobutton text="getTexture" variable="vis_var" value="gettextureargs" width="20" indicatoron="0" side="left"/>
+        </frame>
+        <frame name="procedure" width="200" side="left" fill="y">
+            <form name="getlabelargs" visible="eq(vis_var, 'getlabelargs')" src="Data/tkinter/tkGetLabelArgs.xml" side="left" fill="y" anchor="w" />
+            <frame name="fontawesome" visible="eq(vis_var, 'fontawesome')" side="top" fill="both" expand="yes" >
+                <widgetexplorer name="chartree" lib="Widgets.Custom" side="top" fill="both" expand="yes" />
+                <form name="getfontawesomeicon" src="Data/tkinter/tkGetFontAwesomeArgs.xml" side="left" fill="y" anchor="w" />
+            </frame>
+            <form name="gettextureargs" visible="eq(vis_var, 'gettextureargs')" src="Data/tkinter/tkGetTextureArgs.xml" side="left" fill="y" anchor="w" />
+        </frame>
+        <canvas name="canvas" bg="#d9d996" side="right" fill="both" expand="yes" />
+    </category>
+</settings>

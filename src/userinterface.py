@@ -5,6 +5,7 @@
 
 
 import importlib
+import inspect
 import os.path
 import tkinter as tk
 import xml.etree.ElementTree as ET
@@ -18,6 +19,7 @@ from types import ModuleType
 
 
 from Widgets import specialwidgets
+from Widgets.Custom import ImageProcessor as imgp
 from Widgets.Custom.network import network
 from equations import equations_manager
 import cbwidgetstate
@@ -50,14 +52,28 @@ place_params = ["anchor", "bordermode", "height", "in", "relheight", "relwidth",
 #       widget.event_generate('<<el_evento_name>>')
 #
 @contextmanager
-def event_data(attr_name=None):
-    attr_name = attr_name or 'data'
-    event = tk.Event
-    setattr(event, attr_name, None)
+def event_data(**params):
+    def decor(f):
+        try:
+            vars = inspect.getclosurevars(f)
+            f = vars.nonlocals['f']
+        except:
+            pass
+
+        def wrapper(*args, **kwargs):
+            answ = f(*args, **kwargs)
+            answ.__dict__.update(params)
+            return answ
+
+        return wrapper
+        return decor
+
+    wrapped = tk.Event
+    tk.Event = decor(tk.Event)
     try:
-        yield event
+        yield tk.Event
     finally:
-        delattr(event, attr_name)
+        tk.Event = wrapped
 
 
 def getLayout(layoutfile: str) -> ET.Element:
@@ -187,7 +203,25 @@ def widgetFactory(master: tk.Tk | tk.Widget,
             module = importlib.import_module(module_path, __package__)
             panelModule.append((kini, module))
 
-        dummy = getWidgetInstance(parent, wType, options, panelModule=panelModule)
+        # El atributo 'read' se utiliza para especificar un widget que despliega un texto y
+        # puede tomar los valores left-to-right ('LtoR'), top-to-bottom ('TtoB'),
+        # bottom-to-top ('BtoT').
+        # Con este atributo se pueden generar botones (normales, checkbutton, radiobutton) verticales
+        # cuyo texto se reemplaza por una imagen de un texto vertical si se agrega un atibuto read con
+        # valor 'TtoB' o 'BtoT'.
+        read = options.pop('read', 'LtoR')
+
+        widget = getWidgetInstance(parent, wType, options, panelModule=panelModule)
+
+        if read in ('TtoB', 'BtoT'):
+            text = widget.cget('text')
+            angle = 90 if read == 'BtoT' else -90
+            font = imgp._eqTkFont('/usr/share/fonts/truetype/ubuntu/UbuntuMono-B.ttf', size=12)
+            image = imgp.getLabel(text, font, 'black', angle=angle, isPhotoImage=True)
+            widget.image = image
+            widget.config(image=image)
+            if wType in ('checkbutton', 'radiobutton'):
+                widget.config(selectimage=image)
 
         if bflag:
             panelModule.pop()
@@ -199,16 +233,16 @@ def widgetFactory(master: tk.Tk | tk.Widget,
                 if not isinstance(geomngr_opt[ref_label], (bytes, str)):
                     continue
                 parent_name = geomngr_opt.pop(ref_label).lstrip('.')
-                parent_path = dummy.winfo_parent()
-                geomngr_opt[ref_label] = '.'.join((parent_path, parent_name))
+                parent_path = widget.winfo_parent()
+                geomngr_opt[ref_label] = '.'.join((parent_path if parent_path != '.' else '', parent_name))
             if 'in' in ref_labels:
                 geomngr_opt['in_'] = geomngr_opt.pop('in')
 
         if is_widget and 'visible' not in states_eq:
-            getattr(dummy, geometric_manager)(**geomngr_opt)
+            getattr(widget, geometric_manager)(**geomngr_opt)
 
         if registerWidget:
-            registerWidget(master, xmlwidget, dummy)
+            registerWidget(master, xmlwidget, widget)
 
         for state, eq in states_eq.items():
             callback_closure = cbwidgetstate.STATES[state]
@@ -216,12 +250,12 @@ def widgetFactory(master: tk.Tk | tk.Widget,
                 kwargs = geomngr_opt
             elif state == 'enable':
                 kwargs = {}
-            cb = callback_closure(dummy, **kwargs)
+            cb = callback_closure(widget, **kwargs)
             equations_manager.add_equation(eq, cb)
 
         if has_children:
             k = widgetFactory(
-                dummy,
+                widget,
                 xmlwidget,
                 panelModule=panelModule,
                 setParentTo=setParentTo,
@@ -285,7 +319,7 @@ def newPanelFactory(master: tk.Tk | tk.Widget,
             )
             boton.pack(side=tk.TOP, fill=tk.X)
             frstboton = frstboton or boton
-            pane = tk.Frame(master, relief=tk.RIDGE, bd=5, bg='white', padx=3, pady=3)
+            pane = tk.Frame(master, name=f'categoria{k + 1}', relief=tk.RIDGE, bd=5, bg='white', padx=3, pady=3)
             pane.form = master  # type: ignore
             paneArray.append(pane)
         for child in leftPane.winfo_children():
@@ -310,8 +344,7 @@ def menuFactory(
         registerMenu: RegWidgetCb = None) -> tk.Menu:
     def menu_closure(widget, data=None):
         def menu_cb():
-            with event_data() as event:
-                event.data = data
+            with event_data(data=data) as event:
                 widget.event_generate('<<MENUCLICK>>')
         return menu_cb
 

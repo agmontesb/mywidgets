@@ -147,33 +147,33 @@ def _imageFile(imageFile):
     if not os.path.exists(imageFile): return None
     return imageFile
 
-# def _eqTkFont(fontname, res='720p', fontset='Default'):
-#     import xbmcaddon
-#     pathName, skinDir = xbmc.translatePath('special://skin'), xbmc.getSkinDir()
-#     fontXml = os.path.join(pathName, skinDir, res, 'font.xml')
-#     fonts = xbmcaddon.Addon._parseXml(fontXml)
-#     fontset = fonts.find('.//fontset[@id="%s"]' % fontset)
-#     font = fontset.find('.//font[name="%s"]' % fontname)
-#     if font is None: font = fontset.find('.//font[name="font13"]')
-#     if font is not None:
-#         keys = ['filename', 'size', 'style']
-#         attrib = dict((chld.tag, chld.text) for chld in font.getchildren() if chld.tag in keys)
-#         filename = attrib['filename']
-#         size = int(attrib['size'])
-#         if attrib.has_key('style'):
-#             # Here we must find a way to detect the correct filename
-#             pass
-#     else:
-#         filename = 'arial.ttf'
-#         size = 20
-#     path = xbmc.translatePath('special://xbmc/')
-#     fullname1 = os.path.join(path, 'addons', skinDir, 'fonts', filename)
-#     fullname2 = os.path.join(path, 'media', 'fonts', filename)
-#     for fullname in [fullname1, fullname2]:
-#         if os.path.exists(fullname):
-#             filename = fullname
-#             break
-#     return ImageFont.truetype(filename, size)
+def _eqTkFont(fontname, size=50, res='720p', fontset='Default'):
+    # import xbmcaddon
+    # pathName, skinDir = xbmc.translatePath('special://skin'), xbmc.getSkinDir()
+    # fontXml = os.path.join(pathName, skinDir, res, 'font.xml')
+    # fonts = xbmcaddon.Addon._parseXml(fontXml)
+    # fontset = fonts.find('.//fontset[@id="%s"]' % fontset)
+    # font = fontset.find('.//font[name="%s"]' % fontname)
+    # if font is None: font = fontset.find('.//font[name="font13"]')
+    # if font is not None:
+    #     keys = ['filename', 'size', 'style']
+    #     attrib = dict((chld.tag, chld.text) for chld in font.getchildren() if chld.tag in keys)
+    #     filename = attrib['filename']
+    #     size = int(attrib['size'])
+    #     if attrib.has_key('style'):
+    #         # Here we must find a way to detect the correct filename
+    #         pass
+    # else:
+    #     filename = 'arial.ttf'
+    #     size = 20
+    # path = xbmc.translatePath('special://xbmc/')
+    # fullname1 = os.path.join(path, 'addons', skinDir, 'fonts', filename)
+    # fullname2 = os.path.join(path, 'media', 'fonts', filename)
+    # for fullname in [fullname1, fullname2]:
+    #     if os.path.exists(fullname):
+    #         filename = fullname
+    #         break
+    return ImageFont.truetype(fontname, size)
 
 
 # @memoize
@@ -198,7 +198,9 @@ def getTexture(imageFile, Width, Height, aspectratio='stretch', **options):
     if options.get('colorkey'):
         colorkey = options.get('colorkey')
         colorTuple = _getThemeColour(colorkey)
-        base = Image.new('RGBA', (iw, ih), colorTuple)
+        if im.mode == 'RGB':
+            im.putalpha(128)
+        base = Image.new(im.mode, (iw, ih), colorTuple)
         im = Image.alpha_composite(base, im)
     if aspectratio == 'stretch':
         width, height = Width, Height
@@ -298,7 +300,7 @@ def getLabel(label, font, textcolor, background=None, xpos=0, ypos=0, **options)
     SPACING = 4
     align = 'left'
     if isinstance(font, (bytes, str)):
-        # fnt = _eqTkFont(font)
+        fnt = _eqTkFont(font)
         pass
     else:
         fnt = font
@@ -353,17 +355,22 @@ def getLabel(label, font, textcolor, background=None, xpos=0, ypos=0, **options)
         angle = options['angle']
         txt = txt.rotate(angle, expand=1)
 
-    if not background: return txt
-    Width, Height = background.size
-    imgW, imgH = txtsize
-    if options.get('alignment') == 'center':
-        xpos += (Width - imgW)//2
-    elif options.get('alignment') == 'right':
-        xpos += (Width - imgW)
-    if options.get('yalignment') == 'center':
-        ypos += (Height - imgH)//2
+    if background:
+        Width, Height = background.size
+        imgW, imgH = txt.size
+        if options.get('alignment') == 'center':
+            xpos += (Width - imgW)//2
+        elif options.get('alignment') == 'right':
+            xpos += (Width - imgW)
+        if options.get('yalignment') == 'center':
+            ypos += (Height - imgH)//2
 
-    return background.paste(txt, box=(xpos, ypos), mask=txt)
+        background.paste(txt, box=(xpos, ypos), mask=txt)
+    else:
+        background = txt
+    if options.get('isPhotoImage', False):
+        background = ImageTk.PhotoImage(background)
+    return background
 
 
 @memoize
@@ -463,7 +470,7 @@ def getFontAwesomeIcon(charname, **optionsreq):
             color       : rgb color, rgb tuple. Default='white'
             isPhotoImage: True for a ImageTk.PhotoImage, default=False
     """
-    options = dict([('size', 24), ('color', 'FFFFFF00'), ('aspectratio','keep'),
+    options = dict([('size', 24), ('color', 'FFFFFF00'), ('aspectratio', 'keep'),
                     ('isPhotoImage', False)])
     options.update(optionsreq)
     rootdir = os.path.dirname(__file__)

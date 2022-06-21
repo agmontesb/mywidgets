@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<menu label="master" tearoff="false">
+    <cascade label="File" tearoff="false">
+    </cascade>
+    <cascade label="Edit" tearoff="false">
+    </cascade>
+    <cascade label="View" tearoff="false">
+    </cascade>
+    <cascade label="Navigate" tearoff="false">
+    </cascade>
+    <cascade label="Code" tearoff="false">
+    </cascade>
+    <cascade label="Refactor" tearoff="false">
+    </cascade>
+    <cascade label="Run" tearoff="false">
+    </cascade>
+    <cascade label="Tools" tearoff="false">
+    </cascade>
+    <cascade label="Git" tearoff="false">
+    </cascade>
+    <cascade label="Window" tearoff="false">
+    </cascade>
+    <cascade label="help" tearoff="false">
+    </cascade>
+</menu>

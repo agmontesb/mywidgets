@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<menu label="File" tearoff="false">
+    <command label="New Project" accelerator="Ctrl+O" command="" />
+    <command label="New" accelerator="Alt+Insert" command="" />
+    <command label="New Scratch File" accelerator="Ctrl+Alt+Shift+Insert" command="" />
+    <command label="Open" accelerator="Ctrl+O" command="" />
+    <command label="Save As" accelerator="Ctrl+O" command="" />
+    <cascade label="Open Recent" tearoff="false">
+    </cascade>
+    <command label="Close Project" command="" />
+    <command label="Rename Project" command="" />
+    <separator />
+    <command label="Settings" accelerator="Ctrl+O" command="" />
+    <cascade label="File Properties" tearoff="false">
+    </cascade>
+    <separator />
+    <cascade label="Locale History" tearoff="false">
+    </cascade>
+    <separator />
+    <command label="Save All" accelerator="Ctrl+S" command="" />
+    <command label="Reload All From Disk" accelerator="Ctrl+Alt+Y" command="" />
+    <command label="Repair IDE..." command="" />
+    <command label="Invalidate Caches..." command="" />
+    <command label="Restart IDE..." command="" />
+    <separator />
+    <cascade label="Manage IDE Settings" tearoff="false">
+    </cascade>
+    <cascade label="New Projects Setup" tearoff="false">
+    </cascade>
+    <command label="Save File As Template..." command="" />
+    <separator/>
+    <command label="Export" command="" />
+    <command label="Print" command="" />
+    <separator/>
+    <command label="Power Save Mode" command="" />
+    <separator/>
+    <command label="Exit" command="" />
+
+
+
+
+</menu>

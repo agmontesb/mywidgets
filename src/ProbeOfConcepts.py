@@ -5,11 +5,13 @@ import tkinter as tk
 import tkinter.messagebox as tkMessage
 import tkinter.ttk as ttk
 import xml.etree.ElementTree as ET
+from PIL import Image, ImageTk, ImageFont
 
 import userinterface
 from userinterface import newPanelFactory, getWidgetInstance, menuFactory
 from Widgets.kodiwidgets import formFrame
 from equations import equations_manager
+from Widgets.Custom.ImageProcessor import getLabel
 
 
 def getLayout(layoutfile):
@@ -147,8 +149,116 @@ def nameElements(htmlstr, k=-1):
 
 
 if __name__ == '__main__':
-    caso = 'test_newPaneFactory'
-    if caso == 'menu_factory':
+    caso = 'css_selectors'
+    if caso == 'css_selectors':
+        from Tools.uiStyle import uicss
+        selector_str = 'body #touchnav-wrapper div strong'
+        sel = uicss.Selector(selector_str)
+        cs = sel.compiled_selector
+
+        simple_selectors = [
+            # '.intro',
+            # '.name1.name2',
+            # '#firstname',
+            # '*',
+            # 'p',
+            # 'p.intro',
+            # 'a[target]',
+            'a[target=_blank]',
+            'img[title~=flower]',
+            # 'p[lang|=en]',
+            # 'a[href^="https"]',
+            # 'a[href$=".pdf"]',
+            'a[href*="w3schools"]',
+        ]
+
+        compound_selectors = [
+            '.name1 .name2',
+            'div, p',
+            'div p',
+            'div > p',
+            'div + p',
+            'p ~ ul',
+        ]
+
+        pseudoelem_selectors = [
+            'a:active',
+            'p::after',
+            'p::before',
+            'input:checked',
+            'input:default',
+            'input:disabled',
+            'p:empty',
+            'input:enabled',
+            'p:first-child',
+            'p::first-letter',
+            'p::first-line',
+            'p:first-of-type',
+            'input:focus',
+            ':fullscreen',
+            'a:hover',
+            'input:in-range',
+            'input:indeterminate',
+            'input:invalid',
+            'p:lang(it)',
+            'p:last-child',
+            'p:last-of-type',
+            'a:link',
+            '::marker',
+            ':not(p)',
+            'p:nth-child(2)',
+            'p:nth-last-child(2)',
+            'p:nth-last-of-type(2)',
+            'p:nth-of-type(2)',
+            'p:only-of-type',
+            'p:only-child',
+            'input:optional',
+            'input:out-of-range',
+            'input::placeholder',
+            'input:read-only',
+            'input:read-write',
+            'input:required',
+            ':root',
+            '::selection',
+            '#news:target',
+            'input:valid',
+            'a:visited',
+        ]
+
+        selectors = simple_selectors
+        for selector_str in selectors:
+            sel = uicss.Selector(selector_str)
+            msg = f'{sel.selector_str=} {sel.is_valid} '
+            if sel.is_valid:
+                cp = sel.compiled_selector
+                msg += f'pattern={cp.pattern} tag_pattern={cp.tag_pattern} req_attrs={cp.req_attrs}'
+            print(msg)
+        pass
+
+    elif caso == 'imageprocessor_label':
+        top = tk.Tk()
+
+        font = ImageFont.truetype('/usr/share/fonts/truetype/ubuntu/UbuntuMono-B.ttf', 50)
+        label = 'Texto de Prueba'
+        bg = Image.new('RGBA', (500, 100), (128, 128, 128, 128))
+        bg = bg.rotate(90, expand=1)
+        options = dict(
+            angle=90,
+            width=200,
+            shadowcolor='black',
+            alignment='center',
+            yalignment='center',
+            background=bg,
+        )
+        labelImg = getLabel(label, font, 'blue', **options)
+        labelImg = ImageTk.PhotoImage(labelImg)
+        canvas = tk.Canvas(top)
+        canvas.pack(side=tk.TOP, fill=tk.BOTH, expand=tk.YES)
+        canvas.create_image(top.winfo_screenwidth()//2, top.winfo_screenheight()//2, image=labelImg)
+
+        top.attributes('-zoomed', True)
+        top.mainloop()
+    elif caso == 'menu_factory':
         class TopClass(tk.Tk):
             def __init__(self):
                 super().__init__()
@@ -241,7 +351,7 @@ if __name__ == '__main__':
                 kwargs = dict([widget.tree.item(ifocus, 'values')])
                 boton.config(**kwargs)
                 pass
-            fframe = formFrameGen(
+            fframe = userinterface.formFrameGen(
                 top,
                 filename=os.path.join('./data/', 'WidgetParams.xml')
             )
@@ -282,6 +392,11 @@ if __name__ == '__main__':
             dummy = fframe
             fframe.pack(side=tk.TOP, fill=tk.BOTH, expand=tk.YES, anchor=tk.NE)
         else:
+            file_path = 'Data/kodi/ApplicationLayout.xml'
+            xmlObj = getLayout(file_path)
+            settings = {}
+            fframe = formFrame(master=top, settings=settings, selPane=xmlObj)
+
             def motion(event):
                 widget, x, y = event.widget, event.x, event.y
                 try:
@@ -291,8 +406,6 @@ if __name__ == '__main__':
                 except:
                     pass
             fframe.bind_all("<Enter>", motion)
-
-
             Example(fframe).pack(fill="both", expand=True)
         top.attributes('-zoomed', True)
         top.mainloop()

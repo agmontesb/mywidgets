@@ -10,6 +10,7 @@ import re
 import tkinter as tk
 import tkinter.simpledialog as tkSimpleDialog
 import tkinter.filedialog as tkFileDialog
+from tkinter.colorchooser import askcolor as tkColorDialog
 from tkinter import ttk
 import xml.etree.ElementTree as ET
 import importlib
@@ -24,6 +25,7 @@ def getWidgetClass(widgetName):
         kaction=settAction,
         kaudio=settFile,
         kbool=settBool,
+        kcolor=settColor,
         kcontainer=settContainer,
         kdrpdwnlst=settDDList,
         kenum=settEnum,
@@ -107,6 +109,8 @@ class baseWidget(tk.Frame, object):
     @default.setter
     def default(self, value):
         self._default = value
+        equations_manager.state_equations[self._id]._default = value
+        equations_manager.var_values[self._id] = value
         pass
 
     def setVarType(self, vartype='string', name=None):
@@ -127,6 +131,7 @@ class baseWidget(tk.Frame, object):
             self.value = tk.BooleanVar(name=name)
         else:
             self.value = tk.StringVar(name=name)
+        equations_manager.state_equations[name] = self.value
 
     def getSettingPair(self, tId=False):
         '''
@@ -289,17 +294,41 @@ class settFile(baseWidget):
     def setGUI(self, options):
         ttk.Label(self, text=options.get('label'), width=20, anchor=tk.NW).pack(side=tk.LEFT)
         if options.get('id'): self.id = options.get('id').lower()
+        self.initialdir = options.get('initialdir', '')
         self.default = options.get('default', '')
+        if self.initialdir and self.default:
+            self.default = os.path.relpath(self.default, self.initialdir)
+        tk.Button(
+            self, name=self.id,
+            textvariable=self.value, command=lambda x=options.get("initialdir", ""): self.getFile(x)
+        ).pack(side=tk.RIGHT, fill=tk.X, expand=1)
         self.setValue(self.default)
-        ttk.Button(self, name=self.id, #anchor='e',
-                   textvariable=self.value, command=self.getFile).pack(side=tk.RIGHT,
-                                                                                                      fill=tk.X,
-                                                                                                      expand=1)
 
-    def getFile(self):
-        fileName = tkFileDialog.askopenfilename()
+    def getFile(self, initialdir):
+        fileName = tkFileDialog.askopenfilename(initialdir=initialdir)
         if fileName:
+            fileName = os.path.relpath(fileName, initialdir)
             self.value.set(fileName)
+
+    def getAbsolutePath(self):
+        return os.path.join(self.initialdir, self.value.get()) if self.value.get() else ''
+
+
+class settColor(settFile):
+
+    def setValue(self, value):
+        super().setValue(value)
+        if value:
+            btn = self.nametowidget(self.id)
+            btn.config(bg=value)
+
+    def getFile(self, x=None):
+        colors = tkColorDialog(title='Tkinter Color Chooser')
+        if colors[1] is not None:
+            self.setValue(colors[1])
+            # self.value.set(colors[1])
+            # btn = self.nametowidget(self.id)
+            # btn.config(bg=colors[1])
 
 
 class settDDList(baseWidget):
@@ -324,11 +353,13 @@ class settDDList(baseWidget):
             ndx = self.spBoxValues.index(value)
         except:
             return
-        self.value.set(self.lvalues[ndx])
+        # self.value.set(self.lvalues[ndx])
+        super().setValue(self.lvalues[ndx])
 
     def getValue(self):
         try:
-            ndx = self.lvalues.index(self.value.get())
+            value = super().getValue()
+            ndx = self.lvalues.index(value)
         except:
             return
         return self.spBoxValues[ndx]
@@ -366,12 +397,14 @@ class settEnum(baseWidget):
             spBoxValue = value[nPos + 1:].split('|')
             self.children[self.id].configure(values=spBoxValue)
             value = value[:nPos]
-        self.value.set(value)
+        # self.value.set(value)
+        super().setValue(value)
 
     def getValue(self, onlyValue=False):
         onlyValue = onlyValue or not self.withValues
-        if onlyValue: return self.value.get()
-        return '|'.join([self.value.get()] + self.children[self.id].cget('values').split(' '))
+        value = super().getValue()
+        if onlyValue: return value
+        return '|'.join([value] + self.children[self.id].cget('values').split(' '))
 
     def getSettingPair(self, tId=False):
         id = self._id if tId else self.id
@@ -599,7 +632,7 @@ class settOptionList(baseWidget):
 class settSlider(baseWidget):
     def __init__(self, master, **options):
         wdgName = options.get('name').lower()
-        baseWidget.__init__(self, master, varType='string', name=wdgName, id=options.get('id', ''))
+        baseWidget.__init__(self, master, varType='double', name=wdgName, id=options.get('id', ''))
         self.setGUI(options)
         self.name = wdgName
 
@@ -620,7 +653,7 @@ class settSlider(baseWidget):
 class settNumber(baseWidget):
     def __init__(self, master, **options):
         wdgName = options.get('name').lower()
-        baseWidget.__init__(self, master, varType='string', name=wdgName, id=options.get('id', ''))
+        baseWidget.__init__(self, master, varType='int', name=wdgName, id=options.get('id', ''))
         self.setGUI(options)
         self.name = wdgName
 
@@ -658,7 +691,7 @@ class settText(baseWidget):
     def __init__(self, master, **options):
         wdgName = options.get('name').lower()
         self.name = wdgName
-        baseWidget.__init__(self, master, name=wdgName, id=options.get('id', ''))
+        baseWidget.__init__(self, master, varType='string', name=wdgName, id=options.get('id', ''))
         self.setGUI(options)
 
     def setGUI(self, options):
@@ -672,15 +705,6 @@ class settText(baseWidget):
             ttk.Entry(self, name=self.id, textvariable=self.value).pack(side=tk.RIGHT, fill=tk.X, expand=1)
         else:
             ttk.Label(self, textvariable=self.value).pack(side=tk.RIGHT, fill=tk.X, expand=1)
-
-    def setValue(self, value):
-        if value == None:
-            self.value.set('')
-        else:
-            self.value.set(value)
-
-    def getValue(self):
-        return self.value.get() if self.value.get() != '' else ''
 
 
 class settBool(baseWidget):
@@ -745,8 +769,9 @@ class settAction(baseWidget):
                                                                                             expand=1)
 
     def onClick(self):
+        wdg = self.form if hasattr(self.form, 'onClickEvent') else self.winfo_toplevel()
         try:
-            self.form.onClickEvent(self._id)
+            wdg.onClickEvent(self._id)
         except:
             pass
 
@@ -920,7 +945,7 @@ class FormFrame(tk.Frame):
     Clase que entrega un Frame lleno con los widgets definicos en un archivo layout definido.
     '''
 
-    def __init__(self, master, settings, selPane, formModule=None):
+    def __init__(self, master, settings, selPane, formModule=None, name=None):
         '''
         :param master:      tkinter Form. Padre de la forma a generar.
         :param settings:    dict. Valores de las variables cuyo valor es difernte
@@ -929,7 +954,7 @@ class FormFrame(tk.Frame):
         :param formModule:  module. Modulo que contiene la definición de los widgets.
                             definidos por el usuario.
         '''
-        tk.Frame.__init__(self, master)
+        tk.Frame.__init__(self, master, name=name)
         settings = settings or {}
         self.settings = settings
         self.widgetMapping = {}
@@ -1013,6 +1038,13 @@ class FormFrame(tk.Frame):
         toReset = set(mapping).difference(toModify)
         list(map(lambda w: w.setValue(w.default), self.getWidgets(toReset)))
 
+    def resetForm(self):
+        '''
+        Vuelve los valores del form a sus valores de default
+        :return: None
+        '''
+        self.setChangeSettings({})
+
     def registerWidget(self, wdId, wdPath):
         '''
         Mapea el wdId y el camino absoluto del widget.
@@ -1055,7 +1087,7 @@ class FormFrame(tk.Frame):
         :param settings: dict. Valores que se quieren actualizar con los valores cambiados.
         :return: dict. Valores que estando en settings han cambiado en la forma.
                  Bajo la clave 'reset' entrega los valores que estando en settings han vuelto a
-                 su valro de default.
+                 su valor de default.
         '''
         changedSettings = dict(reset=[])
         for child in self.getWidgets():
@@ -1072,6 +1104,15 @@ class FormFrame(tk.Frame):
         filterFlag = lambda key: (key not in settings or settings[key] != changedSettings[key])
         toProcess = dict([(key, value) for key, value in changedSettings.items() if filterFlag(key)])
         return toProcess
+
+    def getSettings(self):
+        args = {
+            key: value
+            for key, value in [
+                child.getSettingPair() for child in self.getWidgets()
+            ]
+        }
+        return args
 
 # Se hace para compatibilidad con versiones anteriores.
 formFrame = FormFrame

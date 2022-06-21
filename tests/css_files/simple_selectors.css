@@ -1,0 +1,85 @@
+
+
+.intro {
+    a: 1;
+}
+
+* {
+    d: 1;
+}
+
+
+.name1.name2 {
+    b: 1;
+}
+
+
+#firstname {
+    c: 1;
+}
+
+
+p {
+    e: 1;
+}
+
+
+p.intro {
+    f: 1;
+}
+
+
+a[target] {
+    g: 1;
+}
+
+a[target=_blank] {
+    h: 1;
+}
+
+/* equivocado */
+img[title~=flower] {
+    i: 1;
+}
+
+
+p[lang|=en] {
+    j: 1;
+}
+
+
+div[class^="test"] {
+    k: 1;
+}
+
+
+div[class$="test"] {
+    l: 1;
+}
+
+div[class*="test"] {
+    m: 1;
+}
+
+/* Compound Selectors */
+
+
+.name1 .name2 {
+    a: 1;
+}
+
+div p {
+    b: 2;
+}
+
+div > p {
+    c: 3;
+}
+
+div + p {
+    d: 4;
+}
+
+p ~ ul {
+    e: 5;
+}

@@ -33,21 +33,19 @@ def printHexIoData(data, offset, size=-1, base=16, shift=0, label='', to_string=
     offset = offset or 0
     assert data.seek(offset) == offset
     size = 0x7FFF if size < 0 else size
-    linf = shift // base
-    lsup = (size - 1) // base + 1
-    for nlin in range(linf, lsup):
-        colinf = (shift % base) if shift and nlin == linf else 0
-        colsup = min(base * (nlin + 1), size) - base * nlin
-        codes = ((colsup - colinf) * c_uint8)()
+    nlin = shift // base
+    nbytes = base - shift % base
+    while True:
+        codes = (nbytes * c_uint8)()
         breaded = data.readinto(codes)
-        lsup = min(breaded, colsup - colinf)
-        pos = map(lambda x: '{:0>2x}'.format(x).upper(), codes[:lsup])
-        chars = label or ''.join(map(lambda x: chr(x) if 31 < x < 127 else '.', codes[:lsup]))
+        pos = map(lambda x: '{:0>2x}'.format(x).upper(), codes[:breaded])
+        chars = label or ''.join(map(lambda x: chr(x) if 31 < x < 127 else '.', codes[:breaded]))
         saddr = '{:0>8x}'.format(base * nlin)
-        cprint(saddr + ' ' + colinf * '   ' + ' '.join(pos) + (base - colsup + 1) * '   ' + chars, to_string=to_string)
-        if lsup < colsup - colinf:
+        cprint(saddr + ' ' + (base - nbytes) * '   ' + ' '.join(pos) + (base - breaded + 1) * '   ' + chars, to_string=to_string)
+        if breaded < nbytes:
             break
-
+        nbytes = base
+        nlin += 1
 
 @contextlib.contextmanager
 def ioData(data=None, offset=0, output=None, to_string=None):

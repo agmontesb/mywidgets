@@ -1,3 +1,5 @@
+import tkinter as tk
+
 
 def geoManagerClosure(widget, **kwargs):
     geomanager = kwargs.pop('geomanager', 'pack')
@@ -16,7 +18,9 @@ wdg_visible = geoManagerClosure
 def enabledClosure(widget, **kwargs):
 
     def enableCallback(name1, name2, op):
-        enabled = widget.getvar(name1)
+        # enabled = widget.getvar(name1)
+        tkApp = tk._default_root.tk
+        enabled = tkApp.call('set', name1)
         state = 'normal' if enabled else 'disabled'
         widget.configure(state=state)
     return enableCallback

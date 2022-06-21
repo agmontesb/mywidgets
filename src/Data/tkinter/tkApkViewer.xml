@@ -9,14 +9,14 @@
             <widgetexplorer name="rawtree" visible="eq(vis_var, 'raw')*eq(show_var, 'true')" lib="Widgets.Custom" side="top" fill="both" expand="yes" in=".frstwidget"/>
             <frame side="top" fill="both" expand="yes" in=".scndwidget" >
                 <navigationbar path_obj="apktree" name="apk_path" visible="eq(vis_var, 'raw')" before=".output"  side="top" fill="x" />
-                <frame side="bottom" fill="x">
-                    <label text="Views: " side="left" />
-                    <radiobutton text="Text" variable="vis_var" value="text" width="10" indicatoron="0" side="left"/>
-                    <radiobutton text="Raw" variable="vis_var" value="raw" width="10" indicatoron="0" side="left"/>
-                </frame>
                 <widgetexplorer name="fields" visible="eq(vis_var, 'raw')*eq(show_var, 'true')" lib="Widgets.Custom" columns="field value nlin loff size" show='headings' displaycolumns="field value nlin loff size" before=".output" side="bottom" fill="x" expand="yes"/>
                 <sintaxeditor name="output" lib="Widgets.Custom" hrzslider="true" vrtslider="true" side="top" fill="both" expand="yes"/>
             </frame>
         </collapsingframe>
+        <frame side="bottom" fill="x">
+            <label text="Views: " side="left" />
+            <radiobutton text="Text" variable="vis_var" value="text" width="10" indicatoron="0" side="left"/>
+            <radiobutton text="Raw" variable="vis_var" value="raw" width="10" indicatoron="0" side="left"/>
+        </frame>
     </category>
 </settings>

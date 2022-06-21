@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<settings>
+	<category label="getLabels Parameters" lib="Widgets.kodiwidgets">
+		<kcontainer label="Positional Arguments" >
+            <ktext id="label" label="label:   " default=""/>
+			<kfile id="font" label="font:   " default="/usr/share/fonts/truetype/ubuntu/UbuntuMono-B.ttf" initialdir="/usr/share/fonts/truetype"/>
+			<kcolor id="textcolor" label="textcolor:   " default="#000000"/>
+			<kfile id="background" label="background:   " default=""/>
+			<knumber id="xpos" label="xpos:   " default="0"/>
+			<knumber id="ypos" label="ypos:   " default="0"/>
+		</kcontainer>
+        <kcontainer label="Keyword Arguments" scrolled="true">
+			<kbool id="haspath" label="haspath:   " default="false"/>
+			<kbool id="wrapmultiline" label="wrapmultiline:   " default="false"/>
+            <kcolor id="shadowcolor" label="shadowcolor:   " default=""/>
+			<knumber id="width" label="width:   " default="0"/>
+			<kslider id="angle" label="angle:   " default="0" range="-180,180"/>
+			<kenum id="alignment" label="alignment:   " default="left" values="left|center|right"/>			
+			<kenum id="yalignment" label="yalignment:   " default="top" values="top|center|bottom"/>			
+        </kcontainer>
+		<kaction id="getlabel" label="getLabel" enable="ne(label, '')"/>
+	</category>
+</settings>
+
+
+

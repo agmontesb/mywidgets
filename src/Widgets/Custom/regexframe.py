@@ -14,7 +14,7 @@ import urllib.parse
 import re
 import src.Tools.uiStyle.MarkupRe as MarkupRe
 from src.Tools.uiStyle.uicss import Selector
-from . import network
+from . import network, CollapsingFrame
 import queue
 from src.Widgets.kodiwidgets import CustomDialog
 import threading
