@@ -189,6 +189,7 @@ class Selector:
             case, selector = selector[0], selector[1:]
             if case == '.':         # case == '.': #clase
                 self._specificity[TENS] += 1
+                selector = '\\b \\b'.join(selector.split('.'))
                 basic_pattern.append(f'class=".*?\\b{selector}\\b.*?"')
             elif case == '#':       # case == '#': #id
                 self._specificity[HUNDRES] += 1
@@ -350,6 +351,7 @@ class CssWrapper:
         self.style_strings = None
         self.patterns = []
         self.srch_mapping = collections.defaultdict(list)
+        self.end_tag_patterns = collections.defaultdict(list)
         self.process_css_string(css_string)
 
     def process_css_string(self, css_string):
@@ -387,29 +389,47 @@ class CssWrapper:
                 srch_regex, pattern = cp, None
                 key, sel_str = sel_str, ''
             comb, key = key[0], key[1:]
-            if key[0] not in ('.', '#'):
+            if key[0] in ('.', '#'):
                 key = srch_regex.tag_pattern
                 if key == MarkupRe.TAG_PATTERN_DEFAULT:
                     req_attrs = srch_regex.req_attrs['tagpholder']
                     key = '*' if '__TAG__' not in req_attrs else req_attrs['__TAG__'].pattern.rstrip(r'\Z')
-            npos = len(self.patterns)
-            srch_bin = self.srch_mapping[key]
-            srch_bin.append((npos, srch_regex, comb))
-            self.patterns.append((level, (sel_ndx, pattern, sel_str, key, len(srch_bin) - 1)))
+            if comb in (' ', '>'):
+                npos = len(self.patterns)
+                srch_bin = self.srch_mapping[key]
+                srch_bin.append((npos, srch_regex, comb))
+                self.patterns.append((level, (sel_ndx, pattern, sel_str, key, len(srch_bin) - 1)))
+            else:
+                self.end_tag_patterns[level - 1].append((sel_ndx, pattern, sel_str, key, srch_regex, comb))
 
     def check_elem(self, in_level, tag, attrs):
         to_check = ['*', tag]
         if 'id' in attrs:
             to_check.append(f'#{attrs["id"]}')
         if 'class' in attrs:
+            # attrs['class'] = 'clase1 clase2 clase3'
+            # to_check = [
+            #       '.clase1',
+            #       '.clase2',
+            #       '.clase3',
+            #       '.clase1.clase2',
+            #       '.clase1.clase3',
+            #       '.clase2.clase3',
+            #       '.clase1.clase2.clase3'
+            # ]
             clases = attrs['class'].split(' ')
-            for clase in clases:
-                to_check.append(f'.{clase}')
+            clases = itertools.chain(
+                *(
+                    [f'.{".".join(x)}' for x in itertools.combinations(clases, y + 1)]
+                    for y in range(len(clases))
+                )
+            )
+            to_check.extend(clases)
+        # Se filtra to_check a solo los elementos presentes en srch_mapping.keys()
+        to_check &= self.srch_mapping.keys()
         checked = []
         haveAllReqAttr = MarkupRe.MarkupParser._haveTagAllAttrReq
         for key in to_check:
-            if key not in self.srch_mapping:
-                continue
             srch_bin = self.srch_mapping[key]
             for npos, srch_regex, comb in srch_bin:
                 req_attrs = srch_regex.req_attrs.get('tagpholder', {}).copy()
@@ -419,9 +439,13 @@ class CssWrapper:
                         bflag = in_level == level + 1
                         assert req_attrs.pop('__TAG__').match(key)
                     case '+':   # div + p, Selects the first <p> element that is placed immediately after <div> elements
-                        pass
+                        level = self.patterns[npos][0]
+                        bflag = in_level == level
+                        assert req_attrs.pop('__TAG__').match(key)
                     case '~':   # p ~ ul, Selects every <ul> element that is preceded by a <p> element
-                        pass
+                        level = self.patterns[npos][0]
+                        bflag = in_level == level + 1
+                        assert req_attrs.pop('__TAG__').match(key)
                     case _:     # div p, Selects all <p> elements inside <div> elements
                         bflag = True
                 bflag = bflag and haveAllReqAttr(attrs, req_attrs)
@@ -447,6 +471,22 @@ class CssWrapper:
                 self.srch_mapping[key].pop(npos)
                 if not self.srch_mapping[key]:
                     self.srch_mapping.pop(key)
+        lst_level = level - 1
+        # Se debe asegurar que los elementos en self.patterns sean únicos. Esto se asegura
+        # vigilando que (level, sel_str, key)
+        lst_filter = [(x, y[2], y[3]) for x, y in self.patterns if x > -1]
+        for level in (lst_level, lst_level + 1):
+            bin_pattern = self.end_tag_patterns.pop(level, [])
+            for sel_ndx, pattern, sel_str, key, srch_regex, comb in bin_pattern:
+                if level == lst_level and comb == '+':
+                    self.end_tag_patterns[level + 1].append((sel_ndx, pattern, sel_str, key, srch_regex, comb))
+                    continue
+                if (level, sel_str, key) in lst_filter:
+                    continue
+                npos = len(self.patterns)
+                srch_bin = self.srch_mapping[key]
+                srch_bin.append((npos, srch_regex, comb))
+                self.patterns.append((level, (sel_ndx, pattern, sel_str, key, len(srch_bin) - 1)))
 
     def findWidgets(self, htmlstr, wdg_map):
         cp_patterns = []

@@ -61,25 +61,3 @@ div[class*="test"] {
     m: 1;
 }
 
-/* Compound Selectors */
-
-
-.name1 .name2 {
-    a: 1;
-}
-
-div p {
-    b: 2;
-}
-
-div > p {
-    c: 3;
-}
-
-div + p {
-    d: 4;
-}
-
-p ~ ul {
-    e: 5;
-}
