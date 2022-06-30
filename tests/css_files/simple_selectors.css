@@ -47,7 +47,7 @@ p[lang|=en] {
     j: 1;
 }
 
-
+/* Esto es un comentario */
 div[class^="test"] {
     k: 1;
 }
@@ -61,3 +61,13 @@ div[class*="test"] {
     m: 1;
 }
 
+
+/*
+div[class$="test"] {
+    l: 1;
+}
+
+div[class*="test"] {
+    m: 1;
+}
+*/

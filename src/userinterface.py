@@ -76,15 +76,20 @@ def event_data(**params):
         tk.Event = wrapped
 
 
-def getLayout(layoutfile: str) -> ET.Element:
-    if not urllib.parse.urlparse(layoutfile).scheme:
+def getContent(fileurl):
+    if not urllib.parse.urlparse(fileurl).scheme:
         basepath = os.path.dirname(__file__)
-        layoutpath = os.path.join(basepath, layoutfile)
+        layoutpath = os.path.join(basepath, fileurl)
         layoutfile = os.path.abspath(layoutpath)
         layoutfile = f'file://{urllib.request.pathname2url(layoutfile)}'
     initConf = 'curl --user-agent "Mozilla/5.0 (Windows NT 6.0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/47.0.2526.80 Safari/537.36" --cookie-jar "cookies.lwp" --location'
     net = network(initConf)
     content, _ = net.openUrl(layoutfile)
+    return content
+
+
+def getLayout(layoutfile: str) -> ET.Element:
+    content = getContent(layoutfile)
     return ET.XML(content)
 
 

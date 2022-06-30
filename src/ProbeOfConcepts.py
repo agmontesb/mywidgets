@@ -149,8 +149,127 @@ def nameElements(htmlstr, k=-1):
 
 
 if __name__ == '__main__':
-    caso = 'css_selectors'
-    if caso == 'css_selectors':
+    caso = 'treebuilder'
+    if caso == 'treebuilder':
+        import xml.etree.ElementTree as ET
+        from xml.etree.ElementTree import XMLParser, TreeBuilder, ProcessingInstruction
+
+        from src.Tools.uiStyle.uicss import CssWrapper
+
+        pi = ProcessingInstruction('xml-stylesheet', text='type="text/css" href="style.css"')
+
+        exampleXml = """
+        <!DOCTYPE html>
+        <html>
+        <head>
+        <style>
+        body {
+          background-color: lightblue;
+        }
+        
+        h1 {
+          color: white;
+          text-align: center;
+        }
+        
+        p {
+          color: red;
+          font-family: verdana;
+          font-size: 20px;
+        }
+        </style>
+        </head>
+        <body>
+        
+        <h1>My First CSS Example</h1>
+        <p>This is a paragraph.</p>
+        <div>
+            <style>
+                p {
+                    color: green;
+                }
+            </style>
+          <p>This is a second paragraph.</p>
+        </div>
+            <style>
+                p {
+                    color: yellow;
+                }
+            </style>
+        <p>This is a third paragraph.</p>
+        
+        </body>
+        </html>"""
+
+        class XmlSerializer:  # The target object of the parser
+            style_strs = []
+            wrapper = None
+            stack = []
+            _data = []
+            _tail = 1
+            _last_open = []
+
+            def __call__(self, htmlstr):
+                parser = ET.XMLParser(target=self)
+                parser.feed(htmlstr)
+                parser.close()
+                return self.stack
+
+            @property
+            def selectors(self):
+                return getattr(self.wrapper, 'selectors', None)
+
+            def start(self, tag, attrib):  # Called for each opening tag.
+                self._flush()
+                self.stack.append(('starttag', tag, attrib, (0, 0)))
+                self._last_open.append(tag)
+                self._tail = 0
+
+            def end(self, tag):  # Called for each closing tag.
+                self._flush()
+                assert self._last_open.pop() == tag, "end tag mismatch (expected %s, got %s)" % (
+                    self._last_open[-1], tag
+                )
+                self.stack.append(('endttag', tag, (0, 0)))
+                self._tail = 1
+                if tag == 'style':
+                    self.stack.pop()
+                    _, _, attribs, _ = self.stack.pop()
+                    style_str = attribs.get('_tail', '')
+                    self.style_strs.append(style_str)
+
+            def pi(self, target, text=None):
+                if target == 'xml-stylesheet':
+                    self.style_strs.append((target, text))
+
+            def data(self, data):
+                data = data.strip(' \n')
+                if data:
+                    self._data.append(data)
+
+            def close(self):  # Called when all data has been parsed.
+                style_strs = '\n'.join(self.style_strs)
+                self.wrapper = CssWrapper(style_strs)
+
+            def _flush(self):
+                if self._data:
+                    text = "".join(self._data)
+                    if self.stack:
+                        attribs = self.stack[-1][2]
+                        # msg = "internal error (tail)" if self._tail else "internal error (text)"
+                        # assert '_tail' in attribs, msg
+                        attribs['_tail'] = text
+                    self._data = []
+
+
+        xmlserializer = XmlSerializer()
+        it = xmlserializer(exampleXml)
+        for x in it:
+            print(x)
+        for sel in xmlserializer.selectors:
+            print(sel)
+
+    elif caso == 'css_selectors':
         from Tools.uiStyle import uicss
         selector_str = 'body #touchnav-wrapper div strong'
         sel = uicss.Selector(selector_str)
@@ -409,3 +528,11 @@ if __name__ == '__main__':
             Example(fframe).pack(fill="both", expand=True)
         top.attributes('-zoomed', True)
         top.mainloop()
+
+        """
+li > a[href*="en-US"] > .inline-warning
+:nth-of-type
+:nth-of-type(3n)
+        
+        
+        """

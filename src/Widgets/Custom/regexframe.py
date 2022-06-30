@@ -528,10 +528,14 @@ class RegexpBar(tk.Frame):
                 if self.cbIndex.get() + pattern not in cbValues:
                     self.cbIndex.set('')
         self.setRegexpPattern(pattern)
-        if self.keyboard_delay is None:
-            # print('inicio delay buffer')
-            self.after(500, self.delay_buffer)
-        self.keyboard_delay = time.time_ns() // 1_000_000
+        self.formatContent()
+        if self.cbIndex.get():
+            self.textWidget.focus_force()
+        # A continuación la implementación del keyboard delay
+        # if self.keyboard_delay is None:
+        #     # print('inicio delay buffer')
+        #     self.after(500, self.delay_buffer)
+        # self.keyboard_delay = time.time_ns() // 1_000_000
 
     def delay_buffer(self):
         now = time.time_ns() // 1_000_000

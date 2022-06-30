@@ -5,24 +5,145 @@
 #TODO: Crear Test para clase selector con ccs.py y un archivo que contenga los casos de
 # ejemplo en w3school
 import collections
+import os
 import re
 import itertools
+import urllib
 from html.parser import HTMLParser
+import xml.etree.ElementTree as ET
 
 import src.Tools.uiStyle.MarkupRe as MarkupRe
+from Widgets.Custom.network import network
 
 THOUSANDS = 0
 HUNDRES = 1
 TENS = 2
 ONES = 3
 
-PATTERN = re.compile(r'(?:\:*[:\.#]*?[A-Za-z\d\-\_]+)|(?:\[.+?\])')
-SPLIT_PATTERN = re.compile(r'((?:(?:\:*[:\.#]*?[A-Za-z\d\-\_]+)|(?:\[.+?\]))+)')
+PATTERN = re.compile(r'(?:\:*[:\.#]*?[A-Za-z\d\-\_\(\)]+)|(?:\[.+?\])')
+SPLIT_PATTERN = re.compile(r'((?:(?:\:*[:\.#]*?[A-Za-z\d\-\_\(\)]+)|(?:\[.+?\]))+)')
 COMBINATORS = re.compile(r'([\+\>\ \~\,]+)')
 ATTRIBUTES = re.compile(r'([\&\|\^\$\*]*=)')
+CP_PATTERN = re.compile('\s*?((?:[^\{\s\*]+?\*?[^\{\*]+?)|(?:\*))\ *?(\{.+?\})', re.DOTALL)
+STYLE_PATTERN = re.compile('^\s*?([^\s]+?):\s*?([^\s]+?);$', re.MULTILINE)
 
 
-class WebPageParser(HTMLParser):
+class XmlSerializer:  # The target object of the parser
+    style_strs = []
+    _style_ids = []
+    wrapper = None
+    stack = []
+    _data = []
+    _tail = None
+    _last_open = []
+    _ntags = 0
+    _parser = None
+    selectors = None
+
+    def __call__(self, htmlstr):
+        self._parser = parser = ET.XMLParser(target=self)
+        parser.feed(htmlstr)
+        parser.close()
+        return self.stack
+    
+    def getpos(self):
+        return self._ntags, len(self._last_open) - 1
+
+    def start(self, tag, attrib):  # Called for each opening tag.
+        self._flush()
+        self._last_open.append(tag)
+        self._ntags += 1
+        self.stack.append(('starttag', tag, attrib, self.getpos()))
+        self._tail = 0
+
+    def end(self, tag):  # Called for each closing tag.
+        self._flush()
+        assert self._last_open.pop() == tag, "end tag mismatch (expected %s, got %s)" % (
+            self._last_open[-1], tag
+        )
+        self.stack.append(('endtag', tag, self.getpos()))
+        self._tail = 1
+        if self.stack[-2][:2] == ('starttag', tag):
+            # No se admiten otros elementos en un elemento que se instrumentaliza como style
+            attribs = self.stack[-2][2]
+            id = attribs.get('id', '')
+            if id in self._style_ids:
+                self._style_ids.remove(id)
+                style_str = attribs.get('_text', '')
+                self.style_strs.append(style_str)
+
+    def start_ns(self, prefix, uri):
+        self.stack.append(('start-ns', prefix, uri, self.getpos()))
+
+    def end_ns(self, prefix):
+        self.stack.append(('end-ns', prefix, self.getpos()))
+
+    def comment(self, text):
+        self.stack.append(('comment', text, self.getpos()))
+
+    def pi(self, target, text=None):
+        data = f'<{target} {text}>'
+        attrs_pos = MarkupRe.MarkupParser.get_attrs_pos(data)
+        attribs = {key: data[x:y] for key, (x, y) in attrs_pos.items()}
+        if attribs['__TAG__'] == 'xml-stylesheet':
+            match attribs.pop('type', None):
+                case "text/css":
+                    url = attribs.get('href', '')
+                    if url.startswith('#'):
+                        self._style_ids.append(url[1:])
+                    else:
+                        try:
+                            data = self.getContent(url)
+                            self.style_strs.append(data)
+                        except:
+                            pass
+                case _:
+                    pass
+
+    def data(self, data):
+        data = data.strip(' \n')
+        if data:
+            self._data.append(data)
+
+    def close(self):  # Called when all data has been parsed.
+        style_strs = '\n'.join(self.style_strs)
+        self.selectors = self.process_css_string(style_strs)
+
+    @staticmethod
+    def process_css_string(css_string):
+        css_string = css_string.replace('{', '{\n').replace(';', ';\n').replace('\n\n', '\n')
+        css_string = '\n'.join(re.split('/\*.+?\*/', css_string, flags=re.DOTALL))
+        css_tuples = CP_PATTERN.findall(css_string)
+        selectors = []
+        for select_str, style_str in css_tuples:
+            selectors.extend([Selector(x.strip(), style_str) for x in select_str.split(',')])
+        return selectors
+
+    def _flush(self):
+        if self._data:
+            text = "".join(self._data)
+            if self.stack:
+                attribs = self.stack[-1][2]
+                key = '_tail' if self._tail else '_text'
+                msg = "internal error (tail)" if self._tail else "internal error (text)"
+                assert key not in attribs, msg
+                attribs[key] = text
+            self._data = []
+
+    @staticmethod
+    def getContent(fileurl):
+        if not urllib.parse.urlparse(fileurl).scheme:
+            basepath = os.path.dirname(__file__)
+            layoutpath = os.path.join(basepath, fileurl)
+            layoutfile = os.path.abspath(layoutpath)
+            layoutfile = f'file://{urllib.request.pathname2url(layoutfile)}'
+        initConf = 'curl --user-agent "Mozilla/5.0 (Windows NT 6.0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/47.0.2526.80 Safari/537.36" --cookie-jar "cookies.lwp" --location'
+        net = network(initConf)
+        content, _ = net.openUrl(layoutfile)
+        return content
+
+
+class HtmlSerializer(HTMLParser):
 
     def __init__(self):
         super().__init__()
@@ -30,70 +151,55 @@ class WebPageParser(HTMLParser):
 
     def __call__(self, htmlstr):
         self.feed(htmlstr)
-        yield from self.stack
+        return self.stack
 
     def handle_starttag(self, tag, attrs):  # startswith('<')
         self.stack.append(('starttag', tag, dict(attrs), self.getpos()))
+        print('handle_starttag', tag, attrs)
 
     def handle_endtag(self, tag):  # startswith("</")
-        self.stack.append(('endttag', tag, self.getpos()))
+        self.stack.append(('endtag', tag, self.getpos()))
+        print('handle_endtag', tag)
 
     def handle_startendtag(self, tag, attrs):
-        self.stack.append(('startendtag', tag, dict(attrs), self.getpos()))
+        self.stack.append(('starttag', tag, dict(attrs), self.getpos()))
+        self.stack.append(('endtag', tag, self.getpos()))
+        print('handle_startendtag', tag, attrs)
 
     def handle_data(self, data):
+        # ... <tag ...>data</tag>
+        # ... </tag>data<tag ...>
+        print('handle_data', data)
         pass
 
     def handle_entityref(self, name):  # startswith('&')
+        print('handle_entityref', name)
         pass
 
     def handle_charref(self, name):  # startswith("&#")
+        print('handle_charref', name)
         pass
 
     def handle_comment(self, data):  # startswith("<!--")
+        #<!-- Esto es lo que entrega end ata -->
+        print('handle_comment', data)
         pass
 
-    def handle_decl(self, data):  # startswith("<!")
+    def handle_decl(self, data): # startswith("<!")
+        # '<!doctype' -> doctype
+        print('handle_decl', data)
         pass
 
     def handle_pi(self, data):  # startswith("<?")
+        # <? esto es lo que entrega en data>
+        print('handle_pi', data)
         pass
 
     def unknown_decl(self, data):
+        # '<![[mark content]]>' -> mark: "temp", "cdata", "ignore", "include", "rcdata",
+        # '<![[mark content]]>' -> mark: "if", "else", "endif"
+        print('unknown_decl', data)
         pass
-
-
-def getWidgetMap(htmlstr, k=-1):
-    cmpobj = MarkupRe.compile('(?#<__TAG__ __TAG__=tag name=_name_ id=_id_ >)')
-
-    from_pos = 0
-    to_pos = len(htmlstr)
-    answ = []
-    it = cmpobj.finditer(htmlstr, from_pos, to_pos)
-    stack = [(m.span(), m.groups()) for m in it]
-
-    while stack:
-        (pini, pfin), (tag, name, id) = stack.pop(0)
-
-        k += 1
-        if id:
-            id = id.rsplit('/')[-1]
-        name = name or id or str(k)
-        answ.append(((pini, pfin), (tag, name)))
-
-        #
-        # En este punto se puede mandar a calcular el style a aplicar
-        #
-
-        from_pos = htmlstr[pini:pfin].find('>') + pini + 1
-        to_pos = htmlstr[pini:pfin].rfind('<') + pini
-
-        bflag = from_pos != -1 and to_pos != -1 and from_pos < to_pos
-        if bflag:
-            it = cmpobj.finditer(htmlstr, from_pos, to_pos)
-            stack = [(m.span(), m.groups()) for m in it] + stack
-    wdg_map = {key: value[1] for key, value in answ}
-    return wdg_map
 
 
 class UiCssError(Exception):
@@ -103,7 +209,7 @@ class UiCssError(Exception):
 class Selector:
     seq_gen = itertools.count()
 
-    def __init__(self, selector_str, style_str=None, cascade_priority=None):
+    def __init__(self, selector_str, style_str='', cascade_priority=None):
         '''
         Objeto que representa la unidad mínima de especificidad del css
         :param selector_str: str. String que especifica el selector.
@@ -114,7 +220,8 @@ class Selector:
         if cascade_priority is None:
             cascade_priority = next(self.__class__.seq_gen)
         self._specificity = [0, 0, 0, 0, cascade_priority]
-        self._style_str = style_str
+        # Se estandariza el style_str.
+        self._style_str = style_str.replace('{', '{\n').replace(';', ';\n').replace('\n\n', '\n')
         self._selector_str = selector_str
         self._compiled_selector = None
         try:
@@ -136,7 +243,8 @@ class Selector:
         '''
         :return: str. Style asociated with the selector.
         '''
-        return self._style_str
+        style_pairs = STYLE_PATTERN.findall(self._style_str)
+        return dict(style_pairs)
 
     @property
     def selector_str(self):
@@ -195,11 +303,12 @@ class Selector:
                 self._specificity[HUNDRES] += 1
                 basic_pattern.append(f'id="{selector}"')
             elif case == ':':
-                if selector[0] != ':':      # case == ':'
-                    self._specificity[TENS] += 1
+                # Hasta ahora
+                if selector[0] != ':':      # case == ':' pseeudo clases
+                    self._specificity[TENS] += 1 if selector != 'where' else 0
                 else:                       # case == '::'
                     self._specificity[ONES] += 1
-            else:                    # case == '[': [exp]
+            else:                    # case == '[': [exp]   pseudo attributes
                 self._specificity[TENS] += 1
                 selector = selector[:-1]
                 selectors = selector.split(' ')
@@ -260,7 +369,9 @@ class Selector:
         selector_str = selector_str.replace('~=', '&=')     # Se hace para evitar conflicto entre combinator y
                                                             # y attributes.
         if selector_str == '*':
-            return MarkupRe.compile('(?#<__TAG__>)')
+            cp = MarkupRe.compile('(?#<__TAG__>)')
+            self._freeze_specificity()
+            return cp
         selector_str = selector_str.strip('\n\t ')
         splt_sel = SPLIT_PATTERN.split(selector_str)[1:-1]
         try:
@@ -339,46 +450,14 @@ class Selector:
             return getattr(self.compiled_selector, item)
 
 
-class CssWrapper:
-    CP_PATTERN = re.compile('\s+?((?:[^\{\s\*]+?\*?[^\{\*]+?)|(?:\*))\ *?(\{.+?\})', re.DOTALL)
+class ElementFactory:
 
-    def __init__(self, css_string, isfile=False):
-        if isfile:
-            with open(css_string, 'r') as f:
-                css_string = f.read()
-
-        self.selectors = None
+    def __init__(self):
         self.style_strings = None
         self.patterns = []
         self.srch_mapping = collections.defaultdict(list)
         self.end_tag_patterns = collections.defaultdict(list)
-        self.process_css_string(css_string)
-
-    def process_css_string(self, css_string):
-        css_tuples = self.CP_PATTERN.findall(css_string)
-        selectors = []
-        for select_str, style_str in css_tuples:
-            selectors.extend([Selector(x, style_str) for x in select_str.split(',')])
-        self.selectors = selectors
-        pass
-
-    def findStyles(self, htmlstr, from_pos, to_pos):
-        for indx, selector in enumerate(self.selectors):
-            cp_patterns = selector.compiled_selector
-            for cp_pattern in cp_patterns:
-                #
-                # Aqui se debe hacer match y ver como se encuentran los items en los compuestos.
-                #
-                # m = cp_pattern.match(htmlstr, from_pos, to_pos)
-                spans = [
-                    m.span()
-                    for m in cp_pattern.finditer(htmlstr, from_pos, to_pos)
-                    if m is not None
-                ]
-                for span in spans:
-                    style_array = self.styles.setdefault(span, [])
-                    if indx not in style_array:
-                        style_array.append(indx)
+        self.css_selectors = None
 
     def add_to_patterns(self, cp_patterns, level):
         for sel_ndx, cp, sel_str in cp_patterns:
@@ -388,6 +467,7 @@ class CssWrapper:
             else:
                 srch_regex, pattern = cp, None
                 key, sel_str = sel_str, ''
+            key = key.split('[', 1)[0]
             comb, key = key[0], key[1:]
             if key[0] in ('.', '#'):
                 key = srch_regex.tag_pattern
@@ -488,7 +568,14 @@ class CssWrapper:
                 srch_bin.append((npos, srch_regex, comb))
                 self.patterns.append((level, (sel_ndx, pattern, sel_str, key, len(srch_bin) - 1)))
 
-    def findWidgets(self, htmlstr, wdg_map):
+    def getElements(self, htmlstr, tcase='xml'):
+        if tcase == 'xml':
+            serializer = XmlSerializer()
+        else:
+            raise UiCssError('tcase not valid')
+        it = serializer(htmlstr)
+        self.selectors = serializer.selectors
+
         cp_patterns = []
         for k, sel in enumerate(self.selectors):
             split = COMBINATORS.split(sel.selector_str)
@@ -496,22 +583,18 @@ class CssWrapper:
             selector_str = ','.join([f'{x.strip() if x.strip() else " "}{y}' for x, y in zip(comb, tags)])
             cp_patterns.append((k, sel.compiled_selector, selector_str))
 
-        # cp_pattens = [
-        #     (k, sel.compiled_selector, ' '.join(COMBINATORS.split(sel.selector_str)[::2]))
-        #     for k, sel in enumerate(self.selectors)
-        # ]
         self.add_to_patterns(cp_patterns, -1)
-        html_iter = WebPageParser()
+
         tag_stack = []
         answ = collections.defaultdict(list)
-        for item, *params, tpos in html_iter(htmlstr):
+        for item, *params, tpos in it:
             level = None
             match item:
                 case 'starttag':
                     tag, attrs = params
                     tag_stack.append(tag)
                     level = len(tag_stack)
-                case 'endttag':
+                case 'endtag':
                     tag = params[0]
                     levels = []
                     while tag_stack[-1] != tag:
@@ -529,100 +612,29 @@ class CssWrapper:
                     level = 0
 
             match_sels = self.check_elem(level, tag, attrs)
+
             if match_sels:
-                msg = " ".join('%s="%s"' % (key, val) for key, val in attrs.items())
-                msg = f'{"lin: %s, col: %s" % tpos} => <{tag}{msg.strip()}{">" if item == "starttag" else "/>"}'
                 for match_sel in match_sels:
                     key = match_sel.selector_str
-                    answ[key].append(msg)
+                    answ[key].append((item, tpos, tag, attrs))
         return answ
 
 
-def selectorPattern(selector_str):
-    '''
-    Entrega el regex pattern necesario para encontrar los widgets a los cuales aplicar el estilo.
-    Formas de selectores válidos (<tag class="clase" id="id">):
-    'tag',                          # widget class = tag
-    'tag1,tag2,..tagn               # widget class = tag
-    'tag.clase',                    # widget class = tag y css class = clase
-    '.clase',                       # widget con css class = clase
-    '.clase1,.clase2,...clasen',    # widget con css class = clase
-    '#id',                          # widget con id = id
-    '#id1,#id2,..#idn',             # widget con id = id
-    'tag1 tag2',                    # widget class = tag2 en algún nivel por debajo de widget class = tag1
-    'tag1 tag2 tag3 tag4',          # igual al anterior pero con varios tipos de widget class
-    'tag .clase',                   # widget con css class = clase en algún nivel por debajo de widget class = tag
-    '.clase tag',                   # widget class = tag en algún nivel por debajo de widget css class = clase
-    '#id tag',                      # widget class = tag en algún nivel por debajo de widget con id = id
-    '#id tag.clase'                 # widget class = tag y css class = clase por debajo de widget con id = id
-    :param selector_str: str. CSS selector.
-    :return: str. Pattern correspondiene al selector
-    '''
-
-    def getBasicPattern(base_selector):
-        items = MarkupRe.findall(pattern, base_selector)
-        assert len(items) <= 2
-        if len(items) == 2:
-            # Se tiene en este punto un selector del tipo:
-            # tag.clase, tag#id, .clase#id, #id.clase
-            # De los cuales solo el primero (tag.clase) resulta relevante, los otros son redundantes
-            # pues el #id se refiere a un solo elemento
-            dmy = [sel for sel in items if sel[0] == '#']
-            if dmy:
-                items = dmy
-        if len(items) == 1:
-            selector = items[0]
-            if MarkupRe.match('[a-zA-z\d]+', selector):  # widget
-                base_pattern = f'{selector}'
-            elif selector[0] == '.':  # Clase
-                base_pattern = f'__TAG__ class=".*?{selector[1:]}.*?"'
-            elif selector[0] == '#':  # id
-                base_pattern = f'__TAG__ id="{selector[1:]}"'
-            else:
-                raise AssertionError(f'Selector: {selector}, no conocido')
-        elif len(items) == 2:
-            sel1, sel2 = items
-            assert sel1.isalpha() and sel2[0] == '.', f'Caso {sel1}{sel2} no encontrado todavia'
-            base_pattern = f'{sel1} class="{sel2[1:]}"'
-        return base_pattern
-
-    if selector_str == '*':
-        return [MarkupRe.compile(f'(?#<__TAG__>)')]
-    pattern = '[\.#]*?[a-zA-z\d,]+'
-    selectors = selector_str.split(' ', 1)
-    split_selectors = selectors[0].split(',')
-    base_pattern = [getBasicPattern(x) for x in split_selectors]
-    if len(selectors) == 2:
-        if ',' in selectors[1]:
-            raise Exception(f'Selector: {selector_str} no habilitado aún')
-        inner_pattern = [getBasicPattern(x) for x in selectors[1].split(' ')]
-        base_pattern = [f'{x} <{y}>' for x in base_pattern for y in inner_pattern]
-    base_pattern = [MarkupRe.compile(f'(?#<{x}>)') for x in base_pattern]
-    return base_pattern
-
-
-# def findWidgets(patterns, htmlstr, wdg_map):
-#     answ = []
-#     selected = []
-#     for pattern in patterns:
-#         cmpobj = MarkupRe.compile(pattern)
-#         selected.extend([m.span() for m in cmpobj.finditer(htmlstr)])
-#         answ.extend([wdg_map.get(spn, None) for spn in selected])
-#     zansw = sorted(set(zip(answ, selected)), key=lambda x: x[1])
-#     answ, selected = list(zip(*zansw))
-#     return answ, selected
-
 def main():
-    def test_prov(htmlstr, parser):
-        wdg_map = getWidgetMap(htmlstr, k=-2)
-        answ = parser.findWidgets(htmlstr, wdg_map)
-        selected, widgets, styles = list(zip(*answ))
-        for wdg_id, wdg_spn in zip(widgets, selected):
-            pi, pf = wdg_spn
-            print(wdg_id, htmlstr[pi:pf])
-
-    test = 'NewCssWrapper'
-    if test == 'Selector_class':
+    test = 'in_study'
+    if test == 'in_study':
+        cpat = '(?#<__TAG__ class="clase1"=uno class="clase2"=dos class="clase3"=tres>)'
+        cpat_comp = MarkupRe.compile(cpat)
+        sel = Selector('[class=clase1=uno][class=clase2=dos][class=clase3=tres]')
+        print(sel.compiled_selector.req_attrs)
+        print(sel.compiled_selector.var_list)
+    if test == 'htmlserializer':
+        html_filename = '/mnt/c/Users/Alex Montes/PycharmProjects/mywidgets/tests/css_files/generic.html'
+        with open(html_filename, 'r') as f:
+            html_string = f.read()
+        serializer = HtmlSerializer()
+        answ = serializer(html_string)
+    elif test == 'Selector_class':
         # Selectores válidos
         selectors = {}
         selectors['validos'] = [
@@ -644,15 +656,12 @@ def main():
             for sel_str in selectores:
                 selector = Selector(sel_str)
                 print(f'{sel_str}, {selector.pattern}')
-    elif test == 'NewCssWrapper':
-        case = 1
+    elif test == 'ElementFactory':
+        case = 0
         cssfilename = [
             '/mnt/c/Users/Alex Montes/PycharmProjects/mywidgets/tests/css_files/simple_selectors.css',
             '/mnt/c/Users/Alex Montes/PycharmProjects/mywidgets/tests/css_files/compound_selectors.css',
         ]
-        wrapper = CssWrapper(cssfilename[case], isfile=True)
-        # for selector in wrapper.selectors:
-        #     print(selector.selector_str, selector.specificity, selector.regex_pattern_str)
 
         htmlfilename = [
             '/mnt/c/Users/Alex Montes/PycharmProjects/mywidgets/tests/css_files/simple_selectors.html',
@@ -661,156 +670,15 @@ def main():
         with open(htmlfilename[case], 'r') as f:
             html_string = f.read()
 
-        answ = wrapper.findWidgets(html_string, {})
+        wfactory = ElementFactory()
+
+        answ = wfactory.getElements(html_string)
         for key in sorted(answ):
             print(f'**** Selector: {key} ****')
-            print('    ' + '\n    '.join(answ[key]))
-
-
-    elif test == 'CssWrapper':
-        cssfilename = '/mnt/c/Users/Alex Montes/PycharmProjects/mywidgets/tests/css_files/simple_selectors.html'
-        parser = CssWrapper(cssfilename, isfile=True)
-        for selector in parser.selectors:
-            print(selector.selector_str, selector.specificity, selector.regex_pattern_str)
-
-        htmlstr = '''
-        <!DOCTYPE html>
-        <html>
-        <head>
-        <style>
-        p.center {
-          text-align: center;
-          color: red;
-        }
-
-        p.large {
-          font-size: 300%;
-        }
-        </style>
-        </head>
-        <body>
-
-        <h1 class="center">This heading will not be affected</h1>
-        <div>
-        <p class="center">This paragraph will be red and center-aligned.</p>
-        <p class="center large">This paragraph will be red, center-aligned, and in a large font-size.</p> 
-        </div>
-        </body>
-        </html>
-
-        '''
-        test_prov(htmlstr, parser)
-
-        htmlstr = '''<head>
-        <uno id="alex" />
-        <dos />
-        <tres>esto es el freeze</tres>
-        </head>'''
-
-        answ = getWidgetMap(htmlstr, k=-2)
-        htmlstr = '''<!DOCTYPE html>
-        <html>
-        <head>
-        <style>
-        p {
-          text-align: center;
-          color: red;
-        }
-        </style>
-        </head>
-        <body>
-
-        <p>Every paragraph will be affected by the style.</p>
-        <p id="para1">Me too!</p>
-        <p>And me!</p>
-
-        </body>
-        </html>'''
-
-        wdg_map = getWidgetMap(htmlstr, k=-2)
-
-        # id_pattern = '(?#<__TAG__ __TAG__=tag id="para1" >)'
-        id_pattern = selectorPattern('#para1')
-
-        pass
-    elif test == 'po_ver_par_QUE_SON':
-        htmlstr = '''
-        <!DOCTYPE html>
-        <html>
-        <head>
-        <style>
-        .center {
-          text-align: center;
-          color: red;
-        }
-        </style>
-        </head>
-        <body>
-
-        <h1 class="center">Red and center-aligned heading</h1>
-        <p class="center">Red and center-aligned paragraph.</p> 
-
-        </body>
-        </html>'''
-        wdg_map = getWidgetMap(htmlstr, k=-2)
-        # class_pattern = '(?#<__TAG__ class="center" >)'
-        class_pattern = selectorPattern('.center')
-
-        htmlstr = '''
-        <!DOCTYPE html>
-        <html>
-        <head>
-        <style>
-        p.center {
-          text-align: center;
-          color: red;
-        }
-
-        p.large {
-          font-size: 300%;
-        }
-        </style>
-        </head>
-        <body>
-
-        <h1 class="center">This heading will not be affected</h1>
-        <div>
-        <p class="center">This paragraph will be red and center-aligned.</p>
-        <p class="center large">This paragraph will be red, center-aligned, and in a large font-size.</p> 
-        </div>
-        </body>
-        </html>
-
-        '''
-        wdg_map = getWidgetMap(htmlstr, k=-2)
-        # class_pattern = '(?#<__TAG__ class=".*?center.*?" >)'
-        class_pattern = selectorPattern('.center')
-
-        class_pattern = selectorPattern('body p h1')
-
-        htmlstr = '''
-        <!DOCTYPE html>
-        <html>
-        <head>
-        <style>
-        h1, h2, p {
-          text-align: center;
-          color: red;
-        }
-        </style>
-        </head>
-        <body>
-
-        <h1>Hello World!</h1>
-        <h2>Smaller heading!</h2>
-        <p>This is a paragraph.</p>
-
-        </body>
-        </html>
-        '''
-        wdg_map = getWidgetMap(htmlstr, k=-2)
-        # class_pattern = '(?#<p|h1|h2>)'
-        class_pattern = selectorPattern('body,p,h1')
+            for item, tpos, tag, attrs in answ[key]:
+                msg = " ".join('%s="%s"' % (key, val) for key, val in attrs.items())
+                msg = f'{"lin: %s, col: %s" % tpos} => <{tag} {msg.strip()}{">" if item == "starttag" else "/>"}'
+                print('    ' + msg)
 
 
 if __name__ == '__main__':

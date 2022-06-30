@@ -57,7 +57,7 @@ class ImgProcessorE(tk.Tk):
         else:
             value = ', '.join(children)
         form = self.forms['getfontawesomeicon']
-        widget = form.getWidgets(('charname',))[0]
+        widget = form.getElements(('charname',))[0]
         value = f'{widget.getValue()}, {value}'.strip(', ')
         widget.setValue(value)
 
@@ -109,7 +109,7 @@ class ImgProcessorE(tk.Tk):
         if btn_id == 'getlabel':
             form = self.forms['getlabelargs']
             args = form.getSettings()
-            wdg_font = form.getWidgets(('font',))[0]
+            wdg_font = form.getElements(('font',))[0]
             font_path = wdg_font.getAbsolutePath()
             args['font'] = ImageFont.truetype(font_path, 50)
             font = args.pop('font')
@@ -172,7 +172,7 @@ class ImgProcessorE(tk.Tk):
             args = form.getSettings()
             args.pop('gettexture')
             keys = ('imagefile', 'bordertexture')
-            option = {key: wdg.getAbsolutePath() for key, wdg in zip(keys, form.getWidgets(keys))}
+            option = {key: wdg.getAbsolutePath() for key, wdg in zip(keys, form.getElements(keys))}
             args.update(option)
 
             for key in ('border', 'bordersize', 'diffuse'):
