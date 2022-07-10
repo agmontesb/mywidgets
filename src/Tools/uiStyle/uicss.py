@@ -1,8 +1,7 @@
-
-#TODO Crear clase Selector:
+# TODO Crear clase Selector:
 # Esta clase deberá al menos tener los siguientes métodos: parse, especificidad,
 # comparadores como __lt__, __gt__, ... hechoss con base en especificidad.
-#TODO: Crear Test para clase selector con ccs.py y un archivo que contenga los casos de
+# TODO: Crear Test para clase selector con ccs.py y un archivo que contenga los casos de
 # ejemplo en w3school
 import collections
 import os
@@ -20,12 +19,35 @@ HUNDRES = 1
 TENS = 2
 ONES = 3
 
-PATTERN = re.compile(r'(?:\:*[:\.#]*?[A-Za-z\d\-\_\(\)]+)|(?:\[.+?\])')
-SPLIT_PATTERN = re.compile(r'((?:(?:\:*[:\.#]*?[A-Za-z\d\-\_\(\)]+)|(?:\[.+?\]))+)')
+PATTERN = re.compile(r'(?:\:*[:\.#]*?[A-Za-z\d\-\+\_\(\)]+)|(?:\[.+?\])')
+SPLIT_PATTERN = re.compile(r'((?:(?:\:*[:\.#]*?[A-Za-z\d\-\+\_\(\)]+)|(?:\[.+?\]))+)')
 COMBINATORS = re.compile(r'([\+\>\ \~\,]+)')
 ATTRIBUTES = re.compile(r'([\&\|\^\$\*]*=)')
 CP_PATTERN = re.compile('\s*?((?:[^\{\s\*]+?\*?[^\{\*]+?)|(?:\*))\ *?(\{.+?\})', re.DOTALL)
 STYLE_PATTERN = re.compile('^\s*?([^\s]+?):\s*?([^\s]+?);$', re.MULTILINE)
+
+
+class MElement(ET.Element):
+
+    def __init__(self, tag, attrib={}, *, tpos=None, sels=None, **extra):
+        super().__init__(tag, attrib, **extra)
+        self.sels = sels
+        self.tpos = tpos
+
+    @property
+    def raw_attrib(self):
+        return super().attrib
+
+    @property
+    def attrib(self):
+        sels = self.sels or []
+        sels.sort()
+        attrib = self.raw_attrib
+        attrib.update(itertools.chain(*(sel.style_str.items() for sel in sels)))
+        return attrib
+
+    def items(self):
+        return self.attrib.items()
 
 
 class XmlSerializer:  # The target object of the parser
@@ -35,8 +57,9 @@ class XmlSerializer:  # The target object of the parser
     stack = []
     _data = []
     _tail = None
-    _last_open = []
+    _last_open = [('root', dict(_tag_='root', __NCHILDREN__=[]))]
     _ntags = 0
+    _nclose = 0
     _parser = None
     selectors = None
 
@@ -45,23 +68,47 @@ class XmlSerializer:  # The target object of the parser
         parser.feed(htmlstr)
         parser.close()
         return self.stack
-    
+
     def getpos(self):
         return self._ntags, len(self._last_open) - 1
 
     def start(self, tag, attrib):  # Called for each opening tag.
-        self._flush()
-        self._last_open.append(tag)
+        self._flush(self._nclose)
+        attrib['_tag_'] = tag
+        attrib[MarkupRe.N_CHILDREN] = []
+        self._nclose = len(self.stack)
+        self._last_open[-1][1][MarkupRe.N_CHILDREN].append(attrib)
+        self._last_open.append((tag, attrib, len(self.stack)))
         self._ntags += 1
         self.stack.append(('starttag', tag, attrib, self.getpos()))
         self._tail = 0
 
     def end(self, tag):  # Called for each closing tag.
-        self._flush()
-        assert self._last_open.pop() == tag, "end tag mismatch (expected %s, got %s)" % (
-            self._last_open[-1], tag
+        self._flush(self._nclose)
+        last_tag, last_attrib, self._nclose = self._last_open.pop()
+        assert last_tag == tag, "end tag mismatch (expected %s, got %s)" % (
+            last_tag, tag
         )
         self.stack.append(('endtag', tag, self.getpos()))
+
+        children = last_attrib.pop(MarkupRe.N_CHILDREN)
+        nchildren = len(children)
+        last_attrib[MarkupRe.N_CHILDREN] = nchildren
+        if nchildren:
+            child_map = collections.Counter(
+                child['_tag_'] for child in children
+            )
+            tag_count = collections.defaultdict(int)
+            for k, child in enumerate(children):
+                key = child.pop('_tag_')
+                tag_count[key] += 1
+                child.update([
+                    (MarkupRe.NCHILD, k + 1),
+                    (MarkupRe.LCHILD, nchildren - k),
+                    (MarkupRe.NTAG, tag_count[key]),
+                    (MarkupRe.LTAG, child_map[key] - tag_count[key] + 1),
+                ])
+
         self._tail = 1
         if self.stack[-2][:2] == ('starttag', tag):
             # No se admiten otros elementos en un elemento que se instrumentaliza como style
@@ -86,7 +133,7 @@ class XmlSerializer:  # The target object of the parser
         attrs_pos = MarkupRe.MarkupParser.get_attrs_pos(data)
         attribs = {key: data[x:y] for key, (x, y) in attrs_pos.items()}
         if attribs['__TAG__'] == 'xml-stylesheet':
-            match attribs.pop('type', None):
+            match attribs.pop('type', "text/css"):
                 case "text/css":
                     url = attribs.get('href', '')
                     if url.startswith('#'):
@@ -94,7 +141,8 @@ class XmlSerializer:  # The target object of the parser
                     else:
                         try:
                             data = self.getContent(url)
-                            self.style_strs.append(data)
+                            if isinstance(data, (bytes, str)):
+                                self.style_strs.append(data)
                         except:
                             pass
                 case _:
@@ -119,11 +167,11 @@ class XmlSerializer:  # The target object of the parser
             selectors.extend([Selector(x.strip(), style_str) for x in select_str.split(',')])
         return selectors
 
-    def _flush(self):
+    def _flush(self, npos=-1):
         if self._data:
             text = "".join(self._data)
             if self.stack:
-                attribs = self.stack[-1][2]
+                attribs = self.stack[npos][2]
                 key = '_tail' if self._tail else '_text'
                 msg = "internal error (tail)" if self._tail else "internal error (text)"
                 assert key not in attribs, msg
@@ -143,33 +191,48 @@ class XmlSerializer:  # The target object of the parser
         return content
 
 
-class HtmlSerializer(HTMLParser):
+class HtmlSerializer(XmlSerializer, HTMLParser):
 
     def __init__(self):
         super().__init__()
-        self.stack = []
 
     def __call__(self, htmlstr):
         self.feed(htmlstr)
+        self.close()
         return self.stack
 
+    def getpos(self):
+        return HTMLParser.getpos(self)
+
     def handle_starttag(self, tag, attrs):  # startswith('<')
-        self.stack.append(('starttag', tag, dict(attrs), self.getpos()))
-        print('handle_starttag', tag, attrs)
+        dattrs = dict(attrs)
+        self.start(tag, dattrs)
+        if tag == 'link':
+            self.pi(f'xml-{dattrs["rel"]}', ' '.join(f'{key}="{value}"' for key, value in dattrs.items()))
 
     def handle_endtag(self, tag):  # startswith("</")
-        self.stack.append(('endtag', tag, self.getpos()))
-        print('handle_endtag', tag)
+        no_end = []
+        while self._last_open[-1][0] != tag:
+            no_end.append(self._last_open.pop())
+        if no_end:
+            children = []
+            for npos, attrs, pos in no_end[::-1]:
+                children.extend(attrs.pop(MarkupRe.N_CHILDREN))
+            self._last_open[-1][1][MarkupRe.N_CHILDREN].extend(children)
+            for etag, _, npos in no_end:
+                self.stack.insert(npos + 1, ('endtag', etag, self.stack[npos][3]))
+        self.end(tag)
 
     def handle_startendtag(self, tag, attrs):
-        self.stack.append(('starttag', tag, dict(attrs), self.getpos()))
-        self.stack.append(('endtag', tag, self.getpos()))
-        print('handle_startendtag', tag, attrs)
+        self.start(tag, dict(attrs))
+        self.end(tag)
 
     def handle_data(self, data):
         # ... <tag ...>data</tag>
         # ... </tag>data<tag ...>
-        print('handle_data', data)
+        if self._last_open[-1][0] == 'style':
+            self.style_strs.append(data)
+        self.data(data)
         pass
 
     def handle_entityref(self, name):  # startswith('&')
@@ -181,24 +244,24 @@ class HtmlSerializer(HTMLParser):
         pass
 
     def handle_comment(self, data):  # startswith("<!--")
-        #<!-- Esto es lo que entrega end ata -->
-        print('handle_comment', data)
+        # <!-- Esto es lo que entrega en data -->
+        self.comment(data)
         pass
 
-    def handle_decl(self, data): # startswith("<!")
+    def handle_decl(self, data):  # startswith("<!")
         # '<!doctype' -> doctype
         print('handle_decl', data)
         pass
 
     def handle_pi(self, data):  # startswith("<?")
         # <? esto es lo que entrega en data>
-        print('handle_pi', data)
+        self.pi(data)
         pass
 
     def unknown_decl(self, data):
         # '<![[mark content]]>' -> mark: "temp", "cdata", "ignore", "include", "rcdata",
         # '<![[mark content]]>' -> mark: "if", "else", "endif"
-        print('unknown_decl', data)
+        self.pi(data)
         pass
 
 
@@ -228,7 +291,8 @@ class Selector:
             assert not selector_str.count(','), f'SelectorStrError: Aggregated patterns (,) not posible'
             cp = self._get_compiled_selector_pattern()
             pattern = cp.pattern
-            assert isinstance(cp, MarkupRe.ExtRegexObject) or cp.regex_pattern_str == '<', f'SelectorStrError: Not a valid MarkupRe object: {cp.regex_pattern_str}'
+            assert isinstance(cp,
+                              MarkupRe.ExtRegexObject) or cp.regex_pattern_str == '<', f'SelectorStrError: Not a valid MarkupRe object: {cp.regex_pattern_str}'
             self._compiled_selector = cp
         except (UiCssError, AssertionError) as e:
             self._pattern = str(e)
@@ -295,32 +359,66 @@ class Selector:
         while items:
             selector = items.pop(0)
             case, selector = selector[0], selector[1:]
-            if case == '.':         # case == '.': #clase
+            if case == '.':  # case == '.': #clase
                 self._specificity[TENS] += 1
                 selector = '\\b \\b'.join(selector.split('.'))
                 basic_pattern.append(f'class=".*?\\b{selector}\\b.*?"')
-            elif case == '#':       # case == '#': #id
+            elif case == '#':  # case == '#': #id
                 self._specificity[HUNDRES] += 1
                 basic_pattern.append(f'id="{selector}"')
             elif case == ':':
                 # Hasta ahora
-                if selector[0] != ':':      # case == ':' pseeudo clases
+                if selector[0] != ':':  # case == ':' pseudo clases
                     self._specificity[TENS] += 1 if selector != 'where' else 0
-                else:                       # case == '::'
+                    # Tree-structural pseudo-classes
+                    if selector in (
+                            'empty', 'first-child', 'last-child', 'only-child',
+                            'first-of-type', 'last-of-type', 'only-of-type',
+                    ):
+                        match selector:
+                            case 'empty':
+                                basic_pattern.append(f'{MarkupRe.N_CHILDREN}="0"')
+                            case 'first-child':
+                                basic_pattern.append(f'{MarkupRe.NCHILD}="1"')
+                            case 'last-child':
+                                basic_pattern.append(f'{MarkupRe.LCHILD}="1"')
+                            case 'only-child':
+                                basic_pattern.append(f'{MarkupRe.NCHILD}="1" {MarkupRe.LCHILD}="1"')
+                            case 'first-of-type':
+                                basic_pattern.append(f'{MarkupRe.NTAG}="1"')
+                            case 'last-of-type':
+                                basic_pattern.append(f'{MarkupRe.LTAG}="1"')
+                            case 'only-of-type':
+                                basic_pattern.append(f'{MarkupRe.NTAG}="1" {MarkupRe.LTAG}="1"')
+                    elif selector.startswith('nth-'):
+                        npos = selector.find('(')
+                        assert npos > -1
+                        ec, selector = selector[npos + 1:-1], selector[:npos]
+                        ec = ec.replace('even', '2n').replace('odd', '2n+1')
+                        match selector:
+                            case 'nth-child':
+                                basic_pattern.append(f'{MarkupRe.NCHILD}="{ec}"')
+                            case 'nth-last-child':
+                                basic_pattern.append(f'{MarkupRe.LCHILD}="{ec}"')
+                            case 'nth-of-type':
+                                basic_pattern.append(f'{MarkupRe.NTAG}="{ec}"')
+                            case 'nth-last-of-type':
+                                basic_pattern.append(f'{MarkupRe.LTAG}="{ec}"')
+                else:  # case == '::'
                     self._specificity[ONES] += 1
-            else:                    # case == '[': [exp]   pseudo attributes
+            else:  # case == '[': [exp]   pseudo attributes
                 self._specificity[TENS] += 1
                 selector = selector[:-1]
                 selectors = selector.split(' ')
                 for selector in selectors:
                     splt_sel = ATTRIBUTES.split(selector)
                     case = len(splt_sel)
-                    if case == 1:      # Case [target]:
+                    if case == 1:  # Case [target]:
                         attr = splt_sel[0]
                         basic_pattern.append(f'{attr}')
-                    else:       # case >= 3
-                        bflag = not case % 2 or case > 5    # case 2, 4 y case > 5: [a=], [a=b=] y [a=b=c=...]
-                        if not bflag:                       # case in (3, 5)    [a=b], [a=b=c]
+                    else:  # case >= 3
+                        bflag = not case % 2 or case > 5  # case 2, 4 y case > 5: [a=], [a=b=] y [a=b=c=...]
+                        if not bflag:  # case in (3, 5)    [a=b], [a=b=c]
                             (attr, case, value), suffix = splt_sel[:3], ''.join(splt_sel[3:])
                             bflag = suffix and suffix[0] != '='
                         if bflag:
@@ -329,7 +427,7 @@ class Selector:
                             delta = f'{attr}="{value}"'
                         else:
                             value = value.strip('\'"')
-                            if case == '&=':          # Antiguo '~='
+                            if case == '&=':  # Antiguo '~='
                                 delta = f'{attr}=".*?\\b{value}\\b.*?"'
                             elif case == '|=':
                                 delta = f'{attr}="{value}-*.*?"'
@@ -366,8 +464,8 @@ class Selector:
         '''
 
         selector_str = self._selector_str
-        selector_str = selector_str.replace('~=', '&=')     # Se hace para evitar conflicto entre combinator y
-                                                            # y attributes.
+        selector_str = selector_str.replace('~=', '&=')  # Se hace para evitar conflicto entre combinator y
+        # y attributes.
         if selector_str == '*':
             cp = MarkupRe.compile('(?#<__TAG__>)')
             self._freeze_specificity()
@@ -469,7 +567,7 @@ class ElementFactory:
                 key, sel_str = sel_str, ''
             key = key.split('[', 1)[0]
             comb, key = key[0], key[1:]
-            if key[0] in ('.', '#'):
+            if any(map(lambda x: x in key, ('.', '#', ':'))) :
                 key = srch_regex.tag_pattern
                 if key == MarkupRe.TAG_PATTERN_DEFAULT:
                     req_attrs = srch_regex.req_attrs['tagpholder']
@@ -514,19 +612,19 @@ class ElementFactory:
             for npos, srch_regex, comb in srch_bin:
                 req_attrs = srch_regex.req_attrs.get('tagpholder', {}).copy()
                 match comb:
-                    case '>':   # div > p, Selects all <p> elements where the parent is a <div> element.
+                    case '>':  # div > p, Selects all <p> elements where the parent is a <div> element.
                         level = self.patterns[npos][0]
                         bflag = in_level == level + 1
                         assert req_attrs.pop('__TAG__').match(key)
-                    case '+':   # div + p, Selects the first <p> element that is placed immediately after <div> elements
+                    case '+':  # div + p, Selects the first <p> element that is placed immediately after <div> elements
                         level = self.patterns[npos][0]
                         bflag = in_level == level
                         assert req_attrs.pop('__TAG__').match(key)
-                    case '~':   # p ~ ul, Selects every <ul> element that is preceded by a <p> element
+                    case '~':  # p ~ ul, Selects every <ul> element that is preceded by a <p> element
                         level = self.patterns[npos][0]
                         bflag = in_level == level + 1
                         assert req_attrs.pop('__TAG__').match(key)
-                    case _:     # div p, Selects all <p> elements inside <div> elements
+                    case _:  # div p, Selects all <p> elements inside <div> elements
                         bflag = True
                 bflag = bflag and haveAllReqAttr(attrs, req_attrs)
                 if bflag:
@@ -568,25 +666,28 @@ class ElementFactory:
                 srch_bin.append((npos, srch_regex, comb))
                 self.patterns.append((level, (sel_ndx, pattern, sel_str, key, len(srch_bin) - 1)))
 
-    def getElements(self, htmlstr, tcase='xml'):
-        if tcase == 'xml':
+    def getElements(self, htmlstr, tcase='.xml'):
+        if tcase == '.xml':
             serializer = XmlSerializer()
+        elif tcase == '.html':
+            serializer = HtmlSerializer()
         else:
             raise UiCssError('tcase not valid')
         it = serializer(htmlstr)
         self.selectors = serializer.selectors
+        if self.selectors:
+            cp_patterns = []
+            for k, sel in enumerate(self.selectors):
+                split = [x.strip('\n\t ') for x in SPLIT_PATTERN.split(sel.selector_str)[1:-1]]
+                tags, comb = split[::2], [' '] + split[1::2]
+                selector_str = ','.join([f'{x.strip() if x.strip() else " "}{y}' for x, y in zip(comb, tags)])
+                cp_patterns.append((k, sel.compiled_selector, selector_str))
 
-        cp_patterns = []
-        for k, sel in enumerate(self.selectors):
-            split = COMBINATORS.split(sel.selector_str)
-            tags, comb = split[::2], [' '] + split[1::2]
-            selector_str = ','.join([f'{x.strip() if x.strip() else " "}{y}' for x, y in zip(comb, tags)])
-            cp_patterns.append((k, sel.compiled_selector, selector_str))
-
-        self.add_to_patterns(cp_patterns, -1)
+            self.add_to_patterns(cp_patterns, -1)
 
         tag_stack = []
-        answ = collections.defaultdict(list)
+        element_stack = [ET.Element('root')]
+        # MElement = type('MElement', (ET.Element,), dict(tpos=None, sels=None))
         for item, *params, tpos in it:
             level = None
             match item:
@@ -594,6 +695,19 @@ class ElementFactory:
                     tag, attrs = params
                     tag_stack.append(tag)
                     level = len(tag_stack)
+                    match_sels = self.check_elem(level, tag, attrs) if self.selectors else None
+                    text, tail, *_ = [
+                        attrs.pop(x, None) for x in (
+                            '_text', '_tail', MarkupRe.N_CHILDREN, MarkupRe.NCHILD, MarkupRe.LCHILD, MarkupRe.NTAG,  MarkupRe.LTAG,
+                        )
+                    ]
+                    elem = MElement(tag, attrs)
+                    elem.text = text
+                    elem.tail = tail
+                    elem.sels = match_sels
+                    elem.tpos = tpos
+                    element_stack[-1].append(elem)
+                    element_stack.append(elem)
                 case 'endtag':
                     tag = params[0]
                     levels = []
@@ -601,39 +715,36 @@ class ElementFactory:
                         level = len(tag_stack)
                         tag_stack.pop()
                         levels.append(level)
-                    level = len(tag_stack)
+                    if self.selectors:
+                        level = len(tag_stack)
+                        levels.append(level)
+                        self.clear_levels(levels)
                     tag_stack.pop()
-                    levels.append(level)
-                    self.clear_levels(levels)
-                    continue
-
-                case 'startendtag':
-                    tag, attrs = params
-                    level = 0
-
-            match_sels = self.check_elem(level, tag, attrs)
-
-            if match_sels:
-                for match_sel in match_sels:
-                    key = match_sel.selector_str
-                    answ[key].append((item, tpos, tag, attrs))
-        return answ
+                    element_stack.pop()
+                case _:
+                    pass
+        root = element_stack[-1][0]
+        return root
 
 
 def main():
     test = 'in_study'
     if test == 'in_study':
-        cpat = '(?#<__TAG__ class="clase1"=uno class="clase2"=dos class="clase3"=tres>)'
-        cpat_comp = MarkupRe.compile(cpat)
-        sel = Selector('[class=clase1=uno][class=clase2=dos][class=clase3=tres]')
-        print(sel.compiled_selector.req_attrs)
-        print(sel.compiled_selector.var_list)
+        import userinterface
+        file_path = '/mnt/c/Users/Alex Montes/PycharmProjects/mywidgets/src/Tools/mypycharm/res/layout/pycharm_css.xml'
+        xmlObj = userinterface.getLayout(file_path, withCss=True)
+        eroot = ET.ElementTree(xmlObj)
+        ET.indent(eroot, space="\t", level=0)
+        ET.dump(eroot)
+
     if test == 'htmlserializer':
         html_filename = '/mnt/c/Users/Alex Montes/PycharmProjects/mywidgets/tests/css_files/generic.html'
         with open(html_filename, 'r') as f:
             html_string = f.read()
         serializer = HtmlSerializer()
         answ = serializer(html_string)
+        for item in answ:
+            print(item)
     elif test == 'Selector_class':
         # Selectores válidos
         selectors = {}
@@ -657,7 +768,7 @@ def main():
                 selector = Selector(sel_str)
                 print(f'{sel_str}, {selector.pattern}')
     elif test == 'ElementFactory':
-        case = 0
+        case = 3
         cssfilename = [
             '/mnt/c/Users/Alex Montes/PycharmProjects/mywidgets/tests/css_files/simple_selectors.css',
             '/mnt/c/Users/Alex Montes/PycharmProjects/mywidgets/tests/css_files/compound_selectors.css',
@@ -666,18 +777,32 @@ def main():
         htmlfilename = [
             '/mnt/c/Users/Alex Montes/PycharmProjects/mywidgets/tests/css_files/simple_selectors.html',
             '/mnt/c/Users/Alex Montes/PycharmProjects/mywidgets/tests/css_files/compound_selectors.html',
+            '/mnt/c/Users/Alex Montes/PycharmProjects/mywidgets/tests/css_files/generic.html',
+            '/mnt/c/Users/Alex Montes/PycharmProjects/mywidgets/src/Tools/mypycharm/res/layout/pycharm_css.xml',
         ]
         with open(htmlfilename[case], 'r') as f:
             html_string = f.read()
 
         wfactory = ElementFactory()
 
-        answ = wfactory.getElements(html_string)
+        root = wfactory.getElements(html_string, tcase='.xml')
+        answ = collections.defaultdict(list)
+        elem_stack = [root]
+        while elem_stack:
+            elem = elem_stack.pop()
+            elem_stack.extend(list(elem))
+            if elem.sels:
+                for match_sel in elem.sels:
+                    key = match_sel.selector_str
+                    answ[key].append((elem.tpos, elem.tag, elem.attrib, elem.text))
+
         for key in sorted(answ):
             print(f'**** Selector: {key} ****')
-            for item, tpos, tag, attrs in answ[key]:
+            for tpos, tag, attrs, text in answ[key]:
                 msg = " ".join('%s="%s"' % (key, val) for key, val in attrs.items())
-                msg = f'{"lin: %s, col: %s" % tpos} => <{tag} {msg.strip()}{">" if item == "starttag" else "/>"}'
+                if text:
+                    msg += f' {text=}'
+                msg = f'{"lin: %s, col: %s" % tpos} => <{tag} {msg.strip()}>'
                 print('    ' + msg)
 
 

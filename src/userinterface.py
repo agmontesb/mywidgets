@@ -22,6 +22,7 @@ from Widgets import specialwidgets
 from Widgets.Custom import ImageProcessor as imgp
 from Widgets.Custom.network import network
 from equations import equations_manager
+from Tools.uiStyle import uicss
 import cbwidgetstate
 
 MODULE_STACK = [(-1, tk), (-1, specialwidgets)]
@@ -88,8 +89,12 @@ def getContent(fileurl):
     return content
 
 
-def getLayout(layoutfile: str) -> ET.Element:
+def getLayout(layoutfile, withCss=False):
     content = getContent(layoutfile)
+    if withCss:
+        tcase = os.path.splitext(layoutfile)[-1]
+        wfactory = uicss.ElementFactory()
+        return wfactory.getElements(content, tcase=tcase)
     return ET.XML(content)
 
 
@@ -174,6 +179,7 @@ def widgetFactory(master: tk.Tk | tk.Widget,
         has_children = bool(len(list(xmlwidget)))
         is_widget = xmlwidget.tag != 'var'
         options: dict[str, Optional[str]] = dict.copy(xmlwidget.attrib)
+        options.pop('class', None)
         # Se asigna como id del widget el último segmento del id definido.
         name_default = options.get('id', '').rsplit('/')[-1] or str(k)
         options.setdefault('name', name_default)  # Se asigna el consecutivo como nombre del widget.

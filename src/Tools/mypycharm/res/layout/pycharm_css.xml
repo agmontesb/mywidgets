@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<settings>
+    <?xml-stylesheet type="text/css" href="#style"?>
+    <extra id="style">
+        .ltabs {
+            padx:2;
+            pady:2;
+            read:BtoT;
+            indicatoron:0;
+        }
+        .ltop {
+            variable:tree_top_sel;
+            side:top;
+        }
+        .lbottom {
+            variable:tree_btm_sel;
+            side:bottom;
+        }
+        .btabs {
+            variable:view_sel;
+            padx:2;
+            pady:2;
+            indicatoron:0;
+            side:left;
+        }
+        .panel {
+            side:top;
+            fill:both;
+            expand:yes;
+        }
+        .frst {
+            in:.frstwidget;
+        }
+        .scnd {
+            in:.scndwidget;
+        }
+    </extra>
+    <category label="Category uno">
+        <var type="int" name="view_sel" value="128"/>
+        <var type="int" name="tree_top_sel" value="0"/>
+        <var type="int" name="tree_btm_sel" value="0"/>
+        <menubar lib="Widgets.Custom" name="main_menu" src="Tools/mypycharm/res/menu/main_menu.xml" side="top" fill="x"/>
+        <frame side="top" fill="x">
+            <button text="btn3" side="right" />
+            <button text="btn2" side="right" />
+            <button text="btn1" side="right" />
+            <navigationbar path_obj="project_path" name="file_path" lib="Widgets.Custom" side="left" fill="x" expand="yes" anchor="w"/>
+        </frame>
+        <frame name="botton_tabs" bd="2" relief="groove" side="bottom" fill="x">
+            <label text="      "  side="left"/>
+            <checkbutton class="btabs" name="btn0" text="Git" onvalue="1"/>
+            <checkbutton class="btabs" name="btn1" text="Run" onvalue="2"/>
+            <checkbutton class="btabs" name="btn2" text="TODO" onvalue="4"/>
+            <checkbutton class="btabs" name="btn3" text="Problems" onvalue="8"/>
+            <checkbutton class="btabs" name="btn4" text="Python Packages" onvalue="16"/>
+            <checkbutton class="btabs" name="btn5" text="Terminal" onvalue="32"/>
+            <checkbutton class="btabs" name="btn6" text="Python Console" onvalue="64"/>
+        </frame>
+        <frame name="left_tabs" bd="2" relief="groove" side="left" fill="y">
+            <checkbutton class="ltabs ltop" name="tree0" text="Project" onvalue="1"/>
+            <checkbutton class="ltabs ltop" name="tree1" text="Commit" onvalue="2"/>
+            <checkbutton class="ltabs lbottom" name="tree2" text="Bookmarks" onvalue="1"/>
+            <checkbutton class="ltabs lbottom" name="tree3" text="Structure" onvalue="2"/>
+        </frame>
+        <collapsingframe lib="Widgets.Custom" name="hframe" orientation="horizontal" inisplit="0.8" buttconf="Rm" side="top" fill="both" expand="yes">
+            <label class="panel scnd" text="GIT" visible="eq(view_sel, 1)"/>
+            <label class="panel scnd" text="Run" visible="eq(view_sel, 2)"/>
+            <label class="panel scnd" text="TODO" visible="eq(view_sel, 4)"/>
+            <label class="panel scnd" text="Problems" visible="eq(view_sel, 8)"/>
+            <label class="panel scnd" text="Python Packages" visible="eq(view_sel, 16)"/>
+            <label class="panel scnd" text="Terminal" visible="eq(view_sel, 32)"/>
+            <label class="panel scnd" text="Python Console" visible="eq(view_sel, 64)"/>
+            <collapsingframe class="panel frst" lib="Widgets.Custom" name="vframe" orientation="vertical" inisplit="0.2" buttconf="RM">
+                <label class="panel frst" text="tree TOP" visible="ne(tree_top_sel, 0)"/>
+                <label class="panel frst" text="tree BOTTOM" visible="ne(tree_btm_sel, 0)"/>
+                <label class="panel scnd" text="EDITOR"/>
+            </collapsingframe>
+        </collapsingframe>
+    </category>
+</settings>
+

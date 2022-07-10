@@ -435,6 +435,32 @@ class TestExtMatch:
         answer = MarkupRe.findall(pattern, self.htmlStr)
         assert answer == required, f'{msg}'
 
+    def test_multiple_attrs(self):
+        htmlStr = """
+        <span id="1" class="clase1">span1</span>
+        <span id="1" class="clase2">span2</span>
+        <span id="1" class="clase1 clase2">span3</span>
+        <span id="1" class="clase2 clase1">span4</span>
+        <span id="1" class="clase2 clase3">span5</span>
+        """
+        pattern = '(?#<span class=".*?\\bclase1\\b.*?" class=".*?\\bclase2\\b.*?" *=label>)'
+        required = ['span3', 'span4']
+        answer = MarkupRe.findall(pattern, htmlStr)
+        assert answer == required
+
+        # El valor almacenado para la variable 'clase' siempre corresponde al del
+        # pattern definido por la variable
+        pattern = '(?#<span class="(.*?)\\bclase1\\b.*?"=clase class=".*?\\bclase2\\b.*?" *=label>)'
+        required = [('', 'span3'), ('clase2 ', 'span4')]
+        answer = MarkupRe.findall(pattern, htmlStr)
+        assert answer == required
+
+        pattern = '(?#<span class="(.*?)\\bclase1\\b.*?" class=".*?\\bclase2\\b(.*?)"=clase *=label>)'
+        required = [('', 'span3'), (' clase1', 'span4')]
+        answer = MarkupRe.findall(pattern, htmlStr)
+        assert answer == required
+
+
     def test_errors(self):
         with pytest.raises(MarkupRe.MarkupReError):
             'Error porque no se pueden utilizar variables cuando se tiene ".*" como variable requerida'

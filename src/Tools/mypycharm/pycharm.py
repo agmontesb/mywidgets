@@ -40,8 +40,8 @@ class Pycharm(tk.Tk):
         pass
 
     def setGui(self):
-        file_path = 'Tools/mypycharm/res/layout/pycharm.xml'
-        xmlObj = userinterface.getLayout(file_path)
+        file_path = 'Tools/mypycharm/res/layout/pycharm_css.xml'
+        xmlObj = userinterface.getLayout(file_path, withCss=True)
         userinterface.newPanelFactory(
             master=self,
             selpane=xmlObj,

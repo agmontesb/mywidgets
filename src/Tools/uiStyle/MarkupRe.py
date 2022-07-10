@@ -25,11 +25,15 @@ TAGPHOLDER = r'tagpholder'
 TEXTO = r'*'
 PARAM_POS = r'*ParamPos*'
 TAG = r'__TAG__'
-N_CHILDREN = r'__N_CHILDREN__'
+N_CHILDREN = r'__NCHILDREN__'
 N_CHILD = r'__N_CHILD__'
 N_TAG = r'__N_TAG__'
+NCHILD = '__NCHILD__'
+LCHILD = '__LCHILD__'
+NTAG = '__NTAG__'
+LTAG = '__LTAG__'
 
-PSEUDO_ATTRS = set([TEXTO, PARAM_POS, TAG, N_CHILDREN, N_CHILD, N_TAG])
+PSEUDO_ATTRS = set([TEXTO, PARAM_POS, TAG, N_CHILDREN, N_CHILD, N_TAG, NCHILD, LCHILD, NTAG, LTAG])
 
 REGEX_SCANNER = re.compile(r'''
     (?P<SEPARATOR>(?:
@@ -144,6 +148,105 @@ class CPatterns(Enum):
 
 class MarkupReError(Exception):
     pass
+
+
+class MatchPattern:
+
+    def __init__(self, attrib):
+        self.attrib = attrib
+        self._index = 0
+        self.patterns = []
+
+    def __bool__(self):
+        return bool(self.patterns)
+
+    def __eq__(self, other):
+        if not self:
+            return not other
+        if not other:
+            return False
+        if isinstance(other, (bytes, str)):
+            return self.patterns[self._index].pattern == other
+        if isinstance(other, MatchPattern):
+            return self.patterns == other.patterns
+
+    def add(self, pattern_str):
+        self.patterns.append(re.compile(pattern_str + '\\Z', re.DOTALL))
+
+    def match(self, str_to_match):
+        bflag = all(cpattern.match(str_to_match) for cpattern in self.patterns)
+        if bflag:
+            return self.patterns[self._index].match(str_to_match)
+
+    def set_master_pattern(self, index=None):
+        ndx = index or len(self.patterns)
+        ndx = max(0, min(len(self.patterns) - 1, ndx))
+        self._index = ndx
+
+    @property
+    def groups(self):
+        return self.patterns[0].groups
+
+    def span(self, str_to_match):
+        try:
+            m = self.patterns[0].match(str_to_match)
+            answ = m.group(1)
+        except IndexError:
+            answ = m.string
+        except AttributeError as e:
+            raise e
+        return answ
+
+
+class MatchTreeAttribs:
+
+    def __init__(self, attrib):
+        self.attrib = attrib
+        self._index = 0
+        self.patterns = []
+
+    def __bool__(self):
+        return bool(self.patterns)
+
+    def __eq__(self, other):
+        if not self:
+            return not other
+        if not other:
+            return False
+        if isinstance(other, (bytes, str)):
+            return self.patterns[self._index].pattern == other
+        if isinstance(other, MatchPattern):
+            return self.patterns == other.patterns
+
+    def add(self, pattern_str):
+        pattern_str = pattern_str.replace(' ', '').replace('-n', '-1n').replace('+n', '+1')
+        pattern = r'(?P<a>(?:\+|\-)*\d*?n)*(?P<b>(?:\+|\-)*\d+?)*(?P<c>(?:\+|\-)*\d*?n)*'
+        a, b, c = re.match(pattern, pattern_str).groups()
+        a = a or c or '0'
+        b = b or '0'
+        a = a.strip('n')
+        a, b = int(a), int(b)
+        self.patterns.append((a, b))
+
+    @staticmethod
+    def nth_child(x, A, B):
+        if A > 0:
+            a, b, c = A, B % A, B // A
+            return x >= B and (x - b) % a == 0
+        if A == 0:
+            return x == B
+        if A < 0:
+            a, b = A, B % A
+            return x <= B and (x - b) % a == 0
+
+    def match(self, str_to_match):
+        bflag = all(self.nth_child(int(str_to_match), a, b) for a, b in self.patterns)
+        return bflag
+
+    def set_master_pattern(self, index=None):
+        ndx = index or len(self.patterns)
+        ndx = max(0, min(len(self.patterns) - 1, ndx))
+        self._index = ndx
 
 
 class TreeElement:
@@ -1336,7 +1439,7 @@ def compile(regex_str_in, flags=0, etags_str='[!--|style|script]'):
                     attribute = '.'.join([prefix, TAG])
                     element, attr = attribute.rsplit('.', 1)
                     attr_dict = tags.setdefault(element, {})
-                    attr_dict.setdefault(attr, '')
+                    attr_dict.setdefault(attr, MatchPattern(attr))
                     varList.append([attribute, TAG])
                 else:
                     tag_pattern = token.value
@@ -1360,17 +1463,21 @@ def compile(regex_str_in, flags=0, etags_str='[!--|style|script]'):
                         f'{regex_str}: Required tags ({attribute}) not allowed as variables'
                     )
                 if var_name != token.value:
-                    attr_dict[attr] = re.compile('(?:(?:&nbsp;)*\\s*)*(.+?)(?:(?:&nbsp;)*\\s*)*\\Z')
+                    attr_dict[attr].add('(?:(?:&nbsp;)*\\s*)*(.+?)(?:(?:&nbsp;)*\\s*)*')
                 try:
                     varList.append([attribute, var_name])
                 except AttributeError:
                     raise MarkupReError('With required Tag ".*", no vars are allowed')
+                else:
+                    attr_dict[attr].set_master_pattern()
             case 'SPECIAL_ATTR':
                 attribute = '.'.join([prefix, token.value])
                 element, attr = attribute.rsplit('.', 1)
+                attr_dict = tags.setdefault(element, {})
                 if token.value == TAG:
-                    attr_dict = tags.setdefault(element, {})
-                    attr_dict.setdefault(attr, '')
+                    attr_dict.setdefault(attr, MatchPattern(attr))
+                elif token.value in (N_CHILDREN, NCHILD, LCHILD, NTAG, LTAG):
+                    attr_dict.setdefault(attr, MatchTreeAttribs(attr))
             case 'ATTRIBUTE':
                 value = token.value
                 attribute = '.'.join([prefix, value])
@@ -1387,7 +1494,7 @@ def compile(regex_str_in, flags=0, etags_str='[!--|style|script]'):
                 else:
                     element, attr = attribute.rsplit('.', 1)
                     attr_dict = tags.setdefault(element, {})
-                    attr_dict.setdefault(attr, '')
+                    attr_dict.setdefault(attr, MatchPattern(attr))
             case 'PREFIX':
                 value = token.value
                 prefix_stack.append(value)
@@ -1396,7 +1503,7 @@ def compile(regex_str_in, flags=0, etags_str='[!--|style|script]'):
                 attribute = '.'.join([prefix, token.value[1:-1]])
                 element, attr = attribute.rsplit('.', 1)
                 attr_dict = tags.setdefault(element, {})
-                attr_dict.setdefault(attr, '')
+                attr_dict.setdefault(attr, MatchPattern(attr))
                 varList.append([attribute, f'group{n_implicit}'])
             case 'ATTR_PATTERN':
                 attr_pattern = token.value
@@ -1405,7 +1512,8 @@ def compile(regex_str_in, flags=0, etags_str='[!--|style|script]'):
                         maskParam = attr_pattern[1:-1]
                     case _:
                         # attr_dict = tags.setdefault(element, {})
-                        attr_dict[attr] = re.compile(token.value[1:-1] + '\\Z', re.DOTALL)
+                        # attr_dict[attr] = re.compile(token.value[1:-1] + '\\Z', re.DOTALL)
+                        attr_dict[attr].add(token.value[1:-1])
             case 'ASIGNATION':
                 pass
             case 'OPEN_TAG':
