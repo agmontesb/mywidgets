@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<menu label="View" tearoff="false">
+    <checkbutton label="Recycle Bin" variable="view_recycle" />
+    <separator/>
+    <checkbutton label="Files" variable="view_files" />
+    <checkbutton label="Actions" variable="view_actions" />
+</menu>

@@ -9,8 +9,9 @@ class WidgetExplorer(ttk.Treeview):
     def __init__(self, parent, *args, **kwargs):
         super().__init__(parent, *args, **kwargs)
         self.tag_configure('activenode', background='light green')
-        self.event_add('<<ActiveSelection>>', '<Double-1>', '<Return>')
+        self.event_add('<<ActiveSelection>>', '<Double-1>', '<Return>', '<Control-1>')
 
+        self.bind('<<ActiveSelection>>', self.onActiveSelection)
         self.bind("<ButtonPress-1>", self.bDown)
         self.bind("<ButtonRelease-1>", self.bUp, add='+')
         self.bind("<B1-Motion>", self.bMove, add='+')
@@ -21,8 +22,22 @@ class WidgetExplorer(ttk.Treeview):
         self._edit_flag = False
         # Esta variable es puesta en verdadera si el widget ha pasado por Press-Move-Release
         self._drag_and_drop = False
-
+        self.sort_by = '#0'
         pass
+
+    def onActiveSelection(self, event=None):
+        tree = event.widget
+        tag = 'selected'
+        selection = tree.selection()
+        if event.keysym == 'Return':
+            if len(selection) == 1:
+                [tree.item(nodeid, tags='') for nodeid in tree.tag_has(tag)]
+        if event.state & 1 << 2:
+            nodeid = tree.identify_row(event.y)
+            tree.selection_set(nodeid)
+            selection = tree.selection()
+        selected = tree.tag_has(tag)
+        [tree.item(nodeid, tags=tag if nodeid not in selected else '') for nodeid in selection]
 
     def edit_modified(self, flag=None):
         '''
@@ -67,9 +82,45 @@ class WidgetExplorer(ttk.Treeview):
     # A través de bDown, bUp y bMove se implementa el Drag and Drop en este widget.
     def bDown(self, event):
         tv = event.widget
-        tv.configure(cursor='hand2')
-        if tv.identify_row(event.y) not in tv.selection():
-            tv.selection_set(tv.identify_row(event.y))
+        match tv.identify_region(event.x, event.y):
+            case 'tree':
+                tv.configure(cursor='hand2')
+                if tv.identify_row(event.y) not in tv.selection():
+                    tv.selection_set(tv.identify_row(event.y))
+            case 'heading':
+                col_id = tv.identify_column(event.x)
+                col_id = int(col_id[1:]) - 1
+                displaycolumns = tv['columns']
+                col_name = displaycolumns[col_id]
+                suffixes = ['↓', '↑', '#0']
+                if self.sort_by != '#0' and self.sort_by == col_name:
+                    heading_text = tv.heading(self.sort_by, option='text')
+                    suffix = heading_text[len(col_name):].strip()
+                    n = suffixes.index(suffix)
+                    n = (n + 1) % len(suffixes)
+                    revFlag = n == 1
+                    if n == len(suffixes) - 1:
+                        tv.heading(self.sort_by, text=col_name)
+                        col_name = suffixes[n]
+                else:
+                    if self.sort_by != '#0':
+                        tv.heading(self.sort_by, text=col_name)
+                    revFlag = False
+                    n = 0
+                self.sort_by = col_name
+                rows = self.get_children()
+                kwds = dict(reverse=revFlag)
+                if col_name != '#0':
+                    heading_text = f'{col_name} {suffixes[n]}'
+                    tv.heading(col_name, text=heading_text)
+                    kwds['key'] = lambda x: tv.set(x, col_name)
+                rows = sorted(rows, **kwds)
+                self.detach(*rows)
+                for k, iid in enumerate(rows):
+                    tv.move(iid, '', k)
+
+            case _:
+                pass
 
     def bUp(self, event):
         tv = event.widget

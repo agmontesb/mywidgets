@@ -348,38 +348,48 @@ def newPanelFactory(master: tk.Tk | tk.Widget,
     return n
 
 
+def menuclick_closure(widget, data=None):
+    def menu_cb():
+        with event_data(data=data) as event:
+            widget.event_generate('<<MENUCLICK>>')
+    return menu_cb
+
+
 def menuFactory(
         parent: tk.Tk | tk.Widget,
         selPane: TreeLike,
         menu_map: dict[str, tk.Menu] = None,
         registerMenu: RegWidgetCb = None) -> tk.Menu:
-    def menu_closure(widget, data=None):
-        def menu_cb():
-            with event_data(data=data) as event:
-                widget.event_generate('<<MENUCLICK>>')
-        return menu_cb
 
     master = parent.winfo_toplevel()
     menu_map = menu_map or {}
     options = selPane.attrib.copy()
     label = options.pop('label')
-    options['title'] = label
-    menu_map[label] = menu_master = tk.Menu(parent, name=label.lower(), **options)
+    src = options.pop('src', None)
+    if src:
+        selPane = getLayout(src)
+    menu_name = options.pop('name', label.lower())
+    options['title'] = menu_name
+    menu_map[label] = menu_master = tk.Menu(parent, name=menu_name, **options)
+    labels = []
+    cbs = []
     for k, item in enumerate(selPane):
         menu_type = item.tag
         options = item.attrib.copy()
+        cb = None
         if menu_type not in ['separator', 'cascade']:
             try:
-                command = options['command']
+                command = options.pop('command')
                 cb = getattr(master, command)
             except (AttributeError, KeyError):
-                cb = menu_closure(widget=menu_master, data=k)
-            options['command'] = cb
+                cb = menuclick_closure(widget=menu_master, data=k)
+            # options['command'] = cb
             if 'accelerator' in options:
-                accelerator = options['accelerator'].lower()
+                accelerator = options['accelerator']
                 accelerator = accelerator.replace('+', '-')
                 try:
                     modifiers, key = accelerator.rsplit('-', 1)
+                    modifiers = modifiers.lower()
                     modifiers_map = [('ctrl', 'Control'), ('alt', 'Alt'), ('shift', 'Shift')]
                     modifiers = functools.reduce(lambda t, x: t.replace(x[0], x[1]), modifiers_map, modifiers)
                     accelerator = f'{modifiers}-KeyPress-{key}'
@@ -390,9 +400,17 @@ def menuFactory(
             menu_wdg = menuFactory(master, item, menu_map, registerMenu)
             options['menu'] = menu_wdg
             options.pop('tearoff', None)
+            options.pop('src', None)
         menu_master.add(menu_type, **options)
+        labels.append(options.get('label', ''))
+        if cb is not None:
+            cbs.append((menu_master.index(tk.END), cb))
     try:
-        registerMenu(parent, selPane, menu_master)
+        registerMenu(parent, selPane, menu_master, labels)
     except:
         pass
+    # Retrasando la asignación del command en este punto, se permite la inicialización del estado
+    # de la 'entry asociada cuando esta es un checkbox.
+    for index, cb in cbs:
+        menu_master.entryconfigure(index, command=cb)
     return menu_master

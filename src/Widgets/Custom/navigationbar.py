@@ -211,15 +211,35 @@ class BreadCumb(tk.Canvas):
         self.polygon_ids = []
         self.text_ids = []
 
-        path_obj.set_master(self)
-        self.path_obj = path_obj
-        self.base_dir = path_obj.root
-
         self.setGui()
 
+        self.base_dir = None
+        top = master.winfo_toplevel()
+        if isinstance(path_obj, str):
+            try:
+                path_obj = getattr(top, path_obj)
+            except AttributeError:
+                dmy = os.path.abspath('.')
+                path_obj = DirectoryObj(dmy, dmy)
+        self.path_obj = path_obj
+        pass
+
+    @property
+    def path_obj(self):
+        return self._path_obj
+
+    @path_obj.setter
+    def path_obj(self, obj):
+        try:
+            path_obj = pathObjWrapper(obj)
+        except AttributeError:
+            path_obj = DirectoryObj('/', '/')
+        path_obj.set_master(self)
+        self.base_dir = path_obj.root
+        self._path_obj = path_obj
+        self.draw_path = ''
         # Porque no existe el canvas draw_focus es False
         self.setActivePath(path_obj.actual_dir)
-        pass
 
     def setGui(self):
         canvas = self
@@ -407,16 +427,22 @@ class BreadCumb(tk.Canvas):
     def onCanvasClickEvent(self, event):
         self.focus_set()
         x, y = event.x, event.y
+        pfocus = self.identify_index(x, y)
+        if pfocus:
+            self.set_active_index(pfocus)
+            self.onCanvasDownArrowEvent(event)
+
+    def identify_index(self, x, y):
         polygons = self.find_overlapping(x, y, x, y)
         polygons = [polygon for polygon in polygons if self.type(polygon) == 'polygon']
+        pfocus = None
         if polygons:
             next_pfocus = polygons[0]
             try:
                 pfocus = self.polygon_ids.index(next_pfocus)
             except:
-                pfocus = None
-            self.set_active_index(pfocus)
-            self.onCanvasDownArrowEvent(event)
+                pass
+        return pfocus
 
     def onMenuKeyboardEvent(self, event):
         self.event_generate('<Escape>')     # Este evento retira el menu de la ventana
@@ -684,6 +710,61 @@ class TkMenuObj(PathObj):
         return npos is None
 
 
+class StrListObj(PathObj):
+
+    def __init__(self, strlist, root_dir):
+        assert root_dir.startswith(self.SEP)
+        assert all(x.startswith(root_dir) for x in strlist)
+        self.strlist = strlist
+        self.root = root_dir.rstrip(self.SEP)
+        self.actual_dir = self.root
+
+    def isdir(self, path):
+        dmy = self.listdir(path)
+        return bool(dmy)
+
+    def listdir(self, path):
+        dmy = [x for x in self.strlist if x.startswith(f'{path}/')]
+        return [os.path.split(x)[1] for x in dmy]
+
+    def walk(self, path):
+        stack = [path]
+        namelist = set(self.strlist)
+        path = ''
+        while stack:
+            dummy = stack.pop(0)
+            while isinstance(dummy, int):
+                npos = dummy
+                path = path[:npos]
+                dummy = stack.pop(0)
+                if stack and not isinstance(stack[0], int):
+                    stack.insert(0, npos)
+            path = '/' + f'{path.rstrip("/")}/{dummy}/'.lstrip('/')
+            files = []
+            dirs = set()
+            n = len(path)
+            for info in namelist:
+                if info.startswith(path):
+                    suffix = info[n:]
+                    try:
+                        prefix, suffix = suffix.split('/', 1)
+                        dirs.add(prefix)
+                    except:
+                        if suffix:
+                            files.append(suffix)
+            dirs = sorted(dirs)
+            files.sort()
+            yield path, dirs, files
+            to_purge = [f'{path}{dummy}'.lstrip('/') for dummy in files]
+            namelist.difference_update(to_purge)
+            if len(dirs) > 1:
+                dirs.insert(1, len(path))
+            stack = dirs + stack
+
+    def relpath(self, path, base_path):
+        return os.path.relpath(path, base_path)
+
+
 def navigationFactory(master, path_obj, **kwargs):
     '''
     Factory for NavigationBar by identifying the proper path_obj.
@@ -704,9 +785,25 @@ def navigationFactory(master, path_obj, **kwargs):
     except AttributeError:
         dmy = os.path.abspath('.')
         path_obj = DirectoryObj(dmy, dmy)
-    # return NavigationBar(master, path_obj=path_obj, **kwargs)
     return BreadCumb(master, path_obj=path_obj, **kwargs)
 
+
+def pathObjWrapper(obj):
+    if isinstance(obj, PathObj):
+        path_obj = obj
+    elif isinstance(obj, tkk.Treeview):
+        path_obj = TkkTreeObj(obj)
+    elif isinstance(obj, tk.Menu):
+        path_obj = TkMenuObj(obj)
+    elif isinstance(obj, (list, tuple)) and all(isinstance(x, str) for x in obj):
+        obj = ['/' + x.lstrip('/') for x in obj]
+        root_dir = os.path.commonpath(obj)
+        path_obj = StrListObj(obj, root_dir)
+    elif isinstance(obj, (bytes, str)):
+        path_obj = DirectoryObj(obj, obj)
+    else:
+        raise AttributeError(f'{str(obj)} is not a valid path_obj')
+    return path_obj
 
 def main():
     top = tk.Tk()
@@ -759,8 +856,16 @@ if __name__ == '__main__':
     top = tk.Tk()
     top.attributes('-zoomed', True)
 
-    case = 'rolling_menu'
-    if case == 'tkktree':
+    case = 'strlistobj'
+    if case == 'strlistobj':
+        apkname = '/mnt/c/Users/Alex Montes/PycharmProjects/TestFiles/TeaTV-v9.9.6r_build_111-Mod_v2.apk'
+        zf = zipfile.ZipFile(apkname)
+        root_dir = '/zf'
+        strlist = [f'{root_dir}/{x}' for x in zf.namelist()]
+        path_obj = obj_name = StrListObj(strlist, root_dir)
+        next(path_obj.walk(root_dir))
+        pass
+    elif case == 'tkktree':
         def onActiveSelection(event=None):
             treeview = event.widget
             selected = treeview.tag_has('selected')
@@ -804,13 +909,14 @@ if __name__ == '__main__':
         menufile = '/mnt/c/Users/Alex Montes/PycharmProjects/mywidgets/src/Data/menu/file_menu.xml'
         menuPanel = userinterface.getLayout(menufile)
         menu = userinterface.menuFactory(top, selPane=menuPanel)
-        path_obj = TkMenuObj(menu)
+        path_obj = obj_name = TkMenuObj(menu)
         # for path, d_names, f_names in path_obj.walk('master/'):
         #     print(path, d_names, f_names)
     elif case == 'tkktree_methods':
         apkname = '/mnt/c/Users/Alex Montes/PycharmProjects/TestFiles/TeaTV-v9.9.6r_build_111-Mod_v2.apk'
         zf = zipfile.ZipFile(apkname)
         tree = ttk.Treeview(top)
+        tree.pack(side=tk.LEFT, fill=tk.Y, anchor=tk.NW)
         parent_id_map = {'': ''}
         zf = zipfile.ZipFile(apkname)
         path = ''
@@ -832,7 +938,7 @@ if __name__ == '__main__':
                 path = f'{root}/{d_name}'.lstrip('/')
                 parent_id_map[path] = child_id
 
-        path_obj = TkkTreeObj(tree)
+        path_obj = obj_name = TkkTreeObj(tree)
         path = '/org'
         path_obj.isdir(path)
         path = '/org/apache/xmlrpc/client'
@@ -885,8 +991,10 @@ if __name__ == '__main__':
         top['menu'] = fmenu
 
     try:
-        nbar = navigationFactory(top, obj_name)
-    except:
-        pass
+        # nbar = navigationFactory(top, obj_name)
+        nbar = BreadCumb(top, path_obj=obj_name)
+        nbar.pack(side=tk.LEFT, fill=tk.X, expand=tk.YES, anchor=tk.NW)
+    except Exception as e:
+        print(str(e))
     finally:
         top.mainloop()

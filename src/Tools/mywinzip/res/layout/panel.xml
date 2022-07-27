@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<settings>
+    <?xml-stylesheet type="text/css" href="#style"?>
+    <extra id="style">
+        .panel {
+            side:top;
+            fill:both;
+            expand:yes;
+        }
+        .row {
+            side:top;
+            fill:x;
+        }
+    </extra>
+    <category label="Category uno">
+        <label class="row" name="name" text="text" font="Helvetica 32 bold" bg="#919F84"/>
+        <navigationbar class="row" lib="Widgets.Custom" path_obj="__file__" name="tree_path"/>
+        <widgetexplorer class="panel" lib="Widgets.Custom" name="tree"
+                        show="headings"
+                        displaycolumns="#all"
+        />
+        <frame class="row">
+            <checkbutton text="Select all" name="selectall" side="left"/>
+            <checkbutton text="Group by folder" name="groupby" side="right"/>
+        </frame>
+    </category>
+</settings>

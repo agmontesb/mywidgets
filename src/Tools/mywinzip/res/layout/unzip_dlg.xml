@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<settings>
+	<category label="Unzip dialog" lib="Widgets.kodiwidgets">
+        <klabel id="msg" label="" default=""/>
+		<ksep type="lsep" label="What to do?" />
+        <kbool id="replace" label="Replace the file" group="what_to_do"/>
+		<kbool id="omit" label="Omit this file" group="what_to_do"/>
+		<kbool id="keep" label="Keep both files" group="what_to_do"/>
+		<ksep />
+        <kbool id="noask" label="Do the same with all files:   " default="false"/>
+	</category>
+</settings>
+
+

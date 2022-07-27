@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<menu label="Manage" tearoff="false">
+    <command label="Search" />
+    <command label="Move To" />
+    <command label="Copy To" />
+    <command label="Delete" />
+    <command label="Barrido" />
+    <command label="Undo" />
+    <command label="Rename" />
+    <separator/>
+    <command label="Restore" />
+    <separator/>
+    <command label="New Folder" />
+    <separator/>
+    <command label="Properties" />
+    <separator/>
+    <command label="Select All" />
+    <command label="Toggle Selection" />
+</menu>

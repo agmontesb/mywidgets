@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<menu label="Unzip" tearoff="false">
+    <command label="Same folder" />
+    <cascade label="Recent folders" tearoff="false" />
+    <command label="Last folder" />
+    <command label="My PC" />
+    <separator />
+    <radiobutton label="All files" value="all" />
+    <radiobutton label="Selected files" value="selected" />
+    <separator/>
+    <command label="Unzip and test" command="" />
+    <command label="Unzip and install" command="" />
+    <separator/>
+    <command label="Last result" command="" />
+    <command label="Comments" command="" />
+    <command label="Diagnostic" command="" />
+    <separator/>
+    <cascade label="Unzip settings" tearoff="false">
+        <checkbutton label="Ask before file replacement"/>
+        <checkbutton label="Do not replace new files with early versions"/>
+        <checkbutton label="Use folder names"/>
+        <checkbutton label="Show unzip files"/>
+    </cascade>
+</menu>

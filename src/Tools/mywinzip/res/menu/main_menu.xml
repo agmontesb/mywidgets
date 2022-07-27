@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<menu label="master" tearoff="false">
+    <cascade label="File" tearoff="false" src="./Tools/mywinzip/res/menu/file_menu.xml"/>
+    <cascade label="Unzip" tearoff="false" src="./Tools/mywinzip/res/menu/unzip_menu.xml"/>
+    <cascade label="Zip" tearoff="false" src="./Tools/mywinzip/res/menu/zip_menu.xml"/>
+    <cascade label="Manage" tearoff="false" src="./Tools/mywinzip/res/menu/manage_menu.xml"/>
+    <cascade label="Security copy/Clean" tearoff="false"/>
+    <cascade label="Tools" tearoff="false"/>
+    <cascade label="View" tearoff="false" src="./Tools/mywinzip/res/menu/view_menu.xml"/>
+</menu>

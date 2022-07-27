@@ -27,9 +27,10 @@ class MenuBar(tk.Frame):
             finally:
                 menu.grab_release()
 
-
+        top = master.winfo_toplevel()
+        regMenu = getattr(top, 'registerMenu', None)
         selpane = userinterface.getLayout(src)
-        master_menu = userinterface.menuFactory(self, selpane)
+        master_menu = userinterface.menuFactory(self, selpane, registerMenu=regMenu)
         if topmenu == 'true':
             top = master.winfo_toplevel()
             top.config(menu=master_menu)

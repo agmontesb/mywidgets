@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<menu label="Zip" tearoff="false">
+    <radiobutton label="Zip file" value="all" />
+    <radiobutton label="PyZipFile file" value="selected" />
+    <separator/>
+    <cascade label="Zip Method" tearoff="false">
+        <radiobutton label="Maxima" value="one"/>
+        <radiobutton label="Enhance Deflate" value="two"/>
+        <radiobutton label="Super Fast" value="three"/>
+        <radiobutton label="No compression" value="four"/>
+    </cascade>
+    <cascade label="Filters" tearoff="false">
+        <command label="Default Filter" />
+        <separator />
+        <command label="Create/edit/delete Filter" />
+    </cascade>
+    <separator />
+    <command label="Cipher" />
+    <command label="Image Convertion" />
+    <command label="PDF Convertion" />
+    <separator/>
+    <command label="Add Files" />
+    <command label="Add Folder" />
+</menu>

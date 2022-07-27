@@ -51,17 +51,19 @@ class MElement(ET.Element):
 
 
 class XmlSerializer:  # The target object of the parser
-    style_strs = []
-    _style_ids = []
-    wrapper = None
-    stack = []
-    _data = []
-    _tail = None
-    _last_open = [('root', dict(_tag_='root', __NCHILDREN__=[]))]
-    _ntags = 0
-    _nclose = 0
-    _parser = None
-    selectors = None
+
+    def __init__(self):
+        self.style_strs = []
+        self._style_ids = []
+        self.wrapper = None
+        self.stack = []
+        self._data = []
+        self._tail = None
+        self._last_open = [('root', dict(_tag_='root', __NCHILDREN__=[]))]
+        self._ntags = 0
+        self._nclose = 0
+        self._parser = None
+        self.selectors = None
 
     def __call__(self, htmlstr):
         self._parser = parser = ET.XMLParser(target=self)

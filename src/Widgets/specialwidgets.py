@@ -30,6 +30,6 @@ def form(master, **kwargs):
 
     options = {key: value for key, value in kwargs.items() if key in ('src', 'name')}
     layout_name = options.get('src')
-    selpane = ui.getLayout(layout_name)
+    selpane = ui.getLayout(layout_name, withCss=True)
     fframe = formFrame(master, settings={}, selPane=selpane, name=options.get('name', None))
     return fframe

@@ -147,9 +147,9 @@ class TreeList(ttk.Treeview):
             treeCol = displaycolumns[nCol]
 
             if self.sortby is not None and self.sortby == treeCol:
-                    colName = treew.heading(self.sortby, option='text')
-                    revFlag = colName.endswith('(a-z)')
-                    colName = colName[:-5] + ('(z-a)' if revFlag else '(a-z)')
+                colName = treew.heading(self.sortby, option='text')
+                revFlag = colName.endswith('(a-z)')
+                colName = colName[:-5] + ('(z-a)' if revFlag else '(a-z)')
             else:
                 if self.sortby:
                     colName = treew.heading(self.sortby, option='text')[:-6]

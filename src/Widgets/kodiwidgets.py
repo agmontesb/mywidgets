@@ -139,7 +139,7 @@ class baseWidget(tk.Frame, object):
         :return: tuple. "id" y valor asociado al widget.
         '''
         id = self._id if tId else self.id
-        return (id, self.getValue())
+        return (str(self.value), self.getValue())
 
     def isValueSetToDefault(self):
         '''
@@ -226,7 +226,13 @@ class settLabel(baseWidget):
         self.name = wdgName
 
     def setGUI(self, options):
-        ttk.Label(self, text=options.get('label'), width=20, anchor=tk.NW).pack(side=tk.LEFT, fill=tk.X, expand=1)
+        if options.get('id'):
+            texto = self.getValue()
+            method = tk.Message if texto.count('\n') else ttk.Label
+            method(self, name=options.get('id', None), textvariable=self.value, width=20, anchor=tk.NW).pack(side=tk.LEFT, fill=tk.X, expand=1)
+        else:
+            method = tk.Message if options.get('label').count('\n') else ttk.Label
+            method(self, text=options.get('label'), width=20, anchor=tk.NW).pack(side=tk.LEFT, fill=tk.X, expand=1)
 
 
 class settFileenum(baseWidget):
@@ -412,13 +418,14 @@ class settEnum(baseWidget):
 
 
 class CustomDialog(tkSimpleDialog.Dialog):
-    def __init__(self, master, title=None, xmlFile=None, isFile=False, settings=None):
+    def __init__(self, master, title=None, xmlFile=None, isFile=False, settings=None, dlg_type='okcancel'):
         self.allSettings = None
         self.settings = settings or {}
         if isFile:
             with open(xmlFile, 'rb') as f:
                 xmlFile = f.read()
         self.ads = xmlFile
+        self.dlg_type = dlg_type
         tkSimpleDialog.Dialog.__init__(self, master, title)
 
     def body(self, master):
@@ -445,14 +452,14 @@ class CustomDialog(tkSimpleDialog.Dialog):
 
         box = tk.Frame(self)
 
-        w = ttk.Button(box, text="OK", width=10, command=self.ok, default=tk.ACTIVE)
-        w.pack(side=tk.LEFT, padx=5, pady=5)
-        w = ttk.Button(box, text="Cancel", width=10, command=self.cancel)
-        w.pack(side=tk.LEFT, padx=5, pady=5)
-
-        self.bind("<Return>", self.ok)
-        self.bind("<Escape>", self.cancel)
-
+        if self.dlg_type in ('okcancel', 'ok'):
+            w = ttk.Button(box, text="OK", width=10, command=self.ok, default=tk.ACTIVE)
+            w.pack(side=tk.LEFT, padx=5, pady=5)
+            self.bind("<Return>", self.ok)
+        if self.dlg_type == 'okcancel':
+            w = ttk.Button(box, text="Cancel", width=10, command=self.cancel)
+            w.pack(side=tk.LEFT, padx=5, pady=5)
+            self.bind("<Escape>", self.cancel)
         box.pack()
 
     def ok(self, event=None):
@@ -470,12 +477,12 @@ class CustomDialog(tkSimpleDialog.Dialog):
         self.cancel()
         pass
 
-    def geometry(self, posStr):
-        width, height = 290, 220
-        posx = (self.winfo_screenwidth() - width) / 2
-        posy = (self.winfo_screenheight() - height) / 2
-        posStr = "+%d+%d" % (posx, posy)
-        tkSimpleDialog.Dialog.geometry(self, posStr)
+    # def geometry(self, posStr):
+    #     width, height = 290, 220
+    #     posx = (self.winfo_screenwidth() - width) / 2
+    #     posy = (self.winfo_screenheight() - height) / 2
+    #     posStr = "+%d+%d" % (posx, posy)
+    #     tkSimpleDialog.Dialog.geometry(self, posStr)
 
 
 class settOptionList(baseWidget):
@@ -723,17 +730,33 @@ class settBool(baseWidget):
         self.id = id = options.get('id', '').lower()
         self.default = options.get('default') == 'true'
         if 'group' in options:
-            value_on = id
+            method = ttk.Radiobutton
+            value_opt = dict(value=id)
             if self.default: self.setValue(id)
         else:
-            value_on = True
+            method = ttk.Checkbutton
+            value_opt = dict(onvalue=True)
             self.setValue(self.default)
-        chkbtn = ttk.Checkbutton(self, name=self.id, variable=self.value,
-                                onvalue=value_on,
-                                command=self.onClick)
+        chkbtn = method(self, name=self.id, variable=self.value,
+                                command=self.onClick,
+                                **value_opt
+                        )
         chkbtn.pack(side = tk.RIGHT)
         ttk.Label(self, name="boollbl", text=options.get('label'), width=20, anchor=tk.NW)\
             .pack(side = tk.LEFT, fill=tk.X, expand=tk.YES)
+
+    @property
+    def default(self):
+        return self._default
+
+    @default.setter
+    def default(self, value):
+        self._default = value
+        try:
+            equations_manager.state_equations[self._id]._default = value
+            equations_manager.var_values[self._id] = value
+        except:
+            pass
 
     def isValueSetToDefault(self):
         return self.getValue() == self.default
@@ -743,8 +766,8 @@ class settBool(baseWidget):
 
     def getValue(self):
         value = self.value.get()
-        if isinstance(value, str):
-            value = (value == self.id)
+        # if isinstance(value, str):
+        #     value = (value == self.id)
         return value
 
     def onClick(self):
@@ -1031,6 +1054,9 @@ class FormFrame(tk.Frame):
         :return: None.
         '''
         form = self
+        groupvars = set(settings.keys()).intersection(self.radioGroups)
+        for grpvar in groupvars:
+            self.radioGroups[grpvar].set(self.settings.pop(grpvar))
         mapping = [key for key in self.widgetMapping.keys()
                    if hasattr(getattr(form, key), 'setValue')]
         toModify = set(settings.keys()).intersection(mapping)

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<menu name="popupzippanel" label="Zip panel Pop Up" tearoff="false">
+    <command label="New Folder" />
+    <command label="Unzip" />
+    <separator />
+    <command label="A Level Up" />
+    <separator />
+    <command label="New Folder" />
+    <command label="Delete" />
+    <separator />
+    <command label="Restore" />
+    <separator />
+    <command label="Select All" />
+    <command label="Toggle Selection" />
+    <command label="Select By Name" />
+    <separator />
+    <command label="Rename"/>
+    <command label="Zip File With Selected Files"/>
+    <command label="Copy/Move To ..."/>
+</menu>
