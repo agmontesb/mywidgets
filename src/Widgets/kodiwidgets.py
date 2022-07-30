@@ -65,10 +65,13 @@ class baseWidget(tk.Frame, object):
         :param options: dict. kwargs válidos para la definición de un tkinter Frame, además
                         de los cuales acepta "id", "name", "varType"
         '''
+        frametype = options.get('frametype', 'Frame')
+        assert frametype in ('Frame', 'LabelFrame')
         wdgName = options.get('name', '').lower()
         self.id = options.get('id').lower() if options.get('id') else None # Atributo id definido por el usuario
         self._id = options.pop('id', wdgName)       # Atributo _id = 'id' propio.
 
+        nopack = options.pop('nopack', 'false')
         varType = options.pop('varType', None)
         self.value = None
         self._default = None                         # Atributo: default.
@@ -84,11 +87,14 @@ class baseWidget(tk.Frame, object):
             baseConf = dict(name=self._id)
             if options.get('bg'):
                 baseConf['bg'] = options['bg']
+            if frametype == 'LabelFrame':
+                baseConf['text'] = options['text']
 
         if varType:                    # Atributo: value.
             self.setVarType(varType, name=baseConf.get('name', None))
 
-        tk.Frame.__init__(self, master, **baseConf)
+        super_class = getattr(tk, frametype)
+        super_class.__init__(self, master, **baseConf)
         # Se definen dos atributos:
         # path = Camino que resulta de concatenar los nombres de los Frame que contienen
         #        este baseWidget
@@ -96,11 +102,13 @@ class baseWidget(tk.Frame, object):
         if issubclass(master.__class__, settContainer):
             self.path = master.path + '.' + baseConf.get('name', '')
             self.form = master.form
-            master.applyGeoManager(self)
+            if nopack != 'true':
+                master.applyGeoManager(self)
         else:
             self.path = baseConf.get('name', '')
             self.form = master.form if hasattr(master, 'form') else master
-            self.pack(side=tk.TOP, fill=tk.BOTH, expand=tk.YES, ipadx=2, ipady=2, padx=1, pady=1)
+            if nopack != 'true':
+                self.pack(side=tk.TOP, fill=tk.X, ipadx=2, ipady=2, padx=1, pady=1)
 
     @property
     def default(self):
@@ -221,7 +229,7 @@ class baseWidget(tk.Frame, object):
 class settLabel(baseWidget):
     def __init__(self, master, **options):
         wdgName = options.get('name').lower()
-        baseWidget.__init__(self, master, varType='string', name=wdgName, id=options.get('id', ''))
+        baseWidget.__init__(self, master, varType='string', name=wdgName, id=options.get('id', ''), nopack=options.get('nopack', 'false'))
         self.setGUI(options)
         self.name = wdgName
 
@@ -238,7 +246,7 @@ class settLabel(baseWidget):
 class settFileenum(baseWidget):
     def __init__(self, master, **options):
         wdgName = options.get('name').lower()
-        baseWidget.__init__(self, master, varType='string', name=wdgName, id=options.get('id', ''))
+        baseWidget.__init__(self, master, varType='string', name=wdgName, id=options.get('id', ''), nopack=options.get('nopack', 'false'))
         self.setGUI(options)
         self.name = wdgName
 
@@ -272,7 +280,7 @@ class settFileenum(baseWidget):
 class settFolder(baseWidget):
     def __init__(self, master, **options):
         wdgName = options.get('name').lower()
-        baseWidget.__init__(self, master, varType='string', name=wdgName, id=options.get('id', ''))
+        baseWidget.__init__(self, master, varType='string', name=wdgName, id=options.get('id', ''), nopack=options.get('nopack', 'false'))
         self.setGUI(options)
         self.name = wdgName
 
@@ -293,24 +301,28 @@ class settFolder(baseWidget):
 class settFile(baseWidget):
     def __init__(self, master, **options):
         wdgName = options.get('name').lower()
-        baseWidget.__init__(self, master, varType='string', name=wdgName, id=options.get('id', ''))
+        baseWidget.__init__(self, master, varType='string', name=wdgName, id=options.get('id', ''), nopack=options.get('nopack', 'false'))
         self.setGUI(options)
         self.name = wdgName
 
     def setGUI(self, options):
-        ttk.Label(self, text=options.get('label'), width=20, anchor=tk.NW).pack(side=tk.LEFT)
+        if options.get('label'):
+            ttk.Label(self, text=options.get('label'), width=20, anchor=tk.NW).pack(side=tk.LEFT)
         if options.get('id'): self.id = options.get('id').lower()
         self.initialdir = options.get('initialdir', '')
         self.default = options.get('default', '')
         if self.initialdir and self.default:
             self.default = os.path.relpath(self.default, self.initialdir)
         tk.Button(
-            self, name=self.id,
-            textvariable=self.value, command=lambda x=options.get("initialdir", ""): self.getFile(x)
+            self,
+            name=self.id,
+            textvariable=self.value,
+            command=lambda x=options.get("initialdir", ""): self.getFile(x)
         ).pack(side=tk.RIGHT, fill=tk.X, expand=1)
         self.setValue(self.default)
 
     def getFile(self, initialdir):
+        initialdir = self.value.get() or initialdir
         fileName = tkFileDialog.askopenfilename(initialdir=initialdir)
         if fileName:
             fileName = os.path.relpath(fileName, initialdir)
@@ -340,7 +352,7 @@ class settColor(settFile):
 class settDDList(baseWidget):
     def __init__(self, master, **options):
         wdgName = options.get('name').lower()
-        baseWidget.__init__(self, master, varType='string', name=wdgName, id=options.get('id', ''))
+        baseWidget.__init__(self, master, varType='string', name=wdgName, id=options.get('id', ''), nopack=options.get('nopack', 'false'))
         self.setGUI(options)
         self.name = wdgName
 
@@ -380,12 +392,12 @@ class settDDList(baseWidget):
 class settEnum(baseWidget):
     def __init__(self, master, **options):
         wdgName = options.get('name').lower()
-        baseWidget.__init__(self, master, varType='string', name=wdgName, id=options.get('id', ''))
+        baseWidget.__init__(self, master, varType='string', name=wdgName, id=options.get('id', ''), nopack=options.get('nopack', 'false'))
         self.setGUI(options)
         self.name = wdgName
 
     def setGUI(self, options):
-        ttk.Label(self, text=options.get('label'), width=20, anchor=tk.NW).pack(side=tk.LEFT)
+        ttk.Label(self, text=options.get('label'), width=25, anchor=tk.NW).pack(side=tk.LEFT)
         if options.get('id'): self.id = options.get('id').lower()
         self.default = options.get('default', '')
         if 'values' in options:
@@ -435,7 +447,6 @@ class CustomDialog(tkSimpleDialog.Dialog):
         This method should be overridden, and is called
         by the __init__ method.
         '''
-        # selPanel = self.ads.getActivePane()
         self.form = form = formFrameGen(master, settings=self.settings, selPane=self.ads)
         form.pack(side=tk.TOP, fill=tk.BOTH, expand=tk.YES)
         wdgId = list(form.nameToId.keys())[0]
@@ -489,7 +500,7 @@ class settOptionList(baseWidget):
     def __init__(self, master, **options):
         wdgName = options.get('name').lower()
         self.isTree = options.get('tree', 'false') == 'true'
-        baseWidget.__init__(self, master, varType='string', name=wdgName, id=options.get('id', ''))
+        baseWidget.__init__(self, master, varType='string', name=wdgName, id=options.get('id', ''), nopack=options.get('nopack', 'false'))
         self.setGUI(options)
         self.name = wdgName
         self.virtualEventData = None
@@ -639,7 +650,7 @@ class settOptionList(baseWidget):
 class settSlider(baseWidget):
     def __init__(self, master, **options):
         wdgName = options.get('name').lower()
-        baseWidget.__init__(self, master, varType='double', name=wdgName, id=options.get('id', ''))
+        baseWidget.__init__(self, master, varType='double', name=wdgName, id=options.get('id', ''), nopack=options.get('nopack', 'false'))
         self.setGUI(options)
         self.name = wdgName
 
@@ -660,7 +671,7 @@ class settSlider(baseWidget):
 class settNumber(baseWidget):
     def __init__(self, master, **options):
         wdgName = options.get('name').lower()
-        baseWidget.__init__(self, master, varType='int', name=wdgName, id=options.get('id', ''))
+        baseWidget.__init__(self, master, varType='int', name=wdgName, id=options.get('id', ''), nopack=options.get('nopack', 'false'))
         self.setGUI(options)
         self.name = wdgName
 
@@ -698,7 +709,7 @@ class settText(baseWidget):
     def __init__(self, master, **options):
         wdgName = options.get('name').lower()
         self.name = wdgName
-        baseWidget.__init__(self, master, varType='string', name=wdgName, id=options.get('id', ''))
+        baseWidget.__init__(self, master, varType='string', name=wdgName, id=options.get('id', ''), nopack=options.get('nopack', 'false'))
         self.setGUI(options)
 
     def setGUI(self, options):
@@ -717,7 +728,7 @@ class settText(baseWidget):
 class settBool(baseWidget):
     def __init__(self, master, **options):
         wdgName = options.get('name', '').lower()
-        baseWidget.__init__(self, master, name=wdgName, id=options.get('id', ''))
+        baseWidget.__init__(self, master, name=wdgName, id=options.get('id', ''), nopack=options.get('nopack', 'false'))
         if 'group' in options:
             groupName = options['group']
             self.value = self.form.getGroupVar(groupName)
@@ -741,9 +752,10 @@ class settBool(baseWidget):
                                 command=self.onClick,
                                 **value_opt
                         )
-        chkbtn.pack(side = tk.RIGHT)
+        cside = options.get('cside', tk.RIGHT)
+        chkbtn.pack(side=cside)
         ttk.Label(self, name="boollbl", text=options.get('label'), width=20, anchor=tk.NW)\
-            .pack(side = tk.LEFT, fill=tk.X, expand=tk.YES)
+            .pack(side=tk.LEFT, fill=tk.X, expand=tk.YES)
 
     @property
     def default(self):
@@ -780,7 +792,7 @@ class settBool(baseWidget):
 class settAction(baseWidget):
     def __init__(self, master, **options):
         wdgName = options.get('name', '').lower()
-        baseWidget.__init__(self, master, name=wdgName, id=options.get('id', ''))
+        baseWidget.__init__(self, master, name=wdgName, id=options.get('id', ''), nopack=options.get('nopack', 'false'))
         self.setGUI(options)
         self.name = wdgName
 
@@ -817,7 +829,7 @@ class settAction(baseWidget):
 class settSep(baseWidget):
     def __init__(self, master, **options):
         wdgName = options.get('name').lower().lower()
-        baseWidget.__init__(self, master, name=wdgName)
+        baseWidget.__init__(self, master, name=wdgName, nopack=options.get('nopack', 'false'))
         self.setGUI(options)
         self.name = wdgName
 
@@ -846,8 +858,12 @@ class settSep(baseWidget):
 
 class settContainer(baseWidget):
     def __init__(self, master, **options):
-        keys = set(('side', 'label', 'scrolled', 'type')).intersection(options)
+        keys = {'side', 'label', 'scrolled', 'type'}.intersection(options)
         contoptions = {key: options.pop(key) for key in keys}
+        bflag = 'label' in contoptions
+        if bflag:
+            options['frametype'] = 'LabelFrame'
+            options['text'] = contoptions.pop('label')
         packSide = contoptions.get('side', 'top')
         self.side = dict(top=tk.TOP, bottom=tk.BOTTOM, left=tk.LEFT, right=tk.RIGHT).get(packSide, tk.TOP)
         wdgName = options.get('name', '').lower().replace('.', '_')
@@ -857,19 +873,14 @@ class settContainer(baseWidget):
         baseWidget.__init__(self, master, **options)
         self.name = wdgName
 
-        self.innerframe = self
-        if 'label' in contoptions:
-            outerframe = tk.LabelFrame(self, text=contoptions.get('label'))
-            outerframe.pack(side=tk.TOP, fill=tk.BOTH, expand=tk.YES)
-            if contoptions.get('scrolled', 'false') == 'false':
-                self.innerframe = innerframe = settContainer(self, name="innerframe",
+        outerframe = self
+        self.innerframe = outerframe
+        if bflag and contoptions.get('scrolled', 'false') == 'false':
+            self.innerframe = innerframe = settContainer(outerframe, name="innerframe",
                                                                 side=self.side)
-                innerframe.pack(in_=outerframe, side=tk.TOP, fill=tk.BOTH, expand=tk.YES)
-        else:
-            outerframe = tk.Frame(self)
-            outerframe.pack(side=tk.TOP, fill=tk.BOTH, expand=tk.YES)
+            innerframe.pack(side=tk.TOP, fill=tk.BOTH, expand=tk.YES)
 
-        if contoptions.get('scrolled', 'false') == 'true':
+        if not bflag and contoptions.get('scrolled', 'false') == 'true':
             outerframe.grid_columnconfigure(0, weight=1)
             outerframe.grid_columnconfigure(1, weight=0)
             outerframe.grid_rowconfigure(0, weight=1)
@@ -897,19 +908,48 @@ class settContainer(baseWidget):
 
             self.canvas.bind("<Configure>", self._OnCanvasConfigure)
             self.innerframe.bind("<Configure>", self._OnInnerFrameConfigure)
+        pass
 
-    # def _OnCanvasConfigure(self, event):
-    #     canvas = event.widget
-    #     canvas.itemconfig(self.innerframeId, width=event.width)
-    #
-    # def _OnInnerFrameConfigure(self, event):
-    #     height = event.height
-    #     width = event.width
-    #     if height <= self.canvas.winfo_reqheight():
-    #         self.vsb.grid_forget()
-    #     else:
-    #         self.vsb.grid(row=0, column=1, sticky=tk.NS)
-    #     self.canvas.config(scrollregion=(0, 0, width, height))
+        # self.innerframe = self
+        # if 'label' in contoptions:
+        #     outerframe = tk.LabelFrame(self, text=contoptions.get('label'), name='outerframe')
+        #     outerframe.pack(side=tk.TOP, fill=tk.BOTH, expand=tk.YES)
+        #     if contoptions.get('scrolled', 'false') == 'false':
+        #         self.innerframe = innerframe = settContainer(self, name="innerframe",
+        #                                                         side=self.side)
+        #         innerframe.pack(in_=outerframe, side=tk.TOP, fill=tk.BOTH, expand=tk.YES)
+        # else:
+        #     outerframe = tk.Frame(self, name='outerframe')
+        #     outerframe.pack(side=tk.TOP, fill=tk.BOTH, expand=tk.YES)
+        #
+        # if contoptions.get('scrolled', 'false') == 'true':
+        #     outerframe.grid_columnconfigure(0, weight=1)
+        #     outerframe.grid_columnconfigure(1, weight=0)
+        #     outerframe.grid_rowconfigure(0, weight=1)
+        #
+        #     self.vsb = tk.Scrollbar(outerframe, orient="vertical", )
+        #     self.vsb.grid(row=0, column=1, sticky=tk.NS)
+        #
+        #     self.canvas = tk.Canvas(outerframe, name="canvas", borderwidth=0)
+        #     self.canvas.grid(row=0, column=0, sticky=tk.NSEW)
+        #
+        #     self.canvas.configure(yscrollcommand=self.vsb.set)
+        #     self.vsb.configure(command=self.canvas.yview)
+        #
+        #     self.canvas.xview_moveto(0)
+        #     self.canvas.yview_moveto(0)
+        #
+        #     self.innerframe = innerframe = settContainer(self, name="innerframe",
+        #                                                     side=self.side)
+        #     innerframe.pack_forget()
+        #     self.innerframeId = self.canvas.create_window((0, 0),
+        #                                                   window=innerframe,
+        #                                                   anchor="nw",
+        #                                                   tags="innerframe")
+        #
+        #
+        #     self.canvas.bind("<Configure>", self._OnCanvasConfigure)
+        #     self.innerframe.bind("<Configure>", self._OnInnerFrameConfigure)
 
     def _OnCanvasConfigure(self, event):
         if self.innerframe.winfo_reqheight() <= self.canvas.winfo_height():
@@ -945,15 +985,13 @@ class settContainer(baseWidget):
     def applyGeoManager(self, widget):
         innerframe = self.innerframe
         fill = tk.X if self.side in (tk.TOP, tk.BOTTOM) else tk.Y
-        widget.pack(in_=innerframe, side=self.side, expand=tk.YES, fill=fill,
+        widget.pack(in_=innerframe, side=self.side, fill=fill,
                     ipadx=2, ipady=2, padx=2, pady=2)
-                    # ipadx=2, ipady=2, padx=2, pady=2, anchor=tk.NW)
-
 
 class settFragment(baseWidget):
     def __init__(self, master, **options):
         wdgName = options.get('name', '').lower()
-        baseWidget.__init__(self, master, name=wdgName, id=options.get('id', ''))
+        baseWidget.__init__(self, master, name=wdgName, id=options.get('id', ''), nopack=options.get('nopack', 'false'))
         self.setGUI(options)
         self.name = wdgName
 
@@ -1007,7 +1045,7 @@ class FormFrame(tk.Frame):
         :param settings: dict. Valores de los widgets diferentes a los defaults.
         :param selPane: element tree node. Nodo raiz del cual se desprenden la estructura
                         del formFrame.
-        :param formModule: module. Contiene las definiciones de todos los widgets deffinidos
+        :param formModule: module. Contiene las definiciones de todos los widgets definidos
                             por el usuario.
         :return: None.
         '''
@@ -1160,7 +1198,7 @@ def formFrameGen(master, filename=None, selPane=None, settings=None):
             xmlstr = f.read()
         selPane = ET.XML(xmlstr).find('category')
     if isinstance(selPane, (bytes, str)):
-        selPane = ET.XML(selPane).find('category')
+        selPane = ET.XML(selPane)               # .find('category')
 
     formclass = formFrame
     formModule = None

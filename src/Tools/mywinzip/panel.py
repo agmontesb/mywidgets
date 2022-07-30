@@ -2,6 +2,7 @@ import os.path
 import tkinter as tk
 import tkinter.messagebox as tkMessageBox
 import zipfile
+from datetime import datetime
 
 import userinterface
 from Widgets.Custom import navigationbar
@@ -81,8 +82,7 @@ class Panel(tk.Frame):
             suffix = (os.sep, '')[k]
             for name in names:
                 filename = os.path.join(root, name) + suffix
-                indx = self.icons_col.index(filename)
-                row = self.records[indx]
+                row = self.records(filename)
                 child_id = tree.insert(
                     path_id,
                     'end',
@@ -92,7 +92,7 @@ class Panel(tk.Frame):
                 if filename.endswith(os.sep):
                     tree.insert(child_id, 'end', text='dummy')
         self.selectall.deselect()
-        self.tree_path.setActivePath(root)
+        self.tree_path.setActivePath(path)
 
     def onGroupBy(self):
         self.selectall.deselect()
@@ -114,9 +114,7 @@ class Panel(tk.Frame):
         tree = self.tree
         selected = tree.tag_has('selected')
         data = []
-        method = tree.item
-        if col_id != 'values':
-            method = tree.set
+        method = tree.item if col_id != 'values' else tree.set
         for iid in selected:
             data.append(method(iid, col_id))
         return data
@@ -143,22 +141,12 @@ class Panel(tk.Frame):
         else:
             self.selectall.select()
 
-    def tree_data(self, root_dir, icons_col, records, groupby=False, mode='replace'):
-        match mode:
-            case 'replace':
-                self.text = root_dir.strip('/')
-                self.icons_col = icons_col
-                self.records = records
-                self.path_obj = navigationbar.StrListObj(icons_col, root_dir)
-            case 'add':
-                path = self.tree_path.getActivePath().path
-                self.icons_col.extend(icons_col)
-                self.records.extend(records)
-                root_dir = self.path_obj.root
-                icons_col = self.icons_col
-                self.path_obj = navigationbar.StrListObj(icons_col, root_dir)
-                # self.onTreeViewOpen(path=path)
-                groupby = self.groupby
+    def tree_data(self, path_obj, records, groupby=None):
+        if groupby is None:
+            groupby = self.groupby
+        self.text = path_obj.root.strip('/')
+        self.records = records
+        self.path_obj = path_obj
         self.groupby = groupby
 
     @property
@@ -189,17 +177,18 @@ class Panel(tk.Frame):
         if not bflag:
             tree['displaycolumns'] = '#all'
             tree['show'] = 'headings'
-            for icon, row in zip(self.icons_col, self.records):
-                if icon.endswith(os.sep):
-                    continue
-                tree.insert('', 'end', values=row)
-            root = self.path_obj.root
-            self.tree_path.setActivePath(root)
+            root_dir = self.path_obj.root
+            for root, d_names, f_names in self.path_obj.walk(root_dir):
+                for f_name in f_names:
+                    f_name = os.path.join(root, f_name)
+                    row = self.records(f_name)
+                    tree.insert('', 'end', values=row)
+            self.tree_path.setActivePath(root_dir)
         else:
             tree['displaycolumns'] = '#all'
             tree['show'] = 'tree headings'
-            root_dir = self.path_obj.root
-            self.onTreeViewOpen(path=root_dir)
+            path = self.tree_path.getActivePath().path
+            self.onTreeViewOpen(path=path)
             pass
 
 
@@ -242,21 +231,41 @@ def main():
     top.attributes('-zoomed', True)
     # chk = tk.Checkbutton(top, text='groupby', command=lambda: setattr(panel, 'groupby', not panel.groupby))
     # chk.pack(side=tk.TOP, fill=tk.X)
-    panel = Panel(
-        top,
-        path_obj='/mnt/c/',
-        text='PRUEBA',
-        column_ids="Length Method Size Ratio Offset DateTime CRC32 Name",
-    )
-    panel.pack(side=tk.TOP, fill=tk.BOTH, expand=tk.YES)
-
-    filename = '/mnt/c/users/Alex Montes/Downloads/app.zip'
-    zf = zipfile.ZipFile(filename)
-    root = f'/{os.path.basename(filename)}'
-    namelist = [os.path.join(root, x) for x in zf.namelist()]
-    records = listzip(zf.infolist())
-    panel.tree_data(root, namelist, records)
-
+    case = 'zip_files'
+    if case == 'zip_panel':
+        panel = Panel(
+            top,
+            path_obj='/mnt/c/',
+            text='PRUEBA',
+            column_ids="Length Method Size Ratio Offset DateTime CRC32 Name",
+        )
+        panel.pack(side=tk.TOP, fill=tk.BOTH, expand=tk.YES)
+        filename = '/mnt/c/users/Alex Montes/Downloads/app.zip'
+        zf = zipfile.ZipFile(filename)
+        root = f'/{os.path.basename(filename)}'
+        namelist = [os.path.join(root, x) for x in zf.namelist()]
+        path_obj = navigationbar.StrListObj(namelist, root)
+        def f_data(records, namelist):
+            def f_record(x):
+                indx = namelist.index(x)
+                return records[indx]
+            return f_record
+        records = listzip(zf.infolist())
+        panel.tree_data(path_obj, f_data(records, namelist))
+    if case == 'zip_files':
+        panel = Panel(
+            top,
+            path_obj='/mnt/c/',
+            text='PRUEBA',
+            column_ids="Modified Size",
+        )
+        panel.pack(side=tk.TOP, fill=tk.BOTH, expand=tk.YES)
+        path_obj = navigationbar.DirectoryObj('/mnt/c/Users/Alex Montes', '/mnt/c/Users/Alex Montes')
+        def f_record(x):
+            stat = os.stat(x)
+            size = '' if x.endswith(os.sep) else f'{stat.st_size // 1024:>10d} KB'
+            return datetime.fromtimestamp(stat.st_mtime).strftime('%Y-%m-%d %H:%M'), size
+        panel.tree_data(path_obj, f_record, groupby=True)
     top.mainloop()
 
 

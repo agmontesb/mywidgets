@@ -15,7 +15,7 @@
         <command label="Create/edit/delete Filter" />
     </cascade>
     <separator />
-    <command label="Cipher" />
+    <checkbutton label="Cipher"/>
     <command label="Image Convertion" />
     <command label="PDF Convertion" />
     <separator/>

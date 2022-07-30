@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<settings>
+	<category label="Cipher" lib="Widgets.kodiwidgets">
+        <label text="Cipher" side="top" fill="x" font="Helvetica 18 bold"/>
+        <klsep label="Password must have:" type="lsep"/>
+        <kbool id="blower" label="At least one lowercase character (a-z)"/>
+        <kbool id="bupper" label="At least one uppercase character (A-Z)"/>
+        <kbool id="bnumeric" label="At least one numeric character (0-9)"/>
+        <kbool id="bother" label="At least one symbol (!, @, #, $, %, ...)"/>
+		<kenum id="nchars" label="A minimum of characters:    " default="8" values="1|2|3|4|5|6|7|8|9|10|11|12|13"/>
+		<klsep label="Cipher method:" type="lsep"/>
+		<kbool id="aes256" label="AES 256" group="cipher_method"/>
+		<kbool id="aes128" label="AES 128" group="cipher_method"/>
+		<kbool id="zip20" label="Zip 2.0" group="cipher_method"/>
+	</category>
+	<category label="Folders" lib="Widgets.kodiwidgets">
+        <label text="Folders" font="Helvetica 18 bold" side="top" fill="x" expand="1" padx="1" pady="1"/>
+		<kfolder id="tmp_folder" label="Temporal folder:   " default=""/>
+		<kfolder id="wrk_folder" label="Working folder:   " default="" />
+        <klsep label="Add folder" type="lsep"/>
+		<kbool id="open_folder" label="Abrir carpeta de archivo comprimido" group="add_folder" cside="left"/>
+		<kbool id="last_folder" label="Última carpeta de añadir" group="add_folder" cside="left"/>
+		<kcontainer side="top" geomanager="grid">
+			<kbool id="custom_folder" label="Folder:" group="add_folder" cside="left" nopack="true" row="0" column="0" columnspan="1" sticky="nesw" padx="1" pady="1"/>
+			<kfolder id="user_folder" label="" default="" enable="eq(add_folder,'custom_folder')" nopack="true" row="0" column="1" columnspan="1" sticky="ew" padx="1" pady="1"/>
+		</kcontainer>
+	</category>
+</settings>

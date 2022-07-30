@@ -314,11 +314,12 @@ def newPanelFactory(master: tk.Tk | tk.Widget,
         def selectPane(id, panels):
             for pane in panels:
                 pane.pack_forget()
-            panels[id].pack(side=tk.LEFT, fill=tk.BOTH, expand=tk.YES)
+            panels[id].pack(side=tk.TOP, fill=tk.BOTH, expand=tk.YES)
             pass
 
-        paneArray = []
-        leftPane = tk.Frame(master, relief=tk.RIDGE, bd=5, bg='white', padx=3, pady=3)
+        panelArray = []
+        panel_attrs = dict(relief=tk.RIDGE, bd=5, bg='white', padx=3, pady=3)
+        leftPane = tk.Frame(master, **panel_attrs)
         leftPane.pack(side=tk.LEFT, fill=tk.Y)
         frstboton = None
         for k, elem in enumerate(categories):
@@ -330,14 +331,14 @@ def newPanelFactory(master: tk.Tk | tk.Widget,
             )
             boton.pack(side=tk.TOP, fill=tk.X)
             frstboton = frstboton or boton
-            pane = tk.Frame(master, name=f'categoria{k + 1}', relief=tk.RIDGE, bd=5, bg='white', padx=3, pady=3)
-            pane.form = master  # type: ignore
-            paneArray.append(pane)
+            panel = tk.Frame(master, name=f'categoria{k + 1}', **panel_attrs)
+            panel.form = master  # type: ignore
+            panelArray.append(panel)
         for child in leftPane.winfo_children():
-            child.config(command=lambda x=child['value'], y=tuple(paneArray): selectPane(x, y))  # type: ignore
+            child.config(command=lambda x=child['value'], y=tuple(panelArray): selectPane(x, y))  # type: ignore
         assert isinstance(frstboton, tk.Radiobutton)
         frstboton.invoke()
-        for root, selPane in zip(paneArray, categories):
+        for root, selPane in zip(panelArray, categories):
             n = widgetFactory(
                 root,
                 selPane,
@@ -384,7 +385,7 @@ def menuFactory(
             except (AttributeError, KeyError):
                 cb = menuclick_closure(widget=menu_master, data=k)
             # options['command'] = cb
-            if 'accelerator' in options:
+            if options.get('accelerator', ''):
                 accelerator = options['accelerator']
                 accelerator = accelerator.replace('+', '-')
                 try:
