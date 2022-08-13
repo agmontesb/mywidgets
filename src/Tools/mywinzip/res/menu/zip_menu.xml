@@ -10,7 +10,7 @@
         <radiobutton label="No compression" value="four"/>
     </cascade>
     <cascade label="Filters" tearoff="false">
-        <command label="Default Filter" />
+        <radiobutton label="1 Default Filter (+*.*)" value="1"/>
         <separator />
         <command label="Create/edit/delete Filter" />
     </cascade>

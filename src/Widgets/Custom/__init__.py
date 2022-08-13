@@ -13,6 +13,7 @@ def getWidgetClass(widgetName):
         collapsingframe=CollapsingFrame.collapsingFrame,
         widgetexplorer=WidgetsExplorer.WidgetExplorer,
         menubar=MenuBar.MenuBar,
+        ribbon=MenuBar.Ribbon,
         navigationbar=navigationbar.navigationFactory,
     )
     return widgetTypes.get(widgetName, None)

@@ -1,0 +1,11 @@
+<settings>
+    <category label="Category uno">
+        <button text="left" image="/mnt/c/Users/Alex Montes/PycharmProjects/mywidgets/src/Data/Drawable/btn_save.xml"/>
+        <button text="left" image="/mnt/c/Users/Alex Montes/PycharmProjects/mywidgets/src/Data/Drawable/btn_caret_down.xml"/>
+        <button text="right" image="/mnt/c/Users/Alex Montes/PycharmProjects/mywidgets/src/Data/Drawable/btn_open_folder.xml"/>
+        <button text="top" image="/mnt/c/Users/Alex Montes/PycharmProjects/mywidgets/src/Data/Drawable/btn_save.xml" compound="top"/>
+        <button text="bottom" image="/mnt/c/Users/Alex Montes/PycharmProjects/mywidgets/src/Data/Drawable/btn_save.xml" compound="bottom"/>
+        <button text="center" image="/mnt/c/Users/Alex Montes/PycharmProjects/mywidgets/src/Data/Drawable/btn_save.xml" compound="center"/>
+        <button text="center" image="/mnt/c/Users/Alex Montes/PycharmProjects/mywidgets/src/Data/Drawable/female-g81a7bdbfa_640.png"/>
+    </category>
+</settings>

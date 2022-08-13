@@ -157,7 +157,7 @@ class UiEditor(tk.Tk):
         fframes = ui_pane.winfo_children()[1:]
         [fframe.destroy() for fframe in fframes]
         try:
-            panel = ET.XML(xmlstr)
+            panel = userinterface.getLayout(xmlstr, withCss=True, is_content=True)                 # ET.XML(xmlstr)
             self.setupForms(panel, treeview, ui_pane)
         except IOError:
             tkMessageBox.showerror('Not a valid File', 'File not xml compliant ')
@@ -409,7 +409,7 @@ class UiEditor(tk.Tk):
             top_widget = self.parent_frame
             if frame1:
                 top_widget.nametowidget(frame1).pack_forget()
-            top_widget.nametowidget(frame2).pack(side='top', fill='y', expand='yes')
+            top_widget.nametowidget(frame2).pack(side='top', fill='both', expand='yes')
 
     def do_popup(self, event=None):
         iid = event.widget.identify_row(event.y)

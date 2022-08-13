@@ -149,8 +149,28 @@ def nameElements(htmlstr, k=-1):
 
 
 if __name__ == '__main__':
-    caso = 'treebuilder'
-    if caso == 'treebuilder':
+    caso = 'kodiwidgets_custom_dialog'
+    if caso == 'kodiwidgets_custom_dialog':
+        from Widgets import kodiwidgets
+
+        top = tk.Tk()
+        top.attributes('-zoomed', True)
+
+        title = 'Zip File With Selected Files'
+        xmlfile = '/mnt/c/Users/Alex Montes/PycharmProjects/mywidgets/src/Tools/mywinzip/res/layout/dlg_add_files_test.xml'
+        settings = {
+            'fname': 'NuevoZip.zip', 'fpath': '/mnt/c/Users/Alex Montes/PycharmProjects',
+            'zip_type': 'fzip', 'cipher': False, 'fltr_type': 'fltr1',
+        }
+        dlg = kodiwidgets.CustomDialog(
+            top,
+            title=title, xmlFile=xmlfile, isFile=True, settings=settings, dlg_type='okcancel'
+        )
+        if dlg.result:
+            settings.update(dlg.settings)
+        top.mainloop()
+
+    elif caso == 'treebuilder':
         import xml.etree.ElementTree as ET
         from xml.etree.ElementTree import XMLParser, TreeBuilder, ProcessingInstruction
 
@@ -268,7 +288,6 @@ if __name__ == '__main__':
             print(x)
         for sel in xmlserializer.selectors:
             print(sel)
-
     elif caso == 'css_selectors':
         from Tools.uiStyle import uicss
         selector_str = 'body #touchnav-wrapper div strong'
@@ -353,7 +372,6 @@ if __name__ == '__main__':
                 msg += f'pattern={cp.pattern} tag_pattern={cp.tag_pattern} req_attrs={cp.req_attrs}'
             print(msg)
         pass
-
     elif caso == 'imageprocessor_label':
         top = tk.Tk()
 

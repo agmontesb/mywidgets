@@ -16,7 +16,9 @@ import xml.etree.ElementTree as ET
 import importlib
 import fnmatch
 import operator
+import platform
 
+import userinterface
 from equations import equations_manager
 
 
@@ -53,18 +55,21 @@ class baseWidget(tk.Frame, object):
     '''
     Clase que define el widget básico como un tk.Frame
     '''
+
+    params = ('frametype', 'name', 'id', 'nopack', 'varType', 'text', 'bg', )
+
     def __new__(cls, *args, **options):
-        # instance = super(baseWidget, cls).__new__(cls, *args, **options)
         instance = super(baseWidget, cls).__new__(cls)
         return instance
 
-    def __init__(self, master, **options):
+    def __init__(self, master, **in_options):
         '''
         Inicialización del instance.
         :param master: tkinter Frame. Padre del widget.
         :param options: dict. kwargs válidos para la definición de un tkinter Frame, además
                         de los cuales acepta "id", "name", "varType"
         '''
+        options = {key: in_options[key] for key in in_options.keys() & self.params}
         frametype = options.get('frametype', 'Frame')
         assert frametype in ('Frame', 'LabelFrame')
         wdgName = options.get('name', '').lower()
@@ -228,10 +233,9 @@ class baseWidget(tk.Frame, object):
 
 class settLabel(baseWidget):
     def __init__(self, master, **options):
-        wdgName = options.get('name').lower()
-        baseWidget.__init__(self, master, varType='string', name=wdgName, id=options.get('id', ''), nopack=options.get('nopack', 'false'))
+        baseWidget.__init__(self, master, varType='string', **options)
         self.setGUI(options)
-        self.name = wdgName
+        self.name = options.get('name').lower()
 
     def setGUI(self, options):
         if options.get('id'):
@@ -245,10 +249,9 @@ class settLabel(baseWidget):
 
 class settFileenum(baseWidget):
     def __init__(self, master, **options):
-        wdgName = options.get('name').lower()
-        baseWidget.__init__(self, master, varType='string', name=wdgName, id=options.get('id', ''), nopack=options.get('nopack', 'false'))
+        baseWidget.__init__(self, master, varType='string', **options)
         self.setGUI(options)
-        self.name = wdgName
+        self.name = options.get('name').lower()
 
     def setGUI(self, options):
         ttk.Label(self, text=options.get('label'), width=20, anchor=tk.NW).pack(side=tk.LEFT)
@@ -279,10 +282,9 @@ class settFileenum(baseWidget):
 
 class settFolder(baseWidget):
     def __init__(self, master, **options):
-        wdgName = options.get('name').lower()
-        baseWidget.__init__(self, master, varType='string', name=wdgName, id=options.get('id', ''), nopack=options.get('nopack', 'false'))
+        baseWidget.__init__(self, master, varType='string', **options)
         self.setGUI(options)
-        self.name = wdgName
+        self.name = options.get('name').lower()
 
     def setGUI(self, options):
         ttk.Label(self, text=options.get('label'), width=20, anchor=tk.NW).pack(side=tk.LEFT)
@@ -300,10 +302,9 @@ class settFolder(baseWidget):
 
 class settFile(baseWidget):
     def __init__(self, master, **options):
-        wdgName = options.get('name').lower()
-        baseWidget.__init__(self, master, varType='string', name=wdgName, id=options.get('id', ''), nopack=options.get('nopack', 'false'))
+        baseWidget.__init__(self, master, varType='string', **options)
         self.setGUI(options)
-        self.name = wdgName
+        self.name = options.get('name').lower()
 
     def setGUI(self, options):
         if options.get('label'):
@@ -351,10 +352,9 @@ class settColor(settFile):
 
 class settDDList(baseWidget):
     def __init__(self, master, **options):
-        wdgName = options.get('name').lower()
-        baseWidget.__init__(self, master, varType='string', name=wdgName, id=options.get('id', ''), nopack=options.get('nopack', 'false'))
+        baseWidget.__init__(self, master, varType='string', **options)
         self.setGUI(options)
-        self.name = wdgName
+        self.name = options.get('name').lower()
 
     def setGUI(self, options):
         ttk.Label(self, text=options.get('label'), width=20, anchor=tk.NW).pack(side=tk.LEFT)
@@ -391,10 +391,9 @@ class settDDList(baseWidget):
 
 class settEnum(baseWidget):
     def __init__(self, master, **options):
-        wdgName = options.get('name').lower()
-        baseWidget.__init__(self, master, varType='string', name=wdgName, id=options.get('id', ''), nopack=options.get('nopack', 'false'))
+        baseWidget.__init__(self, master, varType='string', **options)
         self.setGUI(options)
-        self.name = wdgName
+        self.name = options.get('name').lower()
 
     def setGUI(self, options):
         ttk.Label(self, text=options.get('label'), width=25, anchor=tk.NW).pack(side=tk.LEFT)
@@ -498,11 +497,10 @@ class CustomDialog(tkSimpleDialog.Dialog):
 
 class settOptionList(baseWidget):
     def __init__(self, master, **options):
-        wdgName = options.get('name').lower()
         self.isTree = options.get('tree', 'false') == 'true'
-        baseWidget.__init__(self, master, varType='string', name=wdgName, id=options.get('id', ''), nopack=options.get('nopack', 'false'))
+        baseWidget.__init__(self, master, varType='string', **options)
         self.setGUI(options)
-        self.name = wdgName
+        self.name = options.get('name').lower()
         self.virtualEventData = None
 
     def setGUI(self, options):
@@ -519,7 +517,8 @@ class settOptionList(baseWidget):
 
         colHeadings = options.get('columnsheadings')
         dshow = 'headings'
-        columnsId = dcolumns = list(map(lambda x: x.strip(), colHeadings.split(',')))
+        column_names = list(map(lambda x: x.strip(), colHeadings.split(',')))
+        columnsId = dcolumns = [x.lower() for x in column_names]
         if self.isTree:
             dshow = 'tree ' + dshow
             dcolumns = '#all'
@@ -527,8 +526,8 @@ class settOptionList(baseWidget):
         tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=1)
         sbar.config(command=tree.yview)  # xlink sbar and tree
         tree.config(yscrollcommand=sbar.set)  # move one moves other
-        for column in columnsId:
-            tree.heading(column, text=column, anchor=tk.W)
+        for column in column_names:
+            tree.heading(column.lower(), text=column, anchor=tk.W)
         self.tree = tree
         self.columnsId = columnsId
 
@@ -541,7 +540,7 @@ class settOptionList(baseWidget):
         boton = ttk.Button(bFrame, text='Del', width=15, command=self.onDel)
         boton.pack(side=tk.RIGHT)
 
-        separator = tuple(options.get('separator', '|,'))
+        self.separator = separator = tuple(options.get('separator', '|,'))
         self.setValue(self.default, sep=separator)
 
     def xmlDlgWindow(self, tupleSett, isEdit=False, isTree=False):
@@ -611,7 +610,8 @@ class settOptionList(baseWidget):
         iid = self.tree.focus()
         if iid: self.tree.delete(iid)
 
-    def setValue(self, value, sep=('|', ',')):
+    def setValue(self, value, sep=None):
+        sep = sep or self.separator
         seprow, sepcol = sep
         lista = self.tree.get_children('')
         self.tree.delete(*lista)
@@ -630,7 +630,9 @@ class settOptionList(baseWidget):
                 record = record[3:]
             self.tree.insert(parent, 'end', iid=iid, text=text, values=record, open=True)
 
-    def getValue(self):
+    def getValue(self, sep=None):
+        sep = sep or self.separator
+        seprow, sepcol = sep
         stack = list(self.tree.get_children('')[::-1])
         bDatos = []
         while stack:
@@ -639,20 +641,19 @@ class settOptionList(baseWidget):
             if self.isTree:
                 iidValues = [self.tree.parent(iid), iid, self.tree.item(iid, 'text')]
             iidValues = iidValues + list(self.tree.item(iid, 'values'))
-            iidValStr = ','.join(iidValues)
+            iidValStr = sepcol.join(iidValues)
             bDatos.append(iidValStr)
             children = self.tree.get_children(iid)
             if children:
                 stack.extend(list(children)[::-1])
-        return '|'.join(bDatos)
+        return seprow.join(bDatos)
 
 
 class settSlider(baseWidget):
     def __init__(self, master, **options):
-        wdgName = options.get('name').lower()
-        baseWidget.__init__(self, master, varType='double', name=wdgName, id=options.get('id', ''), nopack=options.get('nopack', 'false'))
+        baseWidget.__init__(self, master, varType='double', **options)
         self.setGUI(options)
-        self.name = wdgName
+        self.name = options.get('name').lower()
 
     def setGUI(self, options):
         ttk.Label(self, text=options.get('label'), width=20, anchor=tk.NW).pack(side=tk.LEFT)
@@ -670,10 +671,9 @@ class settSlider(baseWidget):
 
 class settNumber(baseWidget):
     def __init__(self, master, **options):
-        wdgName = options.get('name').lower()
-        baseWidget.__init__(self, master, varType='int', name=wdgName, id=options.get('id', ''), nopack=options.get('nopack', 'false'))
+        baseWidget.__init__(self, master, varType='int', **options)
         self.setGUI(options)
-        self.name = wdgName
+        self.name = options.get('name').lower()
 
     def setGUI(self, options):
         ttk.Label(self, text=options.get('label'), width=20, anchor=tk.NW).pack(side=tk.LEFT)
@@ -707,9 +707,8 @@ class settNumber(baseWidget):
 
 class settText(baseWidget):
     def __init__(self, master, **options):
-        wdgName = options.get('name').lower()
-        self.name = wdgName
-        baseWidget.__init__(self, master, varType='string', name=wdgName, id=options.get('id', ''), nopack=options.get('nopack', 'false'))
+        self.name = options.get('name').lower()
+        baseWidget.__init__(self, master, varType='string', **options)
         self.setGUI(options)
 
     def setGUI(self, options):
@@ -727,15 +726,14 @@ class settText(baseWidget):
 
 class settBool(baseWidget):
     def __init__(self, master, **options):
-        wdgName = options.get('name', '').lower()
-        baseWidget.__init__(self, master, name=wdgName, id=options.get('id', ''), nopack=options.get('nopack', 'false'))
+        baseWidget.__init__(self, master, **options)
+        self.name = options.get('name', '').lower()
         if 'group' in options:
             groupName = options['group']
             self.value = self.form.getGroupVar(groupName)
         else:
-            self.setVarType('boolean', name=wdgName)
+            self.setVarType('boolean', name=self.name)
         self.setGUI(options)
-        self.name = wdgName
 
     def setGUI(self, options):
         self.id = id = options.get('id', '').lower()
@@ -791,10 +789,9 @@ class settBool(baseWidget):
 
 class settAction(baseWidget):
     def __init__(self, master, **options):
-        wdgName = options.get('name', '').lower()
-        baseWidget.__init__(self, master, name=wdgName, id=options.get('id', ''), nopack=options.get('nopack', 'false'))
+        baseWidget.__init__(self, master, **options)
         self.setGUI(options)
-        self.name = wdgName
+        self.name = options.get('name', '').lower()
 
     def setGUI(self, options):
         if options.get('id'):
@@ -828,10 +825,9 @@ class settAction(baseWidget):
 
 class settSep(baseWidget):
     def __init__(self, master, **options):
-        wdgName = options.get('name').lower().lower()
-        baseWidget.__init__(self, master, name=wdgName, nopack=options.get('nopack', 'false'))
+        baseWidget.__init__(self, master, **options)
         self.setGUI(options)
-        self.name = wdgName
+        self.name = options.get('name').lower().lower()
 
     def setGUI(self, options):
         if options.get('type', None) == 'lsep':
@@ -873,14 +869,11 @@ class settContainer(baseWidget):
         baseWidget.__init__(self, master, **options)
         self.name = wdgName
 
-        outerframe = self
-        self.innerframe = outerframe
-        if bflag and contoptions.get('scrolled', 'false') == 'false':
-            self.innerframe = innerframe = settContainer(outerframe, name="innerframe",
-                                                                side=self.side)
-            innerframe.pack(side=tk.TOP, fill=tk.BOTH, expand=tk.YES)
+        self.innerframe = self
+        if contoptions.get('scrolled', 'false') == 'true':
+            self.outerframe = outerframe = tk.Frame(self, name='outerframe')
+            outerframe.pack(side=tk.BOTTOM, fill=tk.BOTH, expand=tk.YES)
 
-        if not bflag and contoptions.get('scrolled', 'false') == 'true':
             outerframe.grid_columnconfigure(0, weight=1)
             outerframe.grid_columnconfigure(1, weight=0)
             outerframe.grid_rowconfigure(0, weight=1)
@@ -908,70 +901,58 @@ class settContainer(baseWidget):
 
             self.canvas.bind("<Configure>", self._OnCanvasConfigure)
             self.innerframe.bind("<Configure>", self._OnInnerFrameConfigure)
-        pass
-
-        # self.innerframe = self
-        # if 'label' in contoptions:
-        #     outerframe = tk.LabelFrame(self, text=contoptions.get('label'), name='outerframe')
-        #     outerframe.pack(side=tk.TOP, fill=tk.BOTH, expand=tk.YES)
-        #     if contoptions.get('scrolled', 'false') == 'false':
-        #         self.innerframe = innerframe = settContainer(self, name="innerframe",
-        #                                                         side=self.side)
-        #         innerframe.pack(in_=outerframe, side=tk.TOP, fill=tk.BOTH, expand=tk.YES)
-        # else:
-        #     outerframe = tk.Frame(self, name='outerframe')
-        #     outerframe.pack(side=tk.TOP, fill=tk.BOTH, expand=tk.YES)
-        #
-        # if contoptions.get('scrolled', 'false') == 'true':
-        #     outerframe.grid_columnconfigure(0, weight=1)
-        #     outerframe.grid_columnconfigure(1, weight=0)
-        #     outerframe.grid_rowconfigure(0, weight=1)
-        #
-        #     self.vsb = tk.Scrollbar(outerframe, orient="vertical", )
-        #     self.vsb.grid(row=0, column=1, sticky=tk.NS)
-        #
-        #     self.canvas = tk.Canvas(outerframe, name="canvas", borderwidth=0)
-        #     self.canvas.grid(row=0, column=0, sticky=tk.NSEW)
-        #
-        #     self.canvas.configure(yscrollcommand=self.vsb.set)
-        #     self.vsb.configure(command=self.canvas.yview)
-        #
-        #     self.canvas.xview_moveto(0)
-        #     self.canvas.yview_moveto(0)
-        #
-        #     self.innerframe = innerframe = settContainer(self, name="innerframe",
-        #                                                     side=self.side)
-        #     innerframe.pack_forget()
-        #     self.innerframeId = self.canvas.create_window((0, 0),
-        #                                                   window=innerframe,
-        #                                                   anchor="nw",
-        #                                                   tags="innerframe")
-        #
-        #
-        #     self.canvas.bind("<Configure>", self._OnCanvasConfigure)
-        #     self.innerframe.bind("<Configure>", self._OnInnerFrameConfigure)
 
     def _OnCanvasConfigure(self, event):
         if self.innerframe.winfo_reqheight() <= self.canvas.winfo_height():
             self.vsb.grid_remove()
+            # self.vsb.pack_forget()
         else:
             self.vsb.grid()
+            # self.vsb.pack()
 
         if self.innerframe.winfo_reqwidth() != self.canvas.winfo_width():
             self.canvas.itemconfigure(self.innerframeId, width=self.canvas.winfo_width()-4)
+        # canvas_width = event.width
+        # self.canvas.itemconfig(self.innerframeId, width=canvas_width)
 
     def _OnInnerFrameConfigure(self, event):
-        size = (self.innerframe.winfo_reqwidth(), self.innerframe.winfo_reqheight())
-        self.canvas.config(scrollregion="0 0 %s %s" % size)
+        # x, y = 0, 0
+        reqwidth, reqheight = self.innerframe.winfo_reqwidth(), self.innerframe.winfo_reqheight()
+        # scrl_rgn = (x, y, reqwidth, reqheight)
+        self.canvas.config(scrollregion=self.canvas.bbox('all'))
         options = {}
-        if self.innerframe.winfo_reqwidth() != self.canvas.winfo_width():
-            width = self.innerframe.winfo_reqwidth()
-            options['width'] = width
-        if self.innerframe.winfo_reqheight() <= self.canvas.winfo_height():
-            height = self.innerframe.winfo_reqheight()
-            options['height'] = height
+        if reqwidth != self.canvas.winfo_width():
+            options['width'] = reqwidth
+        if reqheight <= self.canvas.winfo_height():
+            options['height'] = reqheight
         if options:
             self.canvas.config(**options)
+        self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+
+    def onMouseWheel(self, event):  # cross platform scroll wheel event
+        if platform.system() == 'Windows':
+            self.canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+        elif platform.system() == 'Darwin':
+            self.canvas.yview_scroll(int(-1 * event.delta), "units")
+        else:
+            if event.num == 4:
+                self.canvas.yview_scroll(-1, "units")
+            elif event.num == 5:
+                self.canvas.yview_scroll(1, "units")
+
+    def onEnter(self, event):  # bind wheel events when the cursor enters the control
+        if platform.system() == 'Linux':
+            self.canvas.bind_all("<Button-4>", self.onMouseWheel)
+            self.canvas.bind_all("<Button-5>", self.onMouseWheel)
+        else:
+            self.canvas.bind_all("<MouseWheel>", self.onMouseWheel)
+
+    def onLeave(self, event):  # unbind wheel events when the cursorl leaves the control
+        if platform.system() == 'Linux':
+            self.canvas.unbind_all("<Button-4>")
+            self.canvas.unbind_all("<Button-5>")
+        else:
+            self.canvas.unbind_all("<MouseWheel>")
 
     def isValueSetToDefault(self):
         return True
@@ -988,12 +969,12 @@ class settContainer(baseWidget):
         widget.pack(in_=innerframe, side=self.side, fill=fill,
                     ipadx=2, ipady=2, padx=2, pady=2)
 
+
 class settFragment(baseWidget):
     def __init__(self, master, **options):
-        wdgName = options.get('name', '').lower()
-        baseWidget.__init__(self, master, name=wdgName, id=options.get('id', ''), nopack=options.get('nopack', 'false'))
+        baseWidget.__init__(self, master, **options)
         self.setGUI(options)
-        self.name = wdgName
+        self.name = options.get('name', '').lower()
 
     def setGUI(self, options):
         if options.get('id'):
@@ -1182,7 +1163,7 @@ class FormFrame(tk.Frame):
 formFrame = FormFrame
 
 
-def formFrameGen(master, filename=None, selPane=None, settings=None):
+def formFrameGen(master, filename=None, selPane=None, settings=None, withCss=True):
     '''
     Identifica la librería que se utiliza para generar los widgets que conforman la form.
     :param master: tkinter Frame que actuara como padre de la forma.
@@ -1193,12 +1174,9 @@ def formFrameGen(master, filename=None, selPane=None, settings=None):
     '''
     if not any((filename, selPane)):
         raise AttributeError('You must specify filename or selPane')
-    if filename:
-        with open(filename, 'rb') as f:
-            xmlstr = f.read()
-        selPane = ET.XML(xmlstr).find('category')
-    if isinstance(selPane, (bytes, str)):
-        selPane = ET.XML(selPane)               # .find('category')
+    is_content = selPane is not None
+    layout = selPane or filename
+    selPane = userinterface.getLayout(layout, withCss, is_content)
 
     formclass = formFrame
     formModule = None

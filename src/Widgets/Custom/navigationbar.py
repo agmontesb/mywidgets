@@ -326,25 +326,6 @@ class BreadCumb(tk.Canvas):
             self.focus(polygon)
             self.itemconfig(polygon, fill='green')
 
-    def validate_path(self, apath):
-        path = os.path.abspath(apath)
-        # Solo se permiten los path que se derivan del directorio raiz. Cuando se tiene un path
-        # que se deriva de otro directorio, se entrega el directorio raiz.
-        if not path.startswith(self.path_obj.root):
-            return self.path_obj.root
-        # Si el candidato a activepath (apath) resulta ser un directorio, se adicionan a él
-        # todos los directorios que contienen un solo directorio hasta encontrar: 1 - un archivo o
-        # 2 - Un directorio con más de un hijo.
-        while self.path_obj.isdir(path):
-            try:
-                label, *listLabelsDir = self.path_obj.listdir(path)
-            except:
-                break   # Directorio vacío
-            if len(listLabelsDir):
-                break
-            path = os.path.join(path, label)
-        return path
-
     def set_active_index(self, next_pfocus, draw_focus=True):
         next_pfocus = next_pfocus % len(self.labels)
         pfocus, self.pfocus = self.pfocus, next_pfocus
@@ -358,7 +339,7 @@ class BreadCumb(tk.Canvas):
         return ActivePath(self.pfocus, path, isdir)
 
     def setActivePath(self, apath, draw_focus=True):
-        path = self.validate_path(apath)
+        path = self.path_obj.validate_path(apath)
         rel_path = os.path.relpath(path, self.path_obj.root)
         # Se asegura que el camino relativo siempre empiece con ./ porque
         # os.path.abspath('/la/raiz/./uno/dos') = '/la/raiz/uno/dos'
@@ -484,6 +465,25 @@ class PathObj(ABC):
 
     def set_master(self, master):
         pass
+
+    def validate_path(self, apath):
+        path = os.path.abspath(apath)
+        # Solo se permiten los path que se derivan del directorio raiz. Cuando se tiene un path
+        # que se deriva de otro directorio, se entrega el directorio raiz.
+        if not path.startswith(self.root):
+            return self.root
+        # Si el candidato a activepath (apath) resulta ser un directorio, se adicionan a él
+        # todos los directorios que contienen un solo directorio hasta encontrar: 1 - un archivo o
+        # 2 - Un directorio con más de un hijo.
+        while self.isdir(path):
+            try:
+                label, *listLabelsDir = self.listdir(path)
+            except:
+                break   # Directorio vacío
+            if len(listLabelsDir):
+                break
+            path = os.path.join(path, label)
+        return path
 
 
 class DirectoryObj(PathObj):

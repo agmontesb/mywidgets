@@ -2,8 +2,7 @@
 
 # tkinter reference: https://anzeljg.github.io/rin2/book2/2405/docs/tkinter/index.html
 # Tcl8.5.19/Tk8.5.19 Documentation: http://tcl.tk/man/tcl8.5/contents.htm
-
-
+import fnmatch
 import importlib
 import inspect
 import os.path
@@ -16,7 +15,7 @@ from contextlib import contextmanager
 from typing import Callable, Sequence, Any, MutableMapping, Iterable, Tuple, Literal, TypeAlias, Optional
 from typing_extensions import Protocol, runtime_checkable
 from types import ModuleType
-
+import Widgets.Custom.ImageProcessor as imageprocessor
 
 from Widgets import specialwidgets
 from Widgets.Custom import ImageProcessor as imgp
@@ -27,6 +26,7 @@ import cbwidgetstate
 
 MODULE_STACK = [(-1, tk), (-1, specialwidgets)]
 
+getFontAwesomeIcon = imageprocessor.memoize(imageprocessor.getFontAwesomeIcon)
 
 @runtime_checkable
 class TreeLike(Iterable['TreeLike'], Protocol):
@@ -77,7 +77,30 @@ def event_data(**params):
         tk.Event = wrapped
 
 
+def getFileUrl(resource_id):
+    filename = resource_id
+    if filename.startswith('@'):
+        filename = filename[1:]
+        resource_id, f_name = filename.split('/', 1)
+        base_path = os.path.dirname(__file__)
+        #@mywinzip:drawable/btn_file
+        try:
+            pckg, d_name = resource_id.split(':', 1)
+            base_path = os.path.join(base_path, 'Tools', pckg, 'res', d_name)
+        except ValueError:
+            d_name = resource_id
+            base_path = os.path.join(base_path, 'Data', d_name)
+        f_names = fnmatch.filter(os.listdir(base_path), f'{f_name}.*')
+        try:
+            filename = os.path.join(base_path, f_names[0])
+        except IndexError:
+            filename = None
+    return filename
+
+
+
 def getContent(fileurl):
+    fileurl = getFileUrl(fileurl)
     if not urllib.parse.urlparse(fileurl).scheme:
         basepath = os.path.dirname(__file__)
         layoutpath = os.path.join(basepath, fileurl)
@@ -89,10 +112,10 @@ def getContent(fileurl):
     return content
 
 
-def getLayout(layoutfile, withCss=False):
-    content = getContent(layoutfile)
+def getLayout(layoutfile, withCss=False, is_content=False):
+    content = layoutfile if is_content else getContent(layoutfile)
     if withCss:
-        tcase = os.path.splitext(layoutfile)[-1]
+        tcase = '.xml' if is_content else os.path.splitext(layoutfile)[-1]
         wfactory = uicss.ElementFactory()
         return wfactory.getElements(content, tcase=tcase)
     return ET.XML(content)
@@ -104,6 +127,43 @@ def findGeometricManager(tag: GeoManager_Type) -> list[str]:
     if tag == 'place':
         return place_params
     return pack_params
+
+
+def renderImage(filename):
+    filename = getFileUrl(filename)
+    try:
+        _, ext = os.path.splitext(filename)
+    except TypeError:      # El archivo no existe
+        return
+    if ext == '.xml':
+        image_xml = getLayout(os.path.abspath(filename))
+        attrib = image_xml.attrib.copy()
+        match image_xml.tag:
+            case 'fontawesome':
+                charname = attrib.pop('charname')
+                attrib['size'] = int(attrib['size'])
+                attrib['isPhotoImage'] = bool(int(attrib.pop('isphotoimage', '1')))
+                icon_img = getFontAwesomeIcon(charname, **attrib)
+                return icon_img
+            case 'texture':
+                attrib['imagefile'] = os.path.abspath(attrib['imagefile'])
+                if 'bordertexture' in attrib:
+                    attrib['bordertexture'] = os.path.abspath(attrib['bordertexture'])
+
+                for key in ('border', 'width', 'height', 'bordersize'):
+                    try:
+                        attrib[key] = eval(attrib[key])
+                    except Exception as e:
+                        raise
+
+                positional = (attrib.pop('imagefile'), attrib.pop('width'), attrib.pop('height'))
+                kwargs = {key: attrib.pop(key) for key in ('aspectratio',)}
+                options = attrib
+                texture = imageprocessor.getTexture(*positional, **kwargs, **options)
+                return texture
+
+    icon_img = imageprocessor.getCacheTexture(filename, None, None)
+    return icon_img
 
 
 def getWidgetInstance(master: tk.Tk | tk.Widget,
@@ -135,6 +195,9 @@ def getWidgetInstance(master: tk.Tk | tk.Widget,
         # ERROR: No se encontró definición del widget
         raise AttributeError(f'{widgetname} is not a tkinter widget or a user defined class. ')
 
+    if 'image' in attributes:
+        image_file = attributes['image']
+        attributes['image'] = renderImage(image_file)
     widget = widgetClass(master, **attributes)
 
     return widget
@@ -176,7 +239,6 @@ def widgetFactory(master: tk.Tk | tk.Widget,
     assert geometric_manager in ['grid', 'place', 'pack']
     for xmlwidget in selPane:
         k += 1
-        has_children = bool(len(list(xmlwidget)))
         is_widget = xmlwidget.tag != 'var'
         options: dict[str, Optional[str]] = dict.copy(xmlwidget.attrib)
         options.pop('class', None)
@@ -195,8 +257,18 @@ def widgetFactory(master: tk.Tk | tk.Widget,
                 options['in'] = in_default + options['in']
             parent = master.nametowidget(master.winfo_parent())
 
-        options.pop('geomanager', None)
-
+        gman = options.pop('geomanager', None)
+        if gman == 'grid':
+            # Se expresa en el .xml file los datos de rowconfigure/columnconfigure de la siguiebte manera:
+            # rowconfigure2="minsize='2', pad='2', weight='2'", donde 2 es la row a configurar y minsize, pad, weight son las opciones
+            # igual para columnconfigure
+            gridconfigure = {}
+            for label in ('rowconfigure', 'columnconfigure'):
+                n = len(label)
+                gridconfigure[label] = [
+                    (key[n:].split('_'), eval(f'dict({options.pop(key)})')) for key in list(options.keys())
+                    if key.startswith(label)
+                ]
         states_eq = dict([
             (key, options.pop(key)) for key in cbwidgetstate.STATES
             if key in options
@@ -264,7 +336,14 @@ def widgetFactory(master: tk.Tk | tk.Widget,
             cb = callback_closure(widget, **kwargs)
             equations_manager.add_equation(eq, cb)
 
+        has_children = bool(len(list(xmlwidget)))
         if has_children:
+            if gman == 'grid':
+                for label in gridconfigure:
+                    method = getattr(widget, label)
+                    for n, kwargs in gridconfigure.get(label):
+                        method(n, **kwargs)
+                gridconfigure = None
             k = widgetFactory(
                 widget,
                 xmlwidget,

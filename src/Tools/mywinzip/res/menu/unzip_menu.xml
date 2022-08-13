@@ -7,6 +7,7 @@
     <separator />
     <radiobutton label="All files" value="all" />
     <radiobutton label="Selected files" value="selected" />
+    <command label="Find"/>
     <separator/>
     <command label="Unzip and test" command="" />
     <command label="Unzip and install" command="" />

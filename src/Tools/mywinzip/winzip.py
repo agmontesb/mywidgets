@@ -8,6 +8,7 @@ import tkinter.simpledialog as tkSimpleDialog
 import zipfile
 from datetime import datetime, time
 import tempfile
+import fnmatch
 
 import userinterface
 import file_menu as fm
@@ -36,6 +37,11 @@ class Winzip(tk.Tk):
         menu_file.default_file_type = ('zip Files', '*.zip')
 
         self.zf = None
+
+        self._recyclebin = set()
+
+        self.filters = ['*.*;', '*.js,*.py;*.pyc', ';*.pyc', '*.pdf;']
+        self.active_filter = 0
 
         self.winzip_ops = {
             'blower': False,
@@ -98,9 +104,7 @@ class Winzip(tk.Tk):
             case 'Save', *suffix:       # case 'Save' | 'Save As':
                 method = getattr(self.menu_file, 'saveFile' if not suffix else 'saveAsFile')
                 with method() as filename:
-                    try:
-                        self.zf.getinfo(RECYCLEBIN)
-                    except KeyError:
+                    if not self._recyclebin:
                         # El archivo no tiene elementos eliminados
                         srcfile, dstfile = self.zf.filename, filename
                         print(f'Save: {srcfile} -> {dstfile}')
@@ -120,16 +124,15 @@ class Winzip(tk.Tk):
                             x for x in self.zf.namelist()
                             if x.count(os.sep) == 0 or (x.count(os.sep) == 1 and x.endswith(os.sep))
                         ]
-                        assert RECYCLEBIN in selected
-                        selected.remove(RECYCLEBIN)
                         self._save_partial(dstfile, selected)
                         self.zf.close()
                         os.remove(srcfile)
                         self.loadzip(dstfile, mode='a')
+                        self._recyclebin = set()
 
             case 'Settings', :
                 title = 'Winzip Settings'
-                xmlfile = '/mnt/c/Users/Alex Montes/PycharmProjects/mywidgets/src/Tools/mywinzip/res/layout/dlg_settings.xml'
+                xmlfile = userinterface.getFileUrl('@mywinzip:layout/dlg_settings')
                 dlg = kodiwidgets.CustomDialog(
                     self,
                     title=title, xmlFile=xmlfile, isFile=True, settings=self.winzip_ops, dlg_type='okcancel'
@@ -273,6 +276,23 @@ class Winzip(tk.Tk):
                             [os.path.join(root, x) for x in f_names]
                         )
                     self._addFiles(files, directory=True)
+            case prefix, suffix:
+                if prefix.isdigit():
+                    self.active_filter = int(prefix) - 1
+                else:
+                    menu_item = f'{prefix} {suffix}'
+                    assert menu_item == "Create/edit/delete Filter"
+                    xmlfile = userinterface.getFileUrl('@mywinzip:layout/dlg_crud_filters')
+                    settings = {
+                        'filters': '|'.join(self.filters[1:]),
+                    }
+                    dlg = kodiwidgets.CustomDialog(
+                        self,
+                        title=menu_item, xmlFile=xmlfile, isFile=True, settings=settings, dlg_type='ok'
+                    )
+                    if dlg.result:
+                        self.filters[1:] = dlg.result['filters'].split('|')
+                pass
             case _:
                 title = f'Zip Menu - Option: {menu_item}'
                 tkMessageBox.showinfo(title=title, message='Not implemented yet')
@@ -344,9 +364,28 @@ class Winzip(tk.Tk):
                 title = f'Manage Menu - Option: {menu_item}'
                 tkMessageBox.showinfo(title=title, message='Not implemented yet')
 
+    def apply_filter(self, raw_files: list, filter_indx: int) -> list:
+        if filter_indx:
+            active_filter = self.filters[filter_indx]
+            filter_items = active_filter.split(';')
+            fltr_files = []
+            if filter_item := filter_items[0]:      # == '+': Include
+                for fltr in filter_item.split(','):
+                    fltr_files.extend(fnmatch.filter(raw_files, fltr))
+            if filter_item := filter_items[1]:      # == '-': Exclude
+                fltr_files = fltr_files or raw_files[::]
+                exc_files = []
+                for fltr in filter_item.split(','):
+                    exc_files.extend(fnmatch.filter(fltr_files, fltr))
+                fltr_files = list(set(fltr_files).difference(exc_files))
+        else:
+            fltr_files = raw_files[::]
+        return fltr_files
+
     def _addFiles(self, files, zip_files=None, directory=False):
         tree_path = self.zip_panel.tree_path
         root_dir = tree_path.path_obj.root
+        files = self.apply_filter(files, self.active_filter)
         if zip_files is None:
             sys_root = os.path.commonpath(files) if len(files) > 1 else os.path.dirname(files[0])
             if directory:
@@ -414,23 +453,33 @@ class Winzip(tk.Tk):
                 self.manage_menu(menu_item)
             case "Zip File With Selected Files":
                 title = 'Zip File With Selected Files'
-                xmlfile = '/mnt/c/Users/Alex Montes/PycharmProjects/mywidgets/src/Tools/mywinzip/res/layout/dlg_add_files.xml'
+                xmlfile = userinterface.getFileUrl('@mywinzip:layout/dlg_add_files')
                 settings = {
                     'fname': 'NuevoZip.zip', 'fpath': self.menu_file.default_path,
                     'zip_type': 'fzip', 'cipher': False, 'fltr_type': 'fltr1',
                 }
+                fltr_strs = ['Predeterminado (+*.*)']
+                for k, filter in enumerate(self.filters[1:], start=1):
+                    items = filter.split(';')
+                    filter = ';'.join([('+-'[k] + item) if item else item for k, item in enumerate(items)])
+                    fltr_strs.append(filter.strip(';'))
+
+                template = '<kbool id="fltr{0}" label="{1}" group="fltr_type" cside="left"/>'
+                block = '\n'.join(template.format(*pair) for pair in enumerate(fltr_strs, start=1))
+                content = userinterface.getContent(xmlfile)
+                content = content.replace('<<block>>', block)
                 dlg = kodiwidgets.CustomDialog(
                     self,
-                    title=title, xmlFile=xmlfile, isFile=True, settings=settings, dlg_type='okcancel'
+                    title=title, xmlFile=content, isFile=False, settings=settings, dlg_type='okcancel'
                 )
                 if dlg.result:
                     settings.update(dlg.settings)
                     filename = os.path.join(settings['fpath'], settings['fname'])
                     method = zipfile.ZipFile if settings['zip_type'] == 'fzip' else zipfile.PyZipFile
                     cipher = settings['cipher']
-                    filter_type = settings['fltr_type']
+                    active_filter = int(settings['fltr_type'].strip('fltr')) - 1
                     selected = self.zip_panel.selected_data('Name')
-                    self._save_partial(filename, selected, method)
+                    self._save_partial(filename, selected, method, active_filter=active_filter)
                 pass
             case "Copy To" | "Move To":
                 self.manage_menu(menu_item)
@@ -440,83 +489,76 @@ class Winzip(tk.Tk):
         self.rclick_name = None
 
     def delete_items(self, selected):
-        for d_name in (RECYCLEBIN, RECYCLEBIN + RECYCLEBIN):
-            try:
-                self.zf.getinfo(d_name)
-            except KeyError:
-                self.zf.write(os.path.abspath('.'), d_name)
-        to_delete = []
+        to_delete = set()
         for name in selected:
-            d_names = os.path.dirname(name.rstrip(os.sep)).split(os.sep)
-            d_names = [os.path.join(*d_names[:k]) for k in range(1, len(d_names) + 1)]
-            d_names = [os.path.join(RECYCLEBIN, x, '') for x in d_names]
-            for d_name in d_names:
-                try:
-                    self.zf.getinfo(d_name)
-                except KeyError:
-                    self.zf.write(os.path.abspath('.'), d_name)
-                    src_zinfo = self.zf.getinfo(os.path.relpath(d_name, RECYCLEBIN))
-                    zinfo = self.zf.getinfo(d_name)
-                    zinfo.date_time = src_zinfo.date_time
-                    zinfo.orig_filename = src_zinfo.orig_filename
             is_dir = name.endswith(os.sep)
             if is_dir:
                 delta = [x for x in self.zf.NameToInfo if x.startswith(name)]
             else:
                 delta = [name]
-            to_delete.extend(delta)
-        for item in to_delete:
-            zinfo = self.zf.NameToInfo.pop(item)
-            filename = os.path.join(RECYCLEBIN, zinfo.filename)
-            if zinfo.is_dir and filename in self.zf.NameToInfo:
-                # Cuando se borra un diretorio real que ya a sido referenciado se crea en
-                filename = os.path.join(RECYCLEBIN, RECYCLEBIN, os.path.basename(filename))
-            zinfo.filename = filename
-            self.zf.NameToInfo[zinfo.filename] = zinfo
+            to_delete.update(delta)
+        self._recyclebin.update(to_delete)
         self.onVarChange(attr_data=('view_recycle', 0))
         self.menu_file.setSaveFlag(True)
         return len(to_delete)
 
     def restore_items(self, selected):
-        to_delete = []
+        to_delete = set()
         for name in selected:
-            d_names = os.path.dirname(name.rstrip(os.sep)).split(os.sep)[1:]
-            d_names = [os.path.join(*d_names[:k]) for k in range(1, len(d_names) + 1)]
-            for d_name in d_names:
-                d_name = os.path.join(d_name, '')
-                try:
-                    self.zf.getinfo(d_name)
-                except KeyError:
-                    # Si no existe se crea
-                    self.zf.write(os.path.abspath('.'), d_name)
+            d_names = os.path.dirname(name).split(os.sep)
+            delta = [os.path.join(*d_names[:k]) + os.sep for k in range(1, len(d_names) + 1)]
             is_dir = name.endswith(os.sep)
             if is_dir:
-                delta = [x for x in self.zf.NameToInfo if x.startswith(name)]
+                delta.extend([x for x in self.zf.NameToInfo if x.startswith(name)])
             else:
-                delta = [name]
-            to_delete.extend(delta)
-        for item in to_delete:
-            zinfo = self.zf.NameToInfo.pop(item)
-            zinfo.filename = zinfo.filename[len(RECYCLEBIN):]
-            self.zf.NameToInfo[zinfo.filename] = zinfo
+                delta.append(name)
+            to_delete.update(delta)
+        self._recyclebin.difference_update(to_delete)
+
+        # Se restauran los directorios que no contengan al menos un archivo
+        infolist = set(
+            x for x in self._recyclebin
+            if not x.endswith('/')
+        )
+        paths = set(os.path.dirname(filename) for filename in infolist)
+        paths.intersection_update(self._recyclebin)
+        self._recyclebin = infolist.union(paths)
+
         self.onVarChange(attr_data=('view_recycle', 1))
         return len(to_delete)
 
-    def _save_partial(self, filename, selected, method=None):
+    def _save_partial(self, filename, selected, method=None, *, active_filter=0):
         infolist = []
         path_obj = self.zip_panel.path_obj
         root_dir = path_obj.root
+        # En este punto se agregan solo los archivos, no los directorios
         for name in selected:
+            if name in self._recyclebin:
+                continue
             zinfo = self.zf.getinfo(name)
             if zinfo.is_dir():
                 full_name = os.path.join(root_dir, name.strip(os.sep))
                 pgen = self.zip_panel.path_obj.walk(full_name)
                 for root, dirs, files in pgen:
+                    if root in self._recyclebin:
+                        continue
                     root = os.path.relpath(root, root_dir)
-                    files = [os.path.join(root, '').lstrip('./')] + [os.path.join(root, x).lstrip('./') for x in files]
-                    to_extend = map(self.zf.getinfo, files)
-                    infolist.extend(to_extend)
-
+                    files = [os.path.join(root, x).lstrip('./') for x in files]
+                    files = [x for x in files if x not in self._recyclebin]
+                    infolist.extend(files)
+            else:
+                infolist.append(name)
+        # Se filtran los archivos de acuerdo al filtro escogido
+        infolist = self.apply_filter(infolist, filter_indx=active_filter)
+        # Se agregan los directorios que se encuentran en la ruta de los archivos a agregar,
+        # de esta forma no se agregan directorios que se encuentren vacíos luego de aplicar el filtro.
+        dirs = set(infolist)
+        for f_name in infolist:
+            d_names = os.path.dirname(f_name).split('/')
+            d_names = ['/'.join(d_names[:k + 1]) + '/' for k in range(len(d_names))]
+            dirs.update(d_names)
+        infolist = sorted(dirs)
+        infolist = map(self.zf.getinfo, infolist)
         if os.path.exists(filename):
             os.remove(filename)
         method = method or zipfile.ZipFile
@@ -577,6 +619,9 @@ class Winzip(tk.Tk):
             self.manage_menu(menu_item)
         elif menu == 'popupzippanel':
             self.pop_up_zip(menu_item)
+        elif menu == 'filters':
+            menu_item = menu_item.split(' ', 1)
+            self.zip_menu(menu_item)
         pass
 
     def onVarChange(self, event=None, attr_data=None):
@@ -599,28 +644,14 @@ class Winzip(tk.Tk):
             path_obj_root = f'/{filename}'
             if value == 1:
                 infolist = [
-                    x for x in self.zf.infolist()
-                    if x.filename.startswith(RECYCLEBIN) and not x.is_dir()
+                    self.zf.getinfo(x) for x in self._recyclebin
                 ]
-                # Solo se muestran directorios que contengan al menos un elemento
-                paths = set(os.path.dirname(x.filename) for x in infolist)
-                dirs = set()
-                for path in paths:
-                    d_names = path.split(os.sep)[1:]
-                    d_names = [os.path.join(*d_names[:k]) for k in range(1, len(d_names) + 1)]
-                    d_names = [os.path.join(RECYCLEBIN, x, '') for x in d_names]
-                    dirs = dirs.union(d_names)
-                infolist.extend(
-                    self.zf.getinfo(x) for x in dirs
-                )
                 infolist.sort(key=lambda x: x.filename)
             else:
-                infolist = [x for x in self.zf.infolist() if not x.filename.startswith(RECYCLEBIN)]
+                infolist = [x for x in self.zf.infolist() if x.filename not in self._recyclebin]
             file_members = [os.path.join(path_obj_root, x.filename) for x in infolist]
             rows = self.listzip(infolist)
             groupby = self.zip_panel.groupby
-            if value == 1:
-                path_obj_root = f'{path_obj_root}/{RECYCLEBIN}'
 
             def f_data(records, namelist):
                 def f_record(x):
@@ -638,6 +669,7 @@ class Winzip(tk.Tk):
 
                 return f_record
             path_obj = navigationbar.StrListObj(file_members, path_obj_root)
+            path_obj.validate_path = lambda path: os.path.abspath(path)
             path = self.zip_panel.tree_path.getActivePath().path
             if not path.startswith(path_obj.root):
                 path = path_obj.root
@@ -705,9 +737,23 @@ class Winzip(tk.Tk):
                 menu_master.config(postcommand=lambda: self.menu_file.fileHist(menu_master))
             case 'recent folders':
                 menu_master.config(postcommand=lambda: self.menu_file.fileHist(menu_master, self.last_n_directories))
+            case 'filters':
+                menu_master.config(postcommand=lambda: self.filters_menu(menu_master))
 
-
-        # print(f'Menu: {title}')
+    def filters_menu(self, menu_inst:tk.Menu):
+        lstIndx = menu_inst.index(tk.END) - 1
+        menu_inst.delete(1, lstIndx)
+        for k, filter in enumerate(self.filters[1:], start=1):
+            items = filter.split(';')
+            filter = ';'.join([('+-'[k] + item) if item else item for k, item in enumerate(items)])
+            menu_inst.insert_radiobutton(
+                k,
+                label='{} {:30s}'.format(k + 1, filter.strip(';')),
+                value=f'{k + 1}',
+                command=userinterface.menuclick_closure(widget=menu_inst, data=k)
+            )
+        menu_inst.insert_separator(k + 1)
+        menu_inst.entryconfig(k + 2, command=userinterface.menuclick_closure(widget=menu_inst, data=k + 2))
 
     def destroy(self):
         self.menu_file.checkSaveFlag()
@@ -736,7 +782,7 @@ class Winzip(tk.Tk):
                 dstfile = shutil.copy(file, tmpdir)
                 shutil.copystat(file, dstfile)
             except shutil.SameFileError:
-                pass
+                dstfile = file
         elif mode == 'x':
             filename = os.path.basename(file)
             dstfile = os.path.join(tmpdir, filename)

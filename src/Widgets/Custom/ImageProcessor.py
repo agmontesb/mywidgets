@@ -70,7 +70,7 @@ datab = [
          [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]]
 
 
-def memoize(obj):
+def memoize(obj, serialize=True):
     cache = obj.cache = {}
 
     @functools.wraps(obj)
@@ -78,9 +78,16 @@ def memoize(obj):
         key = str(args) + str(sorted(kwargs))
         if key not in cache:
             answ = obj(*args, **kwargs)
-            cache[key] = pickle.dumps(answ)
+            try:
+                to_store = pickle.dumps(answ)
+            except TypeError:
+                to_store = answ
+            cache[key] = to_store
         else:
-            answ = pickle.loads(cache[key])
+            try:
+                answ = pickle.loads(cache[key])
+            except Exception:
+                answ = cache[key]
         return answ
     return memoizer
 
@@ -144,7 +151,8 @@ def _getThemeColour(srchcolor, theme='confluence'):
 def _imageFile(imageFile):
     if not os.path.dirname(imageFile):
         imageFile = os.path.join(TEXTURE_DIRECTORY, imageFile)
-    if not os.path.exists(imageFile): return None
+    if not os.path.exists(imageFile):
+        return None
     return imageFile
 
 def _eqTkFont(fontname, size=50, res='720p', fontset='Default'):
@@ -179,6 +187,13 @@ def _eqTkFont(fontname, size=50, res='720p', fontset='Default'):
 # @memoize
 # He decidido transformar a getCacheTexture la versión memoize de esta función
 def getTexture(imageFile, Width, Height, aspectratio='stretch', **options):
+    defaults = dict(
+        flipx=False, flipy=False,
+        aspectratio='stretch', colorkey='',
+        border=0, bordertexture='', bordersize=0,
+        colordiffuse='', diffuse='',
+    )
+
     if isinstance(imageFile, (bytes, str)):
         imageFile = _imageFile(imageFile)
         if not imageFile:
@@ -189,13 +204,16 @@ def getTexture(imageFile, Width, Height, aspectratio='stretch', **options):
     im = im.crop(bbox)
     iw, ih = im.size
 
+    Width = Width or iw
+    Height = Height or ih
+
     if options.get('flipx', False):
         im = im.transpose(Image.FLIP_LEFT_RIGHT)
 
     if options.get('flipy', False):
         im = im.transpose(Image.FLIP_TOP_BOTTOM)
 
-    if options.get('colorkey'):
+    if options.get('colorkey', ''):
         colorkey = options.get('colorkey')
         colorTuple = _getThemeColour(colorkey)
         if im.mode == 'RGB':
@@ -234,7 +252,7 @@ def getTexture(imageFile, Width, Height, aspectratio='stretch', **options):
     coreSrc = coreRegion(iw, ih)
     coreRgn = im.crop(coreSrc)
 
-    if options.get('bordertexture', '') and options.get('bordersize', None):
+    if options.get('bordertexture', '') and options.get('bordersize', 0):
         bordertexture = options["bordertexture"]
         im = Image.open(bordertexture)
         iw, ih = im.size
@@ -260,12 +278,12 @@ def getTexture(imageFile, Width, Height, aspectratio='stretch', **options):
         coreReg = coreRgn.resize(dstSize)
         dstIm.paste(coreReg, coreDst)
 
-    colordiffuse = options.get('colordiffuse', None)
+    colordiffuse = options.get('colordiffuse', '')
     if colordiffuse:
         colorTuple = _getThemeColour(colordiffuse)
         colordiffuse = Image.new(im.mode, (width, height), colorTuple)
 
-    diffuse = options.get('diffuse', None) or colordiffuse
+    diffuse = options.get('diffuse', '') or colordiffuse
     if diffuse:
         dstIm = ImageChops.multiply(dstIm, diffuse)
 
@@ -293,7 +311,13 @@ def getTexture(imageFile, Width, Height, aspectratio='stretch', **options):
     retIm.paste(region, (x1d, y1d, x2d, y2d))
     return retIm
 
-getCacheTexture = memoize(getTexture)
+@memoize
+def getCacheTexture(imageFile, Width, Height, aspectratio='stretch', isphotoimage=True, **options):
+    img = getTexture(imageFile, Width, Height, aspectratio=aspectratio, **options)
+    if isphotoimage:
+        img = ImageTk.PhotoImage(img)
+    return img
+# getCacheTexture = memoize(getTexture)
 
 
 def getLabel(label, font, textcolor, background=None, xpos=0, ypos=0, **options):

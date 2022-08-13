@@ -1,25 +1,42 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <settings>
+	<?xml-stylesheet type="text/css" href="#style"?>
+    <extra id="style">
+        .block {
+            nopack:true;
+            sticky:nesw;
+            padx:1;
+            pady:1;
+        }
+		.title {
+			font:Helvetica 18 bold;
+			side:top;
+			fill:x;
+			ipadx:2;
+			ipady:2;
+			padx:2;
+			pady:2;
+		}
+	</extra>
 	<category label="Cipher" lib="Widgets.kodiwidgets" geomanager="grid">
-		<kcontainer nopack="true" row="0" column="0" columnspan="2" sticky="nesw" padx="1" pady="1">
-			<label text="File Name" font="Helvetica 18 bold" side="top" fill="x" ipadx="2" ipady="2" padx="2" pady="2"/>
+		<kcontainer label="primer panel" class="block" row="0" column="0" columnspan="2">
+			<label text="File Name" class="title"/>
 			<ktext id="fname" label="Zip file name: " default="NuevoZip.zip"/>
 			<label text="Folder Name" font="Helvetica 18 bold" side="top" fill="x" ipadx="2" ipady="2" padx="2" pady="2"/>
 			<kfolder id="fpath" label="Folder: " default=""/>
 		</kcontainer>
-		<kcontainer nopack="true" row="1" column="0" columnspan="1" sticky="nesw" padx="1" pady="1">
-			<label text="File Type" font="Helvetica 18 bold" side="top" fill="x" ipadx="2" ipady="2" padx="2" pady="2"/>
+		<kcontainer label="segundo panel" class="block" row="1" column="0" columnspan="1">
+			<label text="File Type" class="title"/>
 			<kbool id="fzip" label="Zip file" group="zip_type" cside="left" />
 			<kbool id="fpyzip" label="PyZipFile file" group="zip_type" cside="left" />
-			<label text="Cipher" font="Helvetica 18 bold" side="top" fill="x" ipadx="2" ipady="2" padx="2" pady="2"/>
+			<label text="Cipher" class="title"/>
 			<kbool id="cipher" label="Cipher File" cside="left" />
 		</kcontainer>
-		<kcontainer nopack="true" row="1" column="1" columnspan="1" sticky="nesw" padx="1" pady="1">
-			<label text="Filters" font="Helvetica 18 bold" side="top" fill="x" ipadx="2" ipady="2" padx="2" pady="2"/>
-			<kbool id="fltr1" label="Predeterminado (+*.*)" group="fltr_type" cside="left"/>
-			<kbool id="fltr2" label="+*.*;Absolute Path" group="fltr_type" cside="left"/>
-			<kbool id="fltr3" label="+*.*;Hid/Sys" group="fltr_type" cside="left"/>
-			<kbool id="fltr4" label="+*.*;Absolute Path;Hid/Sys" group="fltr_type" cside="left"/>
+		<kcontainer label="tercer panel" class="block" row="1" column="1" columnspan="1">
+			<label text="Filters" class="title"/>
+			<kcontainer scrolled="true">
+				<<block>>
+			</kcontainer>
 		</kcontainer>
 	</category>
 </settings>

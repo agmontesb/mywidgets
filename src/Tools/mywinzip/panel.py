@@ -92,29 +92,33 @@ class Panel(tk.Frame):
                 if filename.endswith(os.sep):
                     tree.insert(child_id, 'end', text='dummy')
         self.selectall.deselect()
+        self.selectall.configure(text='Select All')
         self.tree_path.setActivePath(path)
 
     def onGroupBy(self):
         self.selectall.deselect()
+        self.selectall.configure(text='Select All')
         self.groupby = not self.groupby
 
     def onSelectAll(self):
         tree = self.tree
         selection = tree.get_children('')
         selected = tree.tag_has('selected')
-        bflag = len(selection) != len(selected)
-        if bflag:
+        if len(selected) == 0:
             tag = 'selected'
+            nitems = len(selection)
+            self.selectall.configure(text=f'{nitems} Item(s) selected')
         else:
             tag = ''
             self.selectall.deselect()
+            self.selectall.configure(text='Select All')
         [tree.item(iid, tags=tag) for iid in selection]
 
     def selected_data(self, col_id='values'):
         tree = self.tree
         selected = tree.tag_has('selected')
         data = []
-        method = tree.item if col_id != 'values' else tree.set
+        method = tree.item if col_id == 'values' else tree.set
         for iid in selected:
             data.append(method(iid, col_id))
         return data
@@ -127,19 +131,20 @@ class Panel(tk.Frame):
         [tree.item(iid, tags='selected') for iid in selection]
         [tree.item(iid, tags='') for iid in selected]
         if not selected:
+            nitems = len(selection)
             self.selectall.select()
+            self.selectall.configure(text=f'{nitems} Item(s) selected')
         if not selection:
             self.selectall.deselect()
+            self.selectall.configure(text='Select All')
 
     def onTreeSelection(self, event):
         tree = event.widget
         selection = tree.get_children('')
         selected = tree.tag_has('selected')
-        bflag = len(selection) != len(selected)
-        if bflag:
-            self.selectall.deselect()
-        else:
-            self.selectall.select()
+        nitems = len(selected)
+        self.selectall.select()
+        self.selectall.configure(text=f'{nitems} Item(s) selected')
 
     def tree_data(self, path_obj, records, groupby=None):
         if groupby is None:

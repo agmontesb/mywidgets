@@ -24,7 +24,7 @@ SPLIT_PATTERN = re.compile(r'((?:(?:\:*[:\.#]*?[A-Za-z\d\-\+\_\(\)]+)|(?:\[.+?\]
 COMBINATORS = re.compile(r'([\+\>\ \~\,]+)')
 ATTRIBUTES = re.compile(r'([\&\|\^\$\*]*=)')
 CP_PATTERN = re.compile('\s*?((?:[^\{\s\*]+?\*?[^\{\*]+?)|(?:\*))\ *?(\{.+?\})', re.DOTALL)
-STYLE_PATTERN = re.compile('^\s*?([^\s]+?):\s*?([^\s]+?);$', re.MULTILINE)
+STYLE_PATTERN = re.compile('^\s*?([^\s]+?):\s*?([^;]+?);$', re.MULTILINE)
 
 
 class MElement(ET.Element):
