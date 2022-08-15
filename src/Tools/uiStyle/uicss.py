@@ -44,6 +44,12 @@ class MElement(ET.Element):
         sels.sort()
         attrib = self.raw_attrib
         attrib.update(itertools.chain(*(sel.style_str.items() for sel in sels)))
+        if self.src and (pckg := self.src.pckg):
+            cp = re.compile(r'@(.+?:)*(.+?)/(.+)')
+            for key, value in attrib.items():
+                if (m := cp.match(value)) and not m.group(1):
+                    attrib[key] = f'@{pckg}:{m.group(2)}/{m.group(3)}'
+        # attrib = dict(itertools.chain(*(sel.style_str.items() for sel in sels))).update(attrib)
         return attrib
 
     def items(self):
@@ -64,8 +70,10 @@ class XmlSerializer:  # The target object of the parser
         self._nclose = 0
         self._parser = None
         self.selectors = None
+        self.src = None
 
     def __call__(self, htmlstr):
+        self.src = getattr(htmlstr, 'src', '')
         self._parser = parser = ET.XMLParser(target=self)
         parser.feed(htmlstr)
         parser.close()
@@ -156,6 +164,7 @@ class XmlSerializer:  # The target object of the parser
             self._data.append(data)
 
     def close(self):  # Called when all data has been parsed.
+        # Se normaliza los style strs
         style_strs = '\n'.join(self.style_strs)
         self.selectors = self.process_css_string(style_strs)
 
@@ -691,7 +700,6 @@ class ElementFactory:
         element_stack = [ET.Element('root')]
         # MElement = type('MElement', (ET.Element,), dict(tpos=None, sels=None))
         for item, *params, tpos in it:
-            level = None
             match item:
                 case 'starttag':
                     tag, attrs = params
@@ -703,11 +711,13 @@ class ElementFactory:
                             '_text', '_tail', MarkupRe.N_CHILDREN, MarkupRe.NCHILD, MarkupRe.LCHILD, MarkupRe.NTAG,  MarkupRe.LTAG,
                         )
                     ]
+
                     elem = MElement(tag, attrs)
                     elem.text = text
                     elem.tail = tail
                     elem.sels = match_sels
                     elem.tpos = tpos
+                    elem.src = htmlstr.src
                     element_stack[-1].append(elem)
                     element_stack.append(elem)
                 case 'endtag':

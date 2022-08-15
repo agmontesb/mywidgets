@@ -1,58 +1,7 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <settings>
-    <?xml-stylesheet type="text/css" href="#style"?>
-    <extra id="style">
-        .section {
-            side:left;
-            fill:y;
-            geomanager:grid;
-            rowconfigure0_1:weight=1;
-        }
-        .command {
-            image:@mywinzip:drawable/btn_file;
-            compound:top;
-            relief:flat;
-            wraplength:64;
-        }
-    </extra>
-    <var type="int" name="v_one" value="1"/>
     <category label="Category uno">
-        <var type="string" name="panel" value="panel1"/>
-        <ribbon lib="Widgets.Custom" name="main_menu" src="@mywinzip:menu/main_menu" side="top" fill="x">
-            <label text="panel1" in=".panels" visible="eq(panel,'file')" side="top" fill="both" expand="yes"/>
-            <frame in=".panels" visible="eq(panel,'unzip')" side="top" fill="both" expand="yes">
-                <labelframe class="section" text="Unzip to" >
-                    <button text="Same folder" class="command" row="0" column="0" command="Unzip/Same_folder"/>
-                    <button text="Recent folders" class="command" row="0" column="1" command="Unzip/Recent_folder"/>
-                    <button text="Last folder" class="command" row="0" column="2" command="Unzip/Last_folder"/>
-                    <button text="My PC" class="command" row="0" column="3" command="Unzip/My_PC"/>
-<!--                    <label text="Unzip to" row="1" column="0" columnspan="4"/>-->
-                </labelframe>
-                <labelframe class="section" text="Files to Unzip">
-                    <radiobutton text="All files" anchor="w" row="0" column="0" command="Unzip/All_files" value="1" variable="v_one" sticky="nsew"/>
-                    <radiobutton text="Selected files" anchor="w" row="1" column="0" command="Unzip/Selected_files" value="2" variable="v_one" sticky="nsew"/>
-                    <button text="Find" class="command" row="0" column="1" rowspan="2" command="Unzip/Find" />
-<!--                    <label text="Files to Unzip" row="3" column="0" columnspan="2"/>-->
-                </labelframe>
-                <labelframe class="section" text="Actions">
-                    <button text="Unzip and test" class="command" row="0" column="0" command="Unzip/Unzip_and_test"/>
-                    <button text="Unzip and install" class="command" row="0" column="1" command="Unzip/Unzip_and_install"/>
-<!--                    <label text="Actions" row="1" column="0" columnspan="2"/>-->
-                </labelframe>
-                <labelframe class="section" text="Reports">
-                    <button text="Last result" class="command" row="0" column="0" command="Unzip/Last_result"/>
-                    <button text="Comments" class="command" row="0" column="1" command="Unzip/Comments"/>
-                    <button text="Diagnostic" class="command" row="0" column="2" command="Unzip/Diagnostic"/>
-<!--                    <label text="Reports" row="1" column="0" columnspan="3"/>-->
-                </labelframe>
-                <button text="Unzip settings"  class="command" side="left" fill="y" command="Unzip/Unzip_settings"/>
-            </frame>
-            <label text="panel3" in=".panels" visible="eq(panel,'zip')" side="top" fill="both"  expand="yes"/>
-            <label text="panel4" in=".panels" visible="eq(panel,'manage')" side="top" fill="both"  expand="yes"/>
-            <label text="panel5" in=".panels" visible="eq(panel,'security copy/clean')" side="top" fill="both"  expand="yes"/>
-            <label text="panel6" in=".panels" visible="eq(panel,'tools')" side="top" fill="both"  expand="yes"/>
-            <label text="panel7" in=".panels" visible="eq(panel,'view')" side="top" fill="both" expand="yes"/>
-        </ribbon>
+        <ribbon lib="Widgets.Custom" name="main_menu" src="@mywinzip:layout/winzip_ribbon" side="top" fill="x"/>
         <Frame bg="blue" side="top" fill="both" expand="yes" />
     </category>
 </settings>

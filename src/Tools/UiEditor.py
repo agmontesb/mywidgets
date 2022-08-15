@@ -98,7 +98,8 @@ class UiEditor(tk.Tk):
             self.treeview.edit_modified(0)
         elif activeView == 'ui':
             if self.codeFrame.textw.edit_modified():
-                xmlstr, _, _ = self.codeFrame.getContent()
+                xmlstr, _, filename = self.codeFrame.getContent()
+                xmlstr = userinterface.SignedContent(xmlstr, src=filename)
                 try:
                     self.init_UI_View(xmlstr)
                     self.codeFrame.textw.edit_modified(0)
@@ -549,28 +550,18 @@ class UiEditor(tk.Tk):
         )
         if not name:
             return
-        with open(name, 'rb') as f:
-            xmlstr = f.read()
+        xmlstr = userinterface.getContent(name)
         try:
             # Se inicializa el UI_View para verificar que efectivamente el archivo es válido
-            # panel = ET.XML(xmlstr).find('category')
             self.init_UI_View(xmlstr)
-        # except IOError:
-        #     tkMessageBox.showerror('Not a valid File', 'File not xml compliant ')
-        #     return
-        # except ValueError:
-        #     tkMessageBox.showerror('Not a valid File', 'An error has ocurred while reding the file ')
-        #     return
-        # except Exception:
-        #     tkMessageBox.showerror('Not a valid File', 'An error has ocurred while reding the file ')
         except Exception:
             pass
         else:
             default_name = os.path.join(initial_path, 'LayoutDefault.xml')
             if name != default_name:
                 self.recFile(name)
-            else:
-                name = 'LayoutDefault.xml'
+            # else:
+            #     name = default_name # 'LayoutDefault.xml'
             self.currentFile = name
             self.title(self.currentFile)
             self.init_XMl_View(xmlstr)

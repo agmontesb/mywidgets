@@ -433,8 +433,7 @@ class CustomDialog(tkSimpleDialog.Dialog):
         self.allSettings = None
         self.settings = settings or {}
         if isFile:
-            with open(xmlFile, 'rb') as f:
-                xmlFile = f.read()
+            xmlFile = userinterface.getContent(xmlFile)
         self.ads = xmlFile
         self.dlg_type = dlg_type
         tkSimpleDialog.Dialog.__init__(self, master, title)
@@ -567,6 +566,7 @@ class settOptionList(baseWidget):
             deltaStr = templateStr.format(x, y)
             outStr += 8 * ' ' + deltaStr
         outStr += footer
+        outStr = userinterface.SignedContent(outStr)
         return outStr
 
     def onAdd(self):

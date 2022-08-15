@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<settings>
+    <?xml-stylesheet type="text/css" href="#style"?>
+    <extra id="style">
+        .section {
+            side:left;
+            fill:y;
+            geomanager:grid;
+            rowconfigure0:weight=1;
+        }
+        .boton {
+            font:Helvetica 8;
+            compound:top;
+            relief:flat;
+            wraplength:64;
+        }
+        .command {
+            font:Helvetica 8;
+            image:@drawable/btn_question;
+            compound:top;
+            relief:flat;
+            wraplength:64;
+        }
+    </extra>
+    <var type="int" name="v_one" value="1"/>
+    <var type="int" name="v_two" value="1"/>
+    <rmenu src="@menu/main_menu"/>
+    <rpanel menuid="file">
+        <labelframe class="section" text="" >
+            <button text="New" image="@drawable/btn_file_archive" class="boton" row="0" column="0" command="File/New" sticky="nsew"/>
+            <frame row="0" column="1">
+                <button image="@data:drawable/btn_caret_down" relief="flat" command="File/Open_Recent" side="bottom" fill="x"/>
+                <button text="Open" image="@drawable/btn_folder_open" class="boton" command="File/Open" side="top" fill="both" expand="yes"/>
+            </frame>
+            <button text="Print" image="@drawable/btn_print" class="boton" row="0" column="2" command="File/Print"/>
+            <frame row="0" column="3">
+                <button image="@data:drawable/btn_caret_down" relief="flat" command="File/Save_As" side="right" fill="y"/>
+                <button text="Save" image="@drawable/btn_save" class="boton" command="File/Save"/>
+            </frame>
+        </labelframe>
+        <button text="Settings" image="@drawable/btn_cog"  class="boton" side="left" fill="y" command="File/Settings"/>
+        <labelframe class="section" text="" >
+            <button text="Close" image="@drawable/btn_folder" class="boton" row="0" column="0" command="File/Close"/>
+            <button text="Exit" image="@drawable/btn_power_off" class="boton" row="0" column="1" command="File/Exit"/>
+        </labelframe>
+    </rpanel>
+    <rpanel menuid="unzip">
+        <labelframe class="section" text="Unzip to" >
+            <button text="Same folder" image="@drawable/btn_folder_open" class="boton" row="0" column="0" command="Unzip/Same_folder"/>
+            <frame row="0" column="1">
+                <button image="@data:drawable/btn_caret_down" relief="flat" command="Unzip/Recent_folders" side="bottom" fill="x"/>
+                <button text="Last Folder" image="@drawable/btn_folder" class="boton" command="Unzip/Last_folder"/>
+            </frame>
+            <button text="My PC" image="@drawable/btn_desktop" class="boton" row="0" column="3" command="Unzip/My_PC"/>
+        </labelframe>
+        <labelframe class="section" text="Files to Unzip">
+            <frame  row="0" column="0">
+                <radiobutton text="All files" anchor="w" command="Unzip/All_files" value="1" variable="v_one"/>
+                <radiobutton text="Selected files" anchor="w" command="Unzip/Selected_files" value="2" variable="v_one"/>
+            </frame>
+            <button text="Find" image="@drawable/btn_search" class="boton" row="0" column="1" command="Unzip/Find" />
+        </labelframe>
+        <labelframe class="section" text="Actions">
+            <button text="Unzip and test" image="@drawable/btn_file" class="boton" row="0" column="0" command="Unzip/Unzip_and_test"/>
+            <button text="Unzip and install" image="@drawable/btn_file" class="boton" row="0" column="1" command="Unzip/Unzip_and_install"/>
+        </labelframe>
+        <labelframe class="section" text="Reports">
+            <button text="Last result" image="@drawable/btn_file_alt" class="boton" row="0" column="0" command="Unzip/Last_result"/>
+            <button text="Comments" image="@drawable/btn_file_alt" class="boton" row="0" column="1" command="Unzip/Comments"/>
+            <button text="Diagnostic" image="@drawable/btn_file_alt" class="boton" row="0" column="2" command="Unzip/Diagnostic"/>
+        </labelframe>
+        <button text="Unzip settings" image="@drawable/btn_cog"  class="boton" side="left" fill="y" command="Unzip/Unzip_settings"/>
+    </rpanel>
+    <rpanel menuid="zip">
+        <labelframe class="section" text="File/Method">
+            <frame  row="0" column="0">
+                <button image="@data:drawable/btn_caret_down" relief="flat" command="Zip/Zip_Method" side="bottom" fill="x"/>
+                <radiobutton text="Zip file" image="@drawable/btn_file_archive" compound="top" indicatoron="0" command="Zip/Zip_file" value="1" variable="v_two"/>
+            </frame>
+            <frame  row="0" column="1">
+                <button image="@data:drawable/btn_caret_down" relief="flat" command="Zip/Zip_Method" side="bottom" fill="x"/>
+                <radiobutton text="PyZipFile" image="@drawable/btn_file_archive" compound="top" indicatoron="0" command="Zip/PyZipFile_file" value="2" variable="v_two"/>
+            </frame>
+        </labelframe>
+        <button text="Filter" image="@drawable/btn_filter"  class="boton" side="left" command="Zip/Filters"/>
+        <checkbutton text="Cipher" image="@drawable/btn_filter" class="boton" side="left" indicatoron="0" command="Zip/Cipher"/>
+        <labelframe class="section" text="Convertion">
+            <button text="Image" image="@drawable/btn_file_image" class="boton" row="0" column="0" command="Zip/Image_Convertion"/>
+            <button text="PDF" image="@drawable/btn_file_pdf" class="boton" row="0" column="1" command="Zip/PDF_Convertion"/>
+        </labelframe>
+        <labelframe class="section" text="Add">
+            <button text="Files" image="@drawable/btn_file" class="boton" row="0" column="0" command="Zip/Add_Files"/>
+            <button text="Folder" image="@drawable/btn_folder" class="boton" row="0" column="1" command="Zip/Add_Folder"/>
+        </labelframe>
+    </rpanel>
+    <rpanel menuid="manage">
+        <labelframe class="section">
+            <button text="Search" image="@drawable/btn_search" class="boton" row="0" column="0" command="Manage/Search"/>
+            <button text="Move To" image="@drawable/btn_briefcase" class="boton" row="0" column="1" command="Manage/Move_To"/>
+            <button text="Copy To" image="@drawable/btn_copy" class="boton" row="0" column="2" command="Manage/Copy_To"/>
+            <button text="Delete" image="@drawable/btn_ban" class="boton" row="0" column="3" command="Manage/Delete"/>
+            <button text="Barrido" image="@drawable/btn_eraser" class="boton" row="0" column="4" command="Manage/Barrido"/>
+            <button text="Undo" image="@drawable/btn_undo_alt" class="boton" row="0" column="5" command="Manage/Undo"/>
+            <button text="Rename" image="@drawable/btn_file" class="boton" row="0" column="6" command="Manage/Rename"/>
+        </labelframe>
+        <labelframe class="section">
+            <button text="Restore" image="@drawable/btn_recycle" class="boton" row="0" column="0" command="Manage/Restore"/>
+        </labelframe>
+        <labelframe class="section">
+            <button text="New Folder" image="@drawable/btn_folder" class="boton" row="0" column="0" command="Manage/New_Folder"/>
+        </labelframe>
+        <labelframe class="section">
+            <button text="Properties" image="@drawable/btn_file_alt" class="boton" row="0" column="0" command="Manage/Properties"/>
+        </labelframe>
+        <labelframe class="section">
+            <button text="Select All" image="@drawable/btn_folder" class="boton" row="0" column="0" command="Manage/Select_All"/>
+            <button text="Toogle Selection" image="@drawable/btn_folder" class="boton" row="0" column="1" command="Manage/Toogle_Selection"/>
+        </labelframe>
+    </rpanel>
+    <rpanel menuid="view">
+        <labelframe class="section">
+            <checkbutton text="Recycle Bin" image="@drawable/btn_recycle" class="boton" row="0" column="0" indicatoron="0" offrelief="flat" command="View/Recycle_Bin"/>
+        </labelframe>
+        <labelframe class="section">
+            <checkbutton text="Files" image="@drawable/btn_file" class="boton" row="0" column="0" indicatoron="0" offrelief="flat" command="View/Files"/>
+            <checkbutton text="Actions" image="@drawable/btn_file_alt" class="boton" row="0" column="1" indicatoron="0" offrelief="flat" command="View/Actions"/>
+        </labelframe>
+    </rpanel>
+<!--    <rpanel menuid="security copy/clean"/>-->
+<!--    <rpanel menuid="tools"/>-->
+</settings>
+

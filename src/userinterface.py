@@ -2,10 +2,13 @@
 
 # tkinter reference: https://anzeljg.github.io/rin2/book2/2405/docs/tkinter/index.html
 # Tcl8.5.19/Tk8.5.19 Documentation: http://tcl.tk/man/tcl8.5/contents.htm
+import collections
 import fnmatch
 import importlib
 import inspect
 import os.path
+import re
+import sys
 import tkinter as tk
 import xml.etree.ElementTree as ET
 import urllib.request
@@ -77,19 +80,24 @@ def event_data(**params):
         tk.Event = wrapped
 
 
-def getFileUrl(resource_id):
+def getFileUrl(resource_id, src=None):
     filename = resource_id
     if filename.startswith('@'):
         filename = filename[1:]
         resource_id, f_name = filename.split('/', 1)
-        base_path = os.path.dirname(__file__)
-        #@mywinzip:drawable/btn_file
+        common_path = os.path.dirname(__file__).lower()
         try:
             pckg, d_name = resource_id.split(':', 1)
-            base_path = os.path.join(base_path, 'Tools', pckg, 'res', d_name)
+            args = [pckg, d_name] if pckg.lower() == 'data' else ['Tools', pckg, 'res', d_name]
+            base_path = os.path.join(common_path, *args)
         except ValueError:
             d_name = resource_id
-            base_path = os.path.join(base_path, 'Data', d_name)
+            src = os.path.dirname(src or sys.argv[0]).lower()
+            join = os.path.join
+            if any(map(lambda x: src.startswith(join(common_path, x)), ('tools', 'data'))):
+                base_path = os.path.join(os.path.dirname(src), d_name)
+            else:
+                base_path = src
         f_names = fnmatch.filter(os.listdir(base_path), f'{f_name}.*')
         try:
             filename = os.path.join(base_path, f_names[0])
@@ -98,24 +106,48 @@ def getFileUrl(resource_id):
     return filename
 
 
+class SignedContent(str):
+    MyTuple = collections.namedtuple('MyTuple', 'pckg res_type res_id src')
+    MyTuple.resource_id = lambda x: f"@{x.pckg}:{x.res_type}/{x.res_id}" if x[:3] != ('', '', '') else ''
+    MyTuple.__str__ = lambda x: x.src
+
+    def __new__(cls, value, *, src=None):
+        obj = str.__new__(cls, value)
+        obj.src = cls.get_resourceid(src) if src else None
+        return obj
+
+    @classmethod
+    def get_resourceid(cls, src_in):
+        src = os.path.splitext(src_in.lower())[0]
+        if m := re.search(r'src/tools/(.+?)/res/(.+?)/(.+)', src):
+            pckg, res_type, res_id = m.groups()
+        elif m := re.search('/src/data/(.+?)/(.+)', src):
+            pckg = 'data'
+            res_type, res_id = m.groups()
+        else:
+            return cls.MyTuple('', '', '', src_in)
+        obj = cls.MyTuple(pckg, res_type, res_id, src_in)
+        return obj
 
 def getContent(fileurl):
     fileurl = getFileUrl(fileurl)
-    if not urllib.parse.urlparse(fileurl).scheme:
+    bflag = not urllib.parse.urlparse(fileurl).scheme
+    if bflag:
         basepath = os.path.dirname(__file__)
         layoutpath = os.path.join(basepath, fileurl)
         layoutfile = os.path.abspath(layoutpath)
-        layoutfile = f'file://{urllib.request.pathname2url(layoutfile)}'
+        fileurl = f'file://{urllib.request.pathname2url(layoutfile)}'
     initConf = 'curl --user-agent "Mozilla/5.0 (Windows NT 6.0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/47.0.2526.80 Safari/537.36" --cookie-jar "cookies.lwp" --location'
     net = network(initConf)
-    content, _ = net.openUrl(layoutfile)
-    return content
+    content, resp_url = net.openUrl(fileurl)
+    src = layoutfile.lower() if bflag else resp_url
+    return SignedContent(content, src=src)
 
 
 def getLayout(layoutfile, withCss=False, is_content=False):
     content = layoutfile if is_content else getContent(layoutfile)
     if withCss:
-        tcase = '.xml' if is_content else os.path.splitext(layoutfile)[-1]
+        tcase = os.path.splitext(str(content.src))[-1] or '.xml'
         wfactory = uicss.ElementFactory()
         return wfactory.getElements(content, tcase=tcase)
     return ET.XML(content)

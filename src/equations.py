@@ -127,6 +127,15 @@ class Equations:
         self.var_values[state_var] = tk_state_var
         pass
 
+    def add_var(self, master=None, value='', name=None, var_type='string'):
+        assert var_type in ('string', 'int', 'double', 'boolean')
+        var_type = f"{var_type.title()}Var"
+        tk_var = getattr(tk, var_type)(master, value=value, name=name)
+        self.state_equations[(var_name := str(tk_var))] = tk_var
+        self.var_values[var_name] = tk_var.get()
+        self.register_variable(var_name)
+        return tk_var
+
     def freeze_equations(self):
         '''
         Función que establece que el sistema de ecuaciones esta completo por lo cual no se
@@ -261,12 +270,13 @@ class Equations:
         if not self.enable_callbacks:
             return
         default_root = equations_manager.default_root()
-        # value = default_root.getvar(var_name)
-        value = self.state_equations[var_name].get()
-        try:
-            self.var_values[var_name] = eval(value)
-        except:
-            self.var_values[var_name] = value
+        var = self.state_equations[var_name]
+        value = var.get()
+        self.var_values[var_name] = value
+        # try:
+        #     self.var_values[var_name] = eval(value)
+        # except:
+        #     self.var_values[var_name] = value
         with userinterface.event_data(attr_data=(var_name, value)) as event:
             default_root.event_generate('<<VAR_CHANGE>>')
         to_verify = self.dependents.get(var_name, set())
