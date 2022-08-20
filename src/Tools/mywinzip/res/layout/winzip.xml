@@ -41,6 +41,12 @@
         <var type="boolean" name="view_files" value="0"/>
         <var type="boolean" name="view_actions" value="0"/>
         <var type="string" name="add_folder" value="last_folder"/>
+        <!-- Variables asociadas al menu UNZIP   -->
+        <var type="string" name="unzip_scope" value="all"/>
+        <!-- Variables asociadas al menu ZIP   -->
+        <var type="string" name="zip_type" value="zip"/>
+        <var type="string" name="zip_method" value="noc"/>
+        <var type="int" name="zip_filters" value="1"/>
         <ribbon lib="Widgets.Custom" name="main_menu" src="@mywinzip:layout/winzip_ribbon" side="top" fill="x"/>
         <collapsingframe class="panel" lib="Widgets.Custom" name="lframe" orientation="vertical" inisplit="0.2" buttconf="hR">
             <panel class="panel frst" name="files_panel" lib="Tools.mywinzip" column_ids="Modified Size"  visible="eq(view_files, true)"/>

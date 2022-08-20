@@ -1,16 +1,16 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <menu label="Zip" tearoff="false">
-    <radiobutton label="Zip file" value="all" />
-    <radiobutton label="PyZipFile file" value="selected" />
+    <radiobutton label="Zip file" variable="zip_type" value="zip" />
+    <radiobutton label="PyZipFile file" variable="zip_type" value="pyzip" />
     <separator/>
     <cascade label="Zip Method" tearoff="false">
-        <radiobutton label="Maxima" value="one"/>
-        <radiobutton label="Enhance Deflate" value="two"/>
-        <radiobutton label="Super Fast" value="three"/>
-        <radiobutton label="No compression" value="four"/>
+        <radiobutton label="Maxima" variable="zip_method" value="max"/>
+        <radiobutton label="Enhance Deflate" variable="zip_method" value="enh"/>
+        <radiobutton label="Super Fast" variable="zip_method" value="sup"/>
+        <radiobutton label="No compression" variable="zip_method" value="noc"/>
     </cascade>
     <cascade label="Filters" tearoff="false">
-        <radiobutton label="1 Default Filter (+*.*)" value="1"/>
+        <radiobutton label="1 Default Filter (+*.*)" variable="zip_filters" value="1"/>
         <separator />
         <command label="Create/edit/delete Filter" />
     </cascade>

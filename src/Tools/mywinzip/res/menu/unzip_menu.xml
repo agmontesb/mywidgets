@@ -5,8 +5,8 @@
     <command label="Last folder" />
     <command label="My PC" />
     <separator />
-    <radiobutton label="All files" value="all" />
-    <radiobutton label="Selected files" value="selected" />
+    <radiobutton label="All files" variable="unzip_scope" value="all" />
+    <radiobutton label="Selected files" variable="unzip_scope" value="selected" />
     <command label="Find"/>
     <separator/>
     <command label="Unzip and test" command="" />

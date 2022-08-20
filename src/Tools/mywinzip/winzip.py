@@ -65,8 +65,8 @@ class Winzip(tk.Tk):
         }
 
         self.zip_ops = {
-            'zip_file': 'Zip file',
-            'zip_method': 'No compression',
+            'zip_type': 'zip',
+            'zip_method': 'noc',
             'Cipher': False,
         }
 
@@ -75,7 +75,7 @@ class Winzip(tk.Tk):
         self.setGui()
 
         self.last_n_directories = [menu_file.default_path.rstrip(os.sep)]
-        src = '/mnt/c/Users/Alex Montes/PycharmProjects/mywidgets/src/Tools/mywinzip/res/menu/zip_panel_popup.xml'
+        src = '@mywinzip:menu/zip_panel_popup'
         selpane = userinterface.getLayout(src)
         self.popUpZip = userinterface.menuFactory(self, selpane, registerMenu=self.registerMenu)
 
@@ -93,12 +93,14 @@ class Winzip(tk.Tk):
                     self.loadzip(filename, mode='x')
             case 'Open', :
                 with self.menu_file.openFile() as filename:
+                    assert filename
                     self.loadzip(filename, mode='a')
             case 'Print', :
                 tree = self.zip_panel.tree
                 selected = tree.get_children()
                 values = [tree.set(iid, 'Name') for iid in selected]
                 infolist = [self.zf.getinfo(path) for path in values]
+                print(f'Filename: {self.title()}')
                 print('\n'.join(self.dumpzip(infolist)))
                 pass
             case 'Save', *suffix:       # case 'Save' | 'Save As':
@@ -141,7 +143,7 @@ class Winzip(tk.Tk):
 
             case indx, filename if indx.isdigit():
                 zipfilename = self.menu_file.fileHistory[int(indx) - 1]
-                assert zipfilename.endswithfil(filename)
+                assert zipfilename.endswith(filename)
                 self.loadzip(zipfilename, mode='a')
 
             case 'Close', :
@@ -160,9 +162,9 @@ class Winzip(tk.Tk):
                 dest_path = self.unzip_ops['Last folder'] or zippath
             case 'My PC':
                 msg = f'Unzip - {zipname}'
-                dest_path = tkFileDialog.askdirectory(initialdir=self.menu_file.default_path, title=msg)
-            case 'All files' | 'Selected files':
-                self.unzip_ops['unzip'] = menu_item
+                initialdir = self.last_n_directories[0]
+                dest_path = tkFileDialog.askdirectory(initialdir=initialdir, title=msg)
+                menu_item = not dest_path or menu_item
             case "Ask before file replacement" | "Do not replace new files with early versions" | "Use folder names" | "Show unzip files":
                 self.unzip_ops[menu_item] = not self.unzip_ops[menu_item]
             case _:
@@ -177,7 +179,7 @@ class Winzip(tk.Tk):
         if menu_item in ('extract', 'Same folder', 'Documents', 'Last folder', 'My PC'):
             use_folder = self.unzip_ops["Use folder names"]
             ask_before = self.unzip_ops["Ask before file replacement"]
-            unzip_selected = self.unzip_ops['unzip'] == 'Selected files'
+            unzip_selected = self.unzip_ops['unzip'] == 'selected'
             pwd = None
             if self.zip_ops['Cipher']:
                 if self.zf.pwd is None:
@@ -240,12 +242,6 @@ class Winzip(tk.Tk):
 
     def zip_menu(self, menu_item):
         match menu_item:
-            case 'Zip file' | 'PyZipFile file':
-                self.zip_ops['zip_file'] = menu_item
-
-            case 'Maxima' | 'Enhance Deflate' | 'Super Fast' | 'No compression':
-                self.zip_ops['zip_method'] = menu_item
-
             case 'Cipher':
                 self.zip_ops['Cipher'] = not self.zip_ops['Cipher']
 
@@ -304,7 +300,7 @@ class Winzip(tk.Tk):
                 dest_path = tkFileDialog.askdirectory(initialdir=self.menu_file.default_path, title=msg)
                 self.unzip_ops['Last folder'] = dest_path
                 unzip = self.unzip_ops['unzip']
-                self.unzip_ops['unzip'] = 'Selected files'
+                self.unzip_ops['unzip'] = 'selected'
                 self.unzip_menu('extract')
                 self.unzip_ops['unzip'] = unzip
                 if menu_item == 'Move To':
@@ -399,9 +395,10 @@ class Winzip(tk.Tk):
                     os.path.join(zip_path, x)
                     for x in zip_files
                 ]
+        compression = self.active_compression_method()
         try:
             for fname, arcname in zip(files, zip_files):
-                self.zf.write(fname, arcname)
+                self.zf.write(fname, arcname, compress_type=compression)
         except Exception as e:
             tkMessageBox.showerror(title='Add Files Error', message=str(e))
             return
@@ -426,7 +423,7 @@ class Winzip(tk.Tk):
                 dest_path = tkFileDialog.askdirectory(initialdir=self.menu_file.default_path, title=msg)
                 self.unzip_ops['Last folder'] = dest_path
                 unzip = self.unzip_ops['unzip']
-                self.unzip_ops['unzip'] = 'Selected files'
+                self.unzip_ops['unzip'] = 'selected'
                 self.unzip_menu('extract')
                 self.unzip_ops['unzip'] = unzip
             case "A Level Up":
@@ -513,16 +510,18 @@ class Winzip(tk.Tk):
             else:
                 delta.append(name)
             to_delete.update(delta)
+        to_delete.intersection_update(self._recyclebin)
         self._recyclebin.difference_update(to_delete)
 
+        # Esta parte se puede utilizar para purgar el recycle bin de directorios vacíos
         # Se restauran los directorios que no contengan al menos un archivo
-        infolist = set(
-            x for x in self._recyclebin
-            if not x.endswith('/')
-        )
-        paths = set(os.path.dirname(filename) for filename in infolist)
-        paths.intersection_update(self._recyclebin)
-        self._recyclebin = infolist.union(paths)
+        # infolist = set(
+        #     x for x in self._recyclebin
+        #     if not x.endswith('/')
+        # )
+        # paths = set(os.path.dirname(filename) for filename in infolist)
+        # paths.intersection_update(self._recyclebin)
+        # self._recyclebin = infolist.union(paths)
 
         self.onVarChange(attr_data=('view_recycle', 1))
         return len(to_delete)
@@ -628,62 +627,71 @@ class Winzip(tk.Tk):
         if event:
             attr_data = event.attr_data
         var_name, value = attr_data
-        if var_name == 'view_files':
-            if value == 0:
-                self.lframe.hide_band('left')
-            else:
-                self.lframe.show_band()
-        elif var_name == 'view_actions':
-            if value == 0:
-                self.rframe.hide_band('right')
-            else:
-                self.rframe.show_band()
-        elif var_name == 'view_recycle':
-            self.basename = os.path.basename(self.zf.filename)
-            filename = self.basename
-            path_obj_root = f'/{filename}'
-            if value == 1:
-                infolist = [
-                    self.zf.getinfo(x) for x in self._recyclebin
-                ]
-                infolist.sort(key=lambda x: x.filename)
-            else:
-                infolist = [x for x in self.zf.infolist() if x.filename not in self._recyclebin]
-            file_members = [os.path.join(path_obj_root, x.filename) for x in infolist]
-            rows = self.listzip(infolist)
-            groupby = self.zip_panel.groupby
+        match var_name:
+            case 'view_files':
+                if value == 0:
+                    self.lframe.hide_band('left')
+                else:
+                    self.lframe.show_band()
+            case 'view_actions':
+                if value == 0:
+                    self.rframe.hide_band('right')
+                else:
+                    self.rframe.show_band()
+            case 'view_recycle':
+                self.basename = os.path.basename(self.zf.filename)
+                filename = self.basename
+                path_obj_root = f'/{filename}'
+                if value == 1:
+                    infolist = [
+                        self.zf.getinfo(x) for x in self._recyclebin
+                    ]
+                    infolist.sort(key=lambda x: x.filename)
+                else:
+                    infolist = [x for x in self.zf.infolist() if x.filename not in self._recyclebin]
+                file_members = [os.path.join(path_obj_root, x.filename) for x in infolist]
+                rows = self.listzip(infolist)
+                groupby = self.zip_panel.groupby
 
-            def f_data(records, namelist):
-                def f_record(x):
-                    try:
-                        indx = namelist.index(x)
-                        zinfo = records[indx]
-                    except ValueError:
-                        is_file = not x.endswith('/')
-                        if is_file:
-                            raise
-                        date_time = datetime.now()
-                        date_time = date_time.strftime('%Y-%m-%d %H:%M')
-                        zinfo = ('', '', '', '', '', date_time, '', x)
-                    return zinfo
+                def f_data(records, namelist):
+                    def f_record(x):
+                        try:
+                            indx = namelist.index(x)
+                            zinfo = records[indx]
+                        except ValueError:
+                            is_file = not x.endswith('/')
+                            if is_file:
+                                raise
+                            # Se expresa como relative path
+                            _, _, x = x.split('/', 2)
+                            date_time = datetime.now()
+                            date_time = date_time.strftime('%Y-%m-%d %H:%M')
+                            zinfo = ('', '', '', '', '', date_time, '', x)
+                        return zinfo
 
-                return f_record
-            path_obj = navigationbar.StrListObj(file_members, path_obj_root)
-            path_obj.validate_path = lambda path: os.path.abspath(path)
-            path = self.zip_panel.tree_path.getActivePath().path
-            if not path.startswith(path_obj.root):
-                path = path_obj.root
-            path_obj.actual_dir = path
-            self.zip_panel.tree_data(path_obj, f_data(rows, file_members), groupby=groupby)
-            if value:
-                self.zip_panel.text = RECYCLEBIN[1:-1]
-        elif var_name == 'mn_unzip':
-            msg = f'{var_name}={value}'
-            tkMessageBox.showinfo(title='on_varchange', message=msg)
+                    return f_record
+                path_obj = navigationbar.StrListObj(file_members, path_obj_root)
+                path_obj.validate_path = lambda path: os.path.abspath(path)
+                path = self.zip_panel.tree_path.getActivePath().path
+                if not path.startswith(path_obj.root):
+                    path = path_obj.root
+                path_obj.actual_dir = path
+                self.zip_panel.tree_data(path_obj, f_data(rows, file_members), groupby=groupby)
+                if value:
+                    self.zip_panel.text = RECYCLEBIN[1:-1]
+            case 'mn_unzip':
+                msg = f'{var_name}={value}'
+                tkMessageBox.showinfo(title='on_varchange', message=msg)
+            case 'zip_type' | 'zip_method':
+                self.zip_ops[var_name] = value
+            case 'zip_filters':
+                self.active_filter = int(value) - 1
+            case 'unzip_scope':
+                self.unzip_ops['unzip'] = value
         pass
 
     def setGui(self):
-        file_path = 'Tools/mywinzip/res/layout/winzip.xml'
+        file_path = '@mywinzip:layout/winzip'
         xmlObj = userinterface.getLayout(file_path, withCss=True)
         userinterface.newPanelFactory(
             master=self,
@@ -750,6 +758,7 @@ class Winzip(tk.Tk):
                 k,
                 label='{} {:30s}'.format(k + 1, filter.strip(';')),
                 value=f'{k + 1}',
+                variable='zip_filters',
                 command=userinterface.menuclick_closure(widget=menu_inst, data=k)
             )
         menu_inst.insert_separator(k + 1)
@@ -759,21 +768,23 @@ class Winzip(tk.Tk):
         self.menu_file.checkSaveFlag()
         super().destroy()
 
+    def active_compression_method(self):
+        match self.zip_ops['zip_method']:
+            case 'max':                             # 'Maxima'
+                compression = zipfile.ZIP_BZIP2
+            case 'enh':                             # 'Enhance Deflate'
+                compression = zipfile.ZIP_DEFLATED
+            case 'sup':                             # 'Super Fast'
+                compression = zipfile.ZIP_LZMA
+            case _:                                 # No Compression
+                compression = zipfile.ZIP_STORED
+        return compression
+
     def _loadzip(self, file, mode='r', compression=None, allowZip64=True, compresslevel=None, *, strict_timestamps=True):
-        compression = compression
-        if compression is None:
-            match self.zip_ops['zip_method']:
-                case 'Maxima':
-                    compression = zipfile.ZIP_BZIP2
-                case 'Enhance Deflate':
-                    compression = zipfile.ZIP_DEFLATED
-                case 'Super Fast':
-                    compression = zipfile.ZIP_LZMA
-                case _:
-                    compression = zipfile.ZIP_STORED
+        compression = compression or self.active_compression_method()
 
         method, kw = zipfile.ZipFile, {'compresslevel': compresslevel, 'strict_timestamps': strict_timestamps}
-        if self.zip_ops['zip_file'] == 'PyZipFile file':
+        if self.zip_ops['zip_type'] == 'pyzip':
             method, kw = zipfile.PyZipFile, {'optimize': -1}
 
         tmpdir = tempfile.gettempdir()
@@ -836,6 +847,7 @@ class Winzip(tk.Tk):
 
     def dumpzip(self, infolist):
         lst_str = []
+        lst_str.append(5 * (8 * '-' + ' ') + 16 * '-' + 2 * (' ' + 8 * '-'))
         prtStr1 = '{:^8} {:^8} {:^8} {:^8} {:^8} {:^16} {:^8} {:^8}'
         lst_str.append(prtStr1.format('Length', 'Method', 'Size', 'Ratio', 'Offset', 'Date Time',
                              'CRC-32', 'Name'))

@@ -1,3 +1,7 @@
+import functools
+import itertools
+import random
+
 import pytest
 
 import src.Tools.uiStyle.uicss as uicss
@@ -22,6 +26,62 @@ def compound_selectors_html():
 
 
 class TestSelector:
+
+    @pytest.mark.parametrize(
+        "type_test",
+        [
+            'specific',
+            'general',
+        ]
+    )
+    def test_generic__melement(self, type_test):
+        def getMElement(test_case):
+            if test_case == 'specific':
+                css_str = '''
+                .command {
+                    font:Helvetica 8;
+                    image:@drawable/btn_question;
+                    compound:top;
+                    relief:flat;
+                    wraplength:64;
+                }
+                '''
+                sels = sorted(uicss.XmlSerializer.process_css_string(css_str))
+                attrs = dict(text="Filter", image="@drawable/btn_filter", side="left", command="Zip/Filters")
+            elif test_case == 'general':
+                nsels = random.randint(3, 6)
+                sel_strs = random.sample([f'sel{k}' for k in range(nsels)], nsels)
+                values = [random.sample(range(10), random.randint(1, 5)) for x in range(nsels)]
+                style_strs = [
+                    f'{{{";".join([f"key{k}:{k}" for k in values[x]])};}}'
+                    for x in range(nsels)
+                ]
+
+                sels = [uicss.Selector(sel_str, style_str) for sel_str, style_str in zip(sel_strs, style_strs)]
+                attrs = {f'key{k}': 10*k for k in random.sample(range(10), random.randint(1, 5))}
+            return attrs, sels
+
+        attrs, sels = getMElement(type_test)
+        melem = uicss.MElement('tag', attrs, sels=sels)
+
+        kattrs = attrs.keys()
+        kraw_attrib = melem.raw_attrib.keys()
+        kattrib = melem.attrib.keys()
+        kstyle_str = functools.reduce(lambda t, x: t | x.keys(), [sel.style_str for sel in sels], set())
+
+        assert kattrs == kraw_attrib, 'Original attributes not preserved'
+        assert (kattrs | kstyle_str) == kattrib, 'Keys in final attributes not well generated'
+
+        keys_from_sels = kattrib - kattrs
+        keys_common = kattrs & kstyle_str
+
+        assert all(attrs[key] == melem.attrib[key] for key in keys_common), 'Original attributes are not mandatory'
+        attrs_pos = [
+            dict.fromkeys(x.keys() & keys_from_sels, k) for k, x in enumerate(sel.style_str for sel in sels)
+        ]
+        attrs_pos = dict(itertools.chain(*(x.items() for x in attrs_pos)))
+        assert all(sels[k].style_str[key] == melem.attrib[key] for key, k in attrs_pos.items()), \
+        'The selector with greater specificity is not defying the final attribute'
 
     @pytest.mark.parametrize(
         "sel_str, count_str",
@@ -100,8 +160,7 @@ class TestSelector:
 
     def test_specificity_order(self):
         selector_strs = ['h1', '::after', '.clase', '[class]', ':disabled', '#identifier']
-        sels = [uicss.Selector(x) for x in selector_strs]
-        sels.sort()
+        sels = sorted([uicss.Selector(x) for x in selector_strs])
         assert [sel.selector_str for sel in sels] == selector_strs
 
 

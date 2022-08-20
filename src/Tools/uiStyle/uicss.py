@@ -33,6 +33,7 @@ class MElement(ET.Element):
         super().__init__(tag, attrib, **extra)
         self.sels = sels
         self.tpos = tpos
+        self.src = None
 
     @property
     def raw_attrib(self):
@@ -42,15 +43,23 @@ class MElement(ET.Element):
     def attrib(self):
         sels = self.sels or []
         sels.sort()
-        attrib = self.raw_attrib
-        attrib.update(itertools.chain(*(sel.style_str.items() for sel in sels)))
+        raw_attrib = self.raw_attrib
+        attrib = dict(itertools.chain(*(sel.style_str.items() for sel in sels), raw_attrib.items()))
         if self.src and (pckg := self.src.pckg):
             cp = re.compile(r'@(.+?:)*(.+?)/(.+)')
             for key, value in attrib.items():
                 if (m := cp.match(value)) and not m.group(1):
                     attrib[key] = f'@{pckg}:{m.group(2)}/{m.group(3)}'
-        # attrib = dict(itertools.chain(*(sel.style_str.items() for sel in sels))).update(attrib)
         return attrib
+
+    def set(self, key, value):
+        super().set(key, value)
+
+    def get(self, key, default=None):
+        return self.attrib.get(key, default)
+
+    def pop(self, key, default=None):
+        return super().attrib.pop(key, default)
 
     def items(self):
         return self.attrib.items()

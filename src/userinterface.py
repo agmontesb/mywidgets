@@ -230,6 +230,8 @@ def getWidgetInstance(master: tk.Tk | tk.Widget,
     if 'image' in attributes:
         image_file = attributes['image']
         attributes['image'] = renderImage(image_file)
+    if 'menuid' in attributes:
+        pass
     widget = widgetClass(master, **attributes)
 
     return widget
@@ -494,8 +496,11 @@ def menuFactory(
                 command = options.pop('command')
                 cb = getattr(master, command)
             except (AttributeError, KeyError):
-                cb = menuclick_closure(widget=menu_master, data=k)
-            # options['command'] = cb
+                if 'variable' not in options:
+                    # En el caso de los radio button o checbutton solo se asigna cb si no se ha definido
+                    # una variable para ellos de tal manera que es posible capturar a través
+                    # del cambio de valor que boton se pulsó. En el caso button no se puede definir variable.
+                    cb = menuclick_closure(widget=menu_master, data=k)
             if options.get('accelerator', ''):
                 accelerator = options['accelerator']
                 accelerator = accelerator.replace('+', '-')

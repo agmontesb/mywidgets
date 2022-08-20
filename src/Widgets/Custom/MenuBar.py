@@ -87,14 +87,15 @@ class Ribbon(tk.Frame):
         geo_ops = dict(side="top", fill="both", expand="yes")
         menuids = []
         for panel in ribbon_root.findall('rpanel'):
-            attrib = panel.attrib
-            menuid = attrib.pop('menuid')
-            attrib['name'] = f'ribbon_{menuid}'
-            attrib['visible'] = f"eq({varname},'{menuid}')"
+            menuid = panel.pop('menuid')
+            attrib = {'name': f'ribbon_{menuid}', 'visible': f"eq({varname},'{menuid}')"}
+            # attrib['name'] = f'ribbon_{menuid}'
+            # attrib['visible'] = f"eq({varname},'{menuid}')"
             attrib.update(geo_ops)
             menuids.append(menuid)
             panel.tag = 'frame'
-            # userinterface.widgetFactory(panels, panel)
+            # panel.clear()
+            [panel.set(key, value) for key, value in attrib.items()]
             pass
         [ribbon_root.remove(selem) for selem in list(ribbon_root) if selem.tag not in ('var', 'frame')]
         userinterface.widgetFactory(panels, ribbon_root)
