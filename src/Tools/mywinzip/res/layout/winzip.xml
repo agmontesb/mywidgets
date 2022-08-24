@@ -38,6 +38,7 @@
     <category label="Category uno">
         <var type="int" name="view_sel" value="128"/>
         <var type="boolean" name="view_recycle" value="0"/>
+        <var type="boolean" name="cipher" value="0"/>
         <var type="boolean" name="view_files" value="0"/>
         <var type="boolean" name="view_actions" value="0"/>
         <var type="string" name="add_folder" value="last_folder"/>
@@ -45,14 +46,14 @@
         <var type="string" name="unzip_scope" value="all"/>
         <!-- Variables asociadas al menu ZIP   -->
         <var type="string" name="zip_type" value="zip"/>
-        <var type="string" name="zip_method" value="noc"/>
+        <var type="string" name="zip_method" value="NOCOMPRESSION"/>
         <var type="int" name="zip_filters" value="1"/>
         <ribbon lib="Widgets.Custom" name="main_menu" src="@mywinzip:layout/winzip_ribbon" side="top" fill="x"/>
         <collapsingframe class="panel" lib="Widgets.Custom" name="lframe" orientation="vertical" inisplit="0.2" buttconf="hR">
-            <panel class="panel frst" name="files_panel" lib="Tools.mywinzip" column_ids="Modified Size"  visible="eq(view_files, true)"/>
+            <panel class="panel frst" name="files_panel" lib="Tools.mywinzip" column_ids="Modified Size"/>
             <collapsingframe class="panel scnd" lib="Widgets.Custom" name="rframe" orientation="vertical" inisplit="0.8" hide="right">
-            <panel class="panel frst" name="zip_panel" lib="Tools.mywinzip" column_ids="Length Method Size Ratio Offset DateTime CRC32 Name" />
-            <label class="panel scnd" text="ACTIONS" visible="eq(view_actions, true)"/>
+                <panel class="panel frst" name="zip_panel" lib="Tools.mywinzip" column_ids="Length Method Size Ratio Offset DateTime CRC32 Name" />
+                <label class="panel scnd" text="ACTIONS"/>
             </collapsingframe>
         </collapsingframe>
     </category>

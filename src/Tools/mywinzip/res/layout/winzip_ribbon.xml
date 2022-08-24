@@ -53,8 +53,8 @@
         </labelframe>
         <labelframe class="section" text="Files to Unzip">
             <frame  row="0" column="0">
-                <radiobutton text="All files" anchor="w" command="Unzip/All_files" value="all" variable="unzip_scope"/>
-                <radiobutton text="Selected files" anchor="w" command="Unzip/Selected_files" value="selected" variable="unzip_scope"/>
+                <radiobutton text="All files" anchor="w" value="all" variable="unzip_scope"/>
+                <radiobutton text="Selected files" anchor="w" value="selected" variable="unzip_scope"/>
             </frame>
             <button text="Find" image="@drawable/btn_search" class="boton" row="0" column="1" command="Unzip/Find" />
         </labelframe>
@@ -73,15 +73,15 @@
         <labelframe class="section" text="File/Method">
             <frame  row="0" column="0">
                 <button image="@data:drawable/btn_caret_down" relief="flat" command="Zip/Zip_Method" side="bottom" fill="x"/>
-                <radiobutton text="Zip file" image="@drawable/btn_file_archive" compound="top" indicatoron="0" command="Zip/Zip_file" value="zip" variable="zip_type"/>
+                <radiobutton text="Zip file" image="@drawable/btn_file_archive" compound="top" indicatoron="0" value="zip" variable="zip_type"/>
             </frame>
             <frame  row="0" column="1">
                 <button image="@data:drawable/btn_caret_down" relief="flat" command="Zip/Zip_Method" side="bottom" fill="x"/>
-                <radiobutton text="PyZipFile" image="@drawable/btn_file_archive" compound="top" indicatoron="0" command="Zip/PyZipFile_file" value="pyzip" variable="zip_type"/>
+                <radiobutton text="PyZipFile" image="@drawable/btn_file_archive" compound="top" indicatoron="0" value="pyzip" variable="zip_type"/>
             </frame>
         </labelframe>
         <button text="Filter" image="@drawable/btn_filter"  class="boton" side="left" command="Zip/Filters"/>
-        <checkbutton text="Cipher" image="@drawable/btn_filter" class="boton" side="left" indicatoron="0" command="Zip/Cipher"/>
+        <checkbutton text="Cipher" variable="cipher" image="@drawable/btn_filter" class="boton" side="left" indicatoron="0"/>
         <labelframe class="section" text="Convertion">
             <button text="Image" image="@drawable/btn_file_image" class="boton" row="0" column="0" command="Zip/Image_Convertion"/>
             <button text="PDF" image="@drawable/btn_file_pdf" class="boton" row="0" column="1" command="Zip/PDF_Convertion"/>
@@ -117,11 +117,11 @@
     </rpanel>
     <rpanel menuid="view">
         <labelframe class="section">
-            <checkbutton text="Recycle Bin" image="@drawable/btn_recycle" class="boton" row="0" column="0" indicatoron="0" offrelief="flat" command="View/Recycle_Bin"/>
+            <checkbutton text="Recycle Bin" variable="view_recycle" image="@drawable/btn_recycle" class="boton" row="0" column="0" indicatoron="0" offrelief="flat"/>
         </labelframe>
         <labelframe class="section">
-            <checkbutton text="Files" image="@drawable/btn_file" class="boton" row="0" column="0" indicatoron="0" offrelief="flat" command="View/Files"/>
-            <checkbutton text="Actions" image="@drawable/btn_file_alt" class="boton" row="0" column="1" indicatoron="0" offrelief="flat" command="View/Actions"/>
+            <checkbutton text="Files" variable="view_files" image="@drawable/btn_file" class="boton" row="0" column="0" indicatoron="0" offrelief="flat"/>
+            <checkbutton text="Actions" variable="view_actions" image="@drawable/btn_file_alt" class="boton" row="0" column="1" indicatoron="0" offrelief="flat"/>
         </labelframe>
     </rpanel>
 <!--    <rpanel menuid="security copy/clean"/>-->

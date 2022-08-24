@@ -1,4 +1,3 @@
-import copy
 import os.path
 import shutil
 import tkinter as tk
@@ -6,7 +5,7 @@ import tkinter.messagebox as tkMessageBox
 import tkinter.filedialog as tkFileDialog
 import tkinter.simpledialog as tkSimpleDialog
 import zipfile
-from datetime import datetime, time
+from datetime import datetime
 import tempfile
 import fnmatch
 
@@ -242,8 +241,8 @@ class Winzip(tk.Tk):
 
     def zip_menu(self, menu_item):
         match menu_item:
-            case 'Cipher':
-                self.zip_ops['Cipher'] = not self.zip_ops['Cipher']
+            # case 'Cipher':
+            #     self.zip_ops['Cipher'] = not self.zip_ops['Cipher']
 
             case 'Add Files':
                 files = tkFileDialog.askopenfilenames(
@@ -638,6 +637,8 @@ class Winzip(tk.Tk):
                     self.rframe.hide_band('right')
                 else:
                     self.rframe.show_band()
+            case 'cipher':
+                self.zip_ops['Cipher'] = value
             case 'view_recycle':
                 self.basename = os.path.basename(self.zf.filename)
                 filename = self.basename

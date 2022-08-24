@@ -4,10 +4,10 @@
     <radiobutton label="PyZipFile file" variable="zip_type" value="pyzip" />
     <separator/>
     <cascade label="Zip Method" tearoff="false">
-        <radiobutton label="Maxima" variable="zip_method" value="max"/>
-        <radiobutton label="Enhance Deflate" variable="zip_method" value="enh"/>
-        <radiobutton label="Super Fast" variable="zip_method" value="sup"/>
-        <radiobutton label="No compression" variable="zip_method" value="noc"/>
+        <radiobutton label="Maxima" variable="zip_method" value="MAXIMA"/>
+        <radiobutton label="Enhance Deflate" variable="zip_method" value="DEFLATED"/>
+        <radiobutton label="Super Fast" variable="zip_method" value="SUPERFAST"/>
+        <radiobutton label="No compression" variable="zip_method" value="NOCOMPRESSION"/>
     </cascade>
     <cascade label="Filters" tearoff="false">
         <radiobutton label="1 Default Filter (+*.*)" variable="zip_filters" value="1"/>
@@ -15,7 +15,7 @@
         <command label="Create/edit/delete Filter" />
     </cascade>
     <separator />
-    <checkbutton label="Cipher"/>
+    <checkbutton label="Cipher" variable="cipher"/>
     <command label="Image Convertion" />
     <command label="PDF Convertion" />
     <separator/>
