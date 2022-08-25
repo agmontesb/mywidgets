@@ -221,12 +221,15 @@ class WinzipUI(WinzipActions, tk.Tk):
             self.zip_menu(menu_item)
         elif menu in ('manage',):
             self.manage_menu(menu_item)
-        # elif menu == 'popupzippanel':
-        #     self.pop_up_zip(menu_item)
-        # elif menu == 'filters':
-        #     menu_item = menu_item.split(' ', 1)
-        #     self.zip_menu(menu_item)
-        # pass
+        elif menu == 'popupzippanel':
+            self.pop_up_zip(menu_item)
+        elif menu == 'filters':
+            menu_item = menu_item.split(' ', 1)
+            self.zip_menu(menu_item)
+        elif menu == 'recent folders':
+            menu_item = menu_item.split(' ', 1)
+            self.unzip_menu(menu_item)
+        pass
 
     def onRightClick(self, event):
         wdg = event.widget
@@ -261,6 +264,85 @@ class WinzipUI(WinzipActions, tk.Tk):
                 popup_menu.grab_release()
                 pass
 
+    def pop_up_zip(self, menu_item):
+        match menu_item:
+            case "New Folder":
+                dir_name = tkSimpleDialog.askstring(title='Add New Folder', prompt='Folder Name:')
+                if dir_name:
+                    files = [os.path.dirname(self.zf.filename)]
+                    tree_path = self.zip_panel.tree_path
+                    zip_path = tree_path.getActivePath().path
+                    root_dir = tree_path.path_obj.root
+                    zip_path = os.path.relpath(zip_path, root_dir)
+                    zip_files = [os.path.join(zip_path, dir_name, '')]
+                    self._addFiles(files, zip_files)
+            case "Unzip":
+                msg = f'Unzip'
+                dest_path = tkFileDialog.askdirectory(initialdir=self.menu_file.default_path, title=msg)
+                self.unzip_ops['Last folder'] = dest_path
+                unzip = self.unzip_ops['unzip']
+                self.unzip_ops['unzip'] = 'selected'
+                self.unzip_menu('extract')
+                self.unzip_ops['unzip'] = unzip
+            case "A Level Up":
+                path = self.zip_panel.tree_path.getActivePath().path
+                path = os.path.dirname(path)
+                self.zip_panel.onTreeViewOpen(path=path)
+            case "Delete":
+                name = self.rclick_name
+                msg = f'Do you want to delete {name} item'
+                bflag = tkMessageBox.askokcancel(title='Delete Zip File Item', message=msg)
+                if bflag:
+                    n = self.delete_items([name])
+                    msg = f'{n} items has been moved to Recycle Bin'
+                    tkMessageBox.showinfo(title='Delete', message=msg)
+            case 'Restore':
+                self.manage_menu(menu_item)
+            case "Select All":
+                self.manage_menu(menu_item)
+            case "Toggle Selection":
+                self.manage_menu(menu_item)
+            case "Select By Name":
+                self.manage_menu('Search')
+            case "Rename":
+                self.manage_menu(menu_item)
+            case "Zip File With Selected Files":
+                title = 'Zip File With Selected Files'
+                xmlfile = userinterface.getFileUrl('@mywinzip:layout/dlg_add_files')
+                settings = {
+                    'fname': 'NuevoZip.zip', 'fpath': self.menu_file.default_path,
+                    'zip_type': 'fzip', 'cipher': False, 'fltr_type': 'fltr1',
+                }
+                fltr_strs = ['Predeterminado (+*.*)']
+                for k, filter in enumerate(self.filters[1:], start=1):
+                    items = filter.split(';')
+                    filter = ';'.join([('+-'[k] + item) if item else item for k, item in enumerate(items)])
+                    fltr_strs.append(filter.strip(';'))
+
+                template = '<kbool id="fltr{0}" label="{1}" group="fltr_type" cside="left"/>'
+                block = '\n'.join(template.format(*pair) for pair in enumerate(fltr_strs, start=1))
+                content = userinterface.getContent(xmlfile)
+                content = content.replace('<<block>>', block)
+                dlg = kodiwidgets.CustomDialog(
+                    self,
+                    title=title, xmlFile=content, isFile=False, settings=settings, dlg_type='okcancel'
+                )
+                if dlg.result:
+                    settings.update(dlg.settings)
+                    filename = os.path.join(settings['fpath'], settings['fname'])
+                    method = zipfile.ZipFile if settings['zip_type'] == 'fzip' else zipfile.PyZipFile
+                    cipher = settings['cipher']
+                    active_filter = int(settings['fltr_type'].strip('fltr')) - 1
+                    selected = self.zip_panel.selected_data('Name')
+                    self._save_partial(filename, selected, method, active_filter=active_filter)
+                pass
+            case "Copy To" | "Move To":
+                self.manage_menu(menu_item)
+            case _:
+                title = f'Popup Menu - Option: {menu_item}'
+                tkMessageBox.showinfo(title=title, message='Not implemented yet')
+        self.rclick_name = None
+
     def file_menu(self, menu_item):
         match menu_item.split():
             case 'New', :
@@ -284,32 +366,11 @@ class WinzipUI(WinzipActions, tk.Tk):
             case 'Save', *suffix:  # case 'Save' | 'Save As':
                 method = getattr(self.menu_file, 'saveFile' if not suffix else 'saveAsFile')
                 with method() as filename:
-                    if not self._recyclebin:
-                        # El archivo no tiene elementos eliminados
-                        srcfile, dstfile = self.zf.filename, filename
-                        print(f'Save: {srcfile} -> {dstfile}')
-                        self.zf.close()
-                        dstfile = shutil.copy(srcfile, dstfile)
-                        if suffix[0] == 'As':
-                            dstfile = os.path.join(os.path.dirname(srcfile), os.path.basename(filename))
-                            os.rename(srcfile, dstfile)
-                            self.menu_file.title(filename)
-                        try:
-                            self._loadzip(dstfile, mode='a')
-                        except Exception as e:
-                            tkMessageBox.showerror(title='Saving Error', message=str(e))
-                    else:
-                        srcfile, dstfile = self.zf.filename, filename
-                        selected = [
-                            x for x in self.zf.namelist()
-                            if x.count(os.sep) == 0 or (x.count(os.sep) == 1 and x.endswith(os.sep))
-                        ]
-                        self._save_partial(dstfile, selected)
-                        self.zf.close()
-                        os.remove(srcfile)
-                        self.loadzip(dstfile, mode='a')
-                        self._recyclebin = set()
-
+                    try:
+                        self.save(filename)
+                        self.menu_file.title(filename)
+                    except Exception as e:
+                        tkMessageBox.showerror(title='Saving Error', message=str(e))
             case 'Settings', :
                 title = 'Winzip Settings'
                 xmlfile = userinterface.getContent('@mywinzip:layout/dlg_settings')
@@ -345,75 +406,76 @@ class WinzipUI(WinzipActions, tk.Tk):
                 menu_item = not dest_path or menu_item
             case "Ask before file replacement" | "Do not replace new files with early versions" | "Use folder names" | "Show unzip files":
                 self.unzip_ops[menu_item] = not self.unzip_ops[menu_item]
+            case prefix, _ if prefix.isdigit():
+                dest_path = self.last_n_directories[int(prefix) - 1]
+                menu_item = 'Same folder'
             case _:
-                if menu_item[0].isdigit():
-                    indx, dirname = menu_item.split(' ')
-                    dest_path = self.last_n_directories[int(indx)]
-                    menu_item = 'Documents'
-                else:
-                    title = f'Unzip Menu - Option: {menu_item}'
-                    tkMessageBox.showinfo(title=title, message='Not implemented yet')
+                title = f'Unzip Menu - Option: {menu_item}'
+                tkMessageBox.showinfo(title=title, message='Not implemented yet')
 
-        if menu_item in ('extract', 'Same folder', 'Documents', 'Last folder', 'My PC'):
-            use_folder = self.unzip_ops["Use folder names"]
-            ask_before = self.unzip_ops["Ask before file replacement"]
-            unzip_selected = self.unzip_ops['scope'] == 'selected'
-            pwd = None
-            if self.zip_ops['cipher']:
-                if self.zf.pwd is None:
-                    pwd = tkSimpleDialog.askstring(title='Password',
-                                                   prompt='Please enter the zip file password', show='*')
-                    if pwd:
-                        pwd = pwd.encode('utf-8')
-                        self.zf.setpassword(pwd)
-                pwd = self.zf.pwd
-            if unzip_selected:
-                selected = [x.rstrip(' ' + LOCK_CHR) for x in self.selected_data()]
-                members = list(map(self.zf.getinfo, selected))
-            else:
-                members = self.zf.infolist()
-            if not use_folder:
-                members = [zinfo for zinfo in members if not zinfo.is_dir()]
-            title = 'Confirm file overwriting'
-            xmlfile = '@mywinzip:layout/unzip_dlg'
-            settings = {'msg': 'msg to display', 'noask': False, 'what_to_do': 'replace'}
-            for zinfo in members:
-                filename = zinfo.filename
-                filepath, name = os.path.dirname(filename), os.path.basename(zinfo.filename)
-                filepath = os.path.join(dest_path, filepath) if use_folder else dest_path
-                dest_filename = os.path.join(filepath, name)
-                if ask_before and os.path.exists(dest_filename) and not settings["noask"]:
-                    stat = os.stat(dest_filename)
-                    src = (zinfo.file_size, datetime(*zinfo.date_time).strftime('%Y-%m-%d %H:%M'))
-                    dst = (stat.st_size, datetime.fromtimestamp(stat.st_mtime).strftime('%Y-%m-%d %H:%M'))
-                    msg = f'This file exists in the destination folder.\n'
-                    msg += f'Replace the existing file:\n{dest_filename}\n{dst[0]} bytes {dst[1]}\n'
-                    msg += f'With this:\n{name}\n{src[0]} bytes {src[1]}'
-                    settings['msg'] = msg
-                    dlg = kodiwidgets.CustomDialog(self, title=title, xmlFile=xmlfile, isFile=True,
-                                                   settings=settings, dlg_type='ok')
-                    settings.update(dlg.settings)
-                what_to_do = settings.get('what_to_do')
-                if what_to_do == "replace":
-                    pass
-                elif what_to_do == "omit":
-                    continue
-                elif what_to_do == "keep":
-                    n = 1
-                    while True:
-                        name, ext = os.path.splitext(name)
-                        dmy = os.path.join(filepath, f'{name} ({n}){ext}')
-                        if not os.path.exists(dmy):
-                            break
-                        n += 1
-                    dest_filename = dmy
-                try:
-                    self.extract(zinfo, dest_filename, pwd)
-                except Exception as e:
-                    msg = str(e)
-                    tkMessageBox.showerror(title='Unzip - Not valid', message=msg)
-            self.unzip_ops['Last folder'] = dest_path
-            self.last_n_directories = self.menu_file.recFile(dest_path, self.last_n_directories)
+        if menu_item in ('Same folder', 'Last folder', 'My PC'):
+            self.interactive_extract(dest_path)
+
+    def interactive_extract(self, dest_path):
+        use_folder = self.unzip_ops["Use folder names"]
+        ask_before = self.unzip_ops["Ask before file replacement"]
+        unzip_selected = self.unzip_ops['scope'] == 'selected'
+        pwd = None
+        if self.zip_ops['cipher']:
+            if self.zf.pwd is None:
+                pwd = tkSimpleDialog.askstring(title='Password',
+                                               prompt='Please enter the zip file password', show='*')
+                if pwd:
+                    pwd = pwd.encode('utf-8')
+                    self.zf.setpassword(pwd)
+            pwd = self.zf.pwd
+        if unzip_selected:
+            selected = [x.rstrip(' ' + LOCK_CHR) for x in self.selected_data()]
+            members = list(map(self.zf.getinfo, selected))
+        else:
+            members = self.zf.infolist()
+        if not use_folder:
+            members = [zinfo for zinfo in members if not zinfo.is_dir()]
+        title = 'Confirm file overwriting'
+        xmlfile = '@mywinzip:layout/unzip_dlg'
+        settings = {'msg': 'msg to display', 'noask': False, 'what_to_do': 'replace'}
+        for zinfo in members:
+            filename = zinfo.filename
+            filepath, name = os.path.dirname(filename), os.path.basename(zinfo.filename)
+            filepath = os.path.join(dest_path, filepath) if use_folder else dest_path
+            dest_filename = os.path.join(filepath, name)
+            if ask_before and os.path.exists(dest_filename) and not settings["noask"]:
+                stat = os.stat(dest_filename)
+                src = (zinfo.file_size, datetime(*zinfo.date_time).strftime('%Y-%m-%d %H:%M'))
+                dst = (stat.st_size, datetime.fromtimestamp(stat.st_mtime).strftime('%Y-%m-%d %H:%M'))
+                msg = f'This file exists in the destination folder.\n'
+                msg += f'Replace the existing file:\n{dest_filename}\n{dst[0]} bytes {dst[1]}\n'
+                msg += f'With this:\n{name}\n{src[0]} bytes {src[1]}'
+                settings['msg'] = msg
+                dlg = kodiwidgets.CustomDialog(self, title=title, xmlFile=xmlfile, isFile=True,
+                                               settings=settings, dlg_type='ok')
+                settings.update(dlg.settings)
+            what_to_do = settings.get('what_to_do')
+            if what_to_do == "replace":
+                pass
+            elif what_to_do == "omit":
+                continue
+            elif what_to_do == "keep":
+                n = 1
+                while True:
+                    name, ext = os.path.splitext(name)
+                    dmy = os.path.join(filepath, f'{name} ({n}){ext}')
+                    if not os.path.exists(dmy):
+                        break
+                    n += 1
+                dest_filename = dmy
+            try:
+                self.extract(zinfo, dest_filename, pwd)
+            except Exception as e:
+                msg = str(e)
+                tkMessageBox.showerror(title='Unzip - Not valid', message=msg)
+        self.unzip_ops['Last folder'] = dest_path
+        self.last_n_directories = self.menu_file.recFile(dest_path, self.last_n_directories)
 
     def zip_menu(self, menu_item):
         match menu_item:
@@ -476,7 +538,7 @@ class WinzipUI(WinzipActions, tk.Tk):
                 self.unzip_ops['Last folder'] = dest_path
                 unzip = self.unzip_ops['scope']
                 self.unzip_ops['scope'] = 'selected'
-                self.unzip_menu('extract')
+                self.interactive_extract(dest_path)
                 self.unzip_ops['scope'] = unzip
                 if menu_item == 'Move To':
                     selected = self.selected_data()

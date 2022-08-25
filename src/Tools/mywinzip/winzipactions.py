@@ -27,6 +27,28 @@ class WinzipActions:
         self.filters = ['*.*;', '*.js,*.py;*.pyc', ';*.pyc', '*.pdf;']
         self.active_filter = 0
 
+    def save(self, filename):
+        srcfile, dstfile = self.zf.filename, filename
+        isSaveAs = os.path.basename(self.zf.filename) != os.path.basename(filename)
+        if not self._recyclebin:
+            # El archivo no tiene elementos eliminados
+            self.zf.close()
+            shutil.copy(srcfile, dstfile)
+            if isSaveAs:
+                dstfile = os.path.join(os.path.dirname(srcfile), os.path.basename(filename))
+                os.rename(srcfile, dstfile)
+                self._loadzip(dstfile, mode='a')
+        else:
+            selected = [
+                x for x in self.zf.namelist()
+                if x.count(os.sep) == 0 or (x.count(os.sep) == 1 and x.endswith(os.sep))
+            ]
+            self._save_partial(dstfile, selected)
+            self.zf.close()
+            os.remove(srcfile)
+            self.loadzip(dstfile, mode='a')
+            self._recyclebin = set()
+
     def create_folder(self, filename, date_time):
         assert filename.endswith('/')
         zinfo = zipfile.ZipInfo(filename, date_time)
