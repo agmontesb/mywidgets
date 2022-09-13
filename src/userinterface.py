@@ -15,16 +15,17 @@ import urllib.request
 import urllib.parse
 import functools
 from contextlib import contextmanager
-from typing import Callable, Sequence, Any, MutableMapping, Iterable, Tuple, Literal, TypeAlias, Optional
+from typing import Callable, ClassVar, Any, MutableMapping, Iterable, Tuple, Literal, TypeAlias, Optional
 from typing_extensions import Protocol, runtime_checkable
 from types import ModuleType
+from abc import abstractmethod
 import Widgets.Custom.ImageProcessor as imageprocessor
 
 from Widgets import specialwidgets
 from Widgets.Custom import ImageProcessor as imgp
 from Widgets.Custom.network import network
 from equations import equations_manager
-from Tools.uiStyle import uicss
+from Tools.uiStyle import uicss, cssgrid
 import cbwidgetstate
 
 MODULE_STACK = [(-1, tk), (-1, specialwidgets)]
@@ -49,6 +50,97 @@ GeoManager_Type = Literal['grid', 'place', 'pack']
 pack_params = ["after", "anchor", "before", "expand", "fill", "in", "ipadx", "ipady", "padx", "pady", "side"]
 grid_params = ["column", "columnspan", "in", "ipadx", "ipady", "padx", "pady", "row", "rowspan", "sticky"]
 place_params = ["anchor", "bordermode", "height", "in", "relheight", "relwidth", "relx", "rely", "width", "x", "y"]
+
+
+class BaseGeomngr(Protocol):
+    manager: ClassVar[Literal['pack', 'grid', 'place']]
+    container_attribs: ClassVar[set] = set()
+    item_attribs: ClassVar[set] = set()
+    slaves:list[tuple[str, dict]]
+
+    @classmethod
+    def filter_container_attribs(cls, attribs: dict):
+        other_attribs = attribs.copy()
+        item_attribs = {key: other_attribs.pop(key) for key in other_attribs.keys() & cls.container_attribs}
+        return item_attribs, other_attribs
+
+    @classmethod
+    def filter_item_attribs(cls, attribs: dict):
+        other_attribs = attribs.copy()
+        item_attribs = {key: other_attribs.pop(key) for key in other_attribs.keys() & cls.item_attribs}
+        return item_attribs, other_attribs
+
+    def config_master(self, master):
+        [
+            getattr(master.nametowidget(name), self.manager)(**item_attrs)
+            for name, item_attrs in self.slaves
+        ]
+
+    def register_item(self, widget, item_attrs: dict) -> None:
+        self.slaves.append((str(widget), item_attrs))
+
+
+class TkGridGeomngr(BaseGeomngr):
+    manager = 'grid'
+    item_attribs = {
+        "column", "columnspan", "in", "ipadx", "ipady",
+        "padx", "pady", "row", "rowspan", "sticky"
+    }
+
+    def __init__(self, **attribs):
+        self.gridconfigure, _ = self.filter_container_attribs(attribs)
+        self.slaves = []
+        pass
+
+    def config_master(self, master):
+        super().config_master(master)
+        for label in self.gridconfigure:
+            method = getattr(master, label)
+            for n, kwargs in self.gridconfigure.get(label):
+                method(n, **kwargs)
+        pass
+
+    @classmethod
+    def filter_container_attribs(cls, attribs: dict):
+        other_attribs = attribs.copy()
+        gridconfigure = {}
+        for label in ('rowconfigure', 'columnconfigure'):
+            n = len(label)
+            gridconfigure[label] = [
+                (key[n:].split('_'), eval(f'dict({other_attribs.pop(key)})')) for key in list(other_attribs.keys())
+                if key.startswith(label)
+            ]
+        return gridconfigure, other_attribs
+
+
+class TkPlaceGeomngr(BaseGeomngr):
+    manager = 'place'
+
+    item_attribs = {
+        "anchor", "bordermode", "height", "in", "relheight", "relwidth",
+        "relx", "rely", "width", "x", "y"
+    }
+
+    def __init__(self, **attribs):
+        self.slaves = []
+        pass
+
+
+class TkPackGeomngr(BaseGeomngr):
+    manager = 'pack'
+
+    item_attribs = {
+            "after", "anchor", "before", "expand", "fill", "in",
+            "ipadx", "ipady", "padx", "pady", "side"
+        }
+
+    def __init__(self, **attribs):
+        self.slaves = []
+        pass
+
+
+tkgeomanager_mapping = {'pack': TkPackGeomngr, 'place': TkPlaceGeomngr, 'grid': TkGridGeomngr}
+
 
 # Este context manager se puede utilizar cuando se quiere adjuntar datos en la emision de un evento:
 #   with event_data as event:
@@ -88,7 +180,13 @@ def getFileUrl(resource_id, src=None):
         common_path = os.path.dirname(__file__).lower()
         try:
             pckg, d_name = resource_id.split(':', 1)
-            args = [pckg, d_name] if pckg.lower() == 'data' else ['Tools', pckg, 'res', d_name]
+            match pckg.lower():
+                case 'data' | 'tests' as case:
+                    args = [pckg, d_name]
+                    if case == 'tests':
+                        common_path = os.path.dirname(common_path)
+                case _:
+                    args = ['Tools', pckg, 'res', d_name]
             base_path = os.path.join(common_path, *args)
         except ValueError:
             d_name = resource_id
@@ -260,6 +358,18 @@ def widgetFactory(master: tk.Tk | tk.Widget,
                         Posición 1: Lista de tuples que muestra el id del widget y
                         la ecuación que activa (enable) el widget.
     '''
+
+    def set_geomanager(selpane) -> BaseGeomngr:
+        if 'display' in selpane:
+            if selpane.get('display'):
+                master_geomngr = cssgrid.CssGrid
+            else:
+                raise Exception('Not Geometric Manager supported')
+        else:
+            gmanager: Literal['pack', 'place', 'grid'] = selpane.get('geomanager', 'pack')
+            master_geomngr: BaseGeomngr = tkgeomanager_mapping[gmanager]
+        return master_geomngr(**selpane)
+
     kini = k
     panelModule = panelModule or [(kini, m) for _, m in MODULE_STACK]
     if selPane.get('lib'):
@@ -269,8 +379,7 @@ def widgetFactory(master: tk.Tk | tk.Widget,
         assert module_path is not None
         module = importlib.import_module(module_path, __package__)
         panelModule.append((kini, module))
-    geometric_manager: GeoManager_Type = selPane.get('geomanager', 'pack')
-    assert geometric_manager in ['grid', 'place', 'pack']
+    master_geomngr = set_geomanager(selPane.attrib)
     for xmlwidget in selPane:
         k += 1
         is_widget = xmlwidget.tag != 'var'
@@ -291,28 +400,23 @@ def widgetFactory(master: tk.Tk | tk.Widget,
                 options['in'] = in_default + options['in']
             parent = master.nametowidget(master.winfo_parent())
 
-        gman = options.pop('geomanager', None)
-        if gman == 'grid':
-            # Se expresa en el .xml file los datos de rowconfigure/columnconfigure de la siguiebte manera:
-            # rowconfigure2="minsize='2', pad='2', weight='2'", donde 2 es la row a configurar y minsize, pad, weight son las opciones
-            # igual para columnconfigure
-            gridconfigure = {}
-            for label in ('rowconfigure', 'columnconfigure'):
-                n = len(label)
-                gridconfigure[label] = [
-                    (key[n:].split('_'), eval(f'dict({options.pop(key)})')) for key in list(options.keys())
-                    if key.startswith(label)
-                ]
+        wdg_geomngr = set_geomanager(options)
+        # wdg_geomngr = geomngr(**options)
+
+        # Se filtran los atributos que manejan el geometric manager
+        # Los relativos al widget como container
+        options.pop('geomanager', None)
+        options.pop('display', None)
+        _, options = wdg_geomngr.filter_container_attribs(options)
+        # Los relativos al widget como item del container en que está definido
+        geomngr_opt, options = master_geomngr.filter_item_attribs(options)
+
         states_eq = dict([
             (key, options.pop(key)) for key in cbwidgetstate.STATES
             if key in options
         ])
 
         wType = xmlwidget.tag
-
-        geomngr_params = findGeometricManager(geometric_manager)
-        geomngr_keys = options.keys() & geomngr_params
-        geomngr_opt = {key: options.pop(key) for key in geomngr_keys}
 
         bflag = 'lib' in options
         if bflag:
@@ -356,7 +460,7 @@ def widgetFactory(master: tk.Tk | tk.Widget,
                 geomngr_opt['in_'] = geomngr_opt.pop('in')
 
         if is_widget and 'visible' not in states_eq:
-            getattr(widget, geometric_manager)(**geomngr_opt)
+            master_geomngr.register_item(widget, geomngr_opt)
 
         if registerWidget:
             registerWidget(master, xmlwidget, widget)
@@ -372,12 +476,7 @@ def widgetFactory(master: tk.Tk | tk.Widget,
 
         has_children = bool(len(list(xmlwidget)))
         if has_children:
-            if gman == 'grid':
-                for label in gridconfigure:
-                    method = getattr(widget, label)
-                    for n, kwargs in gridconfigure.get(label):
-                        method(n, **kwargs)
-                gridconfigure = None
+            # wdg_geomngr.config_master(widget)
             k = widgetFactory(
                 widget,
                 xmlwidget,
@@ -386,6 +485,7 @@ def widgetFactory(master: tk.Tk | tk.Widget,
                 registerWidget=registerWidget,
                 k=k
             )
+    master_geomngr.config_master(master)
     if kini == panelModule[-1][0]:
         panelModule.pop()
     return k
