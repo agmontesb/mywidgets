@@ -264,6 +264,8 @@ class CssGrid:
                     self.grid_auto_rows = template.strip()
                 case 'grid-auto-flow':
                     self.grid_auto_flow = template.strip()
+                case 'z-index':
+                    self.grid_auto_flow = int(template.strip())
 
         self.nrows = self.nrows_explicit = len(self.row_tracks)
         self.ncolumns = self.ncolumns_explicit = len(self.column_tracks)
@@ -374,9 +376,11 @@ class CssGrid:
             ('grid-row-gap', 'pady'),
             ('grid-column-gap', 'padx'),
         ]
-
+        order = []
         for name, item_attrs in self.get_process_item_attribs():
             wdg = master.nametowidget(name)
+            if zindex := item_attrs.pop('z-index', None):
+                order.append((zindex, name))
             # Se traduce la n-pos a su posición (x, y) de acuerdo al dato final de nrows y ncolumns
             # x, y = self.get_xy_from_n(item_attrs.pop('n-pos'))
             # item_attrs.update({'grid-row-start': x, 'grid-column-start': y})
@@ -389,6 +393,15 @@ class CssGrid:
                 item_attrs[key] = 2 * item_attrs[key] - 1
             # Se mapea el widget en el master
             wdg.grid(**item_attrs)
+
+        # Se ajusta el stacking order si así se requiriera
+        if order:
+            order.sort()
+            # en este punto se tiene en wdg el widget con el stacking order más alto ya que fue
+            # el último en ser creado.
+            for zindex, name in order:
+                lstwdg, wdg = wdg, master.nametowidget(name)
+                wdg.lift(lstwdg)
 
         nrows, ncolumns = 2 * self.nrows + 1, 2 * self.ncolumns + 1
         h, w = self.row_gap, self.column_gap
@@ -436,11 +449,11 @@ class CssGrid:
             fval = (2 * min(self.nrows, self.ncolumns) - 2) if all([h, w]) else 1
             it = itertools.zip_longest(row_ids, col_ids, fillvalue=fval)
             for row in row_ids:
-                frm = tkinter.Frame(master, height=1, width=1, bg='black')
+                frm = tkinter.Frame(master, name=f'row_{row - 1}', height=1, width=1, bg='black')
                 frm.grid(row=row, column=0, columnspan=ncolumns, sticky='ew')
                 frm.lower()  # Con esto se manda estos al fondo del stacking order
             for col in col_ids:
-                frm = tkinter.Frame(master, height=1, width=1, bg='black')
+                frm = tkinter.Frame(master, name=f'col_{col - 1}', height=1, width=1, bg='black')
                 frm.grid(row=0, column=col, rowspan=nrows, sticky='ns')
                 frm.lower()  # Con esto se manda estos al fondo del stacking order
             # for row, col in it:
@@ -884,6 +897,7 @@ class CssGrid:
         'align-self': grid_child,
         'justify-self': grid_child,
         'place-self': lambda x: CssGrid.place_items(x, ('align-self', 'justify-self')),
+        'z-index': grid_child,
     }
 
 

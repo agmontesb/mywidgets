@@ -576,6 +576,7 @@ class ElementFactory:
         self.srch_mapping = collections.defaultdict(list)
         self.end_tag_patterns = collections.defaultdict(list)
         self.css_selectors = None
+        self.attrs_equiv = {}
 
     def add_to_patterns(self, cp_patterns, level):
         for sel_ndx, cp, sel_str in cp_patterns:
@@ -600,7 +601,10 @@ class ElementFactory:
             else:
                 self.end_tag_patterns[level - 1].append((sel_ndx, pattern, sel_str, key, srch_regex, comb))
 
-    def check_elem(self, in_level, tag, attrs):
+    def check_elem(self, in_level, tag, attrs_in:dict):
+        attrs = attrs_in.copy()
+        [attrs.__setitem__(ckey, attrs.pop(key)) for key, ckey in self.attrs_equiv.items() if key in attrs]
+
         to_check = ['*', tag]
         if 'id' in attrs:
             to_check.append(f'#{attrs["id"]}')
@@ -689,6 +693,7 @@ class ElementFactory:
     def getElements(self, htmlstr, tcase='.xml'):
         if tcase == '.xml':
             serializer = XmlSerializer()
+            self.attrs_equiv = dict(name='id')
         elif tcase == '.html':
             serializer = HtmlSerializer()
         else:

@@ -2,48 +2,30 @@
 <settings>
     <?xml-stylesheet type="text/css" href="#style"?>
     <extra id="style">
-        .grid {
-            display: grid;
-            grid-template-columns: repeat(3, 50px);
-            grid-template-rows: repeat(3, 50px);
-            grid-gap: 0px 0px;
-            grid-auto-columns: 50px;
-            grid-auto-rows: 50px;
-            justify-items:stretch;
-            align-items:stretch;
+        #grid {
+          display: grid;
+          grid-template-columns: repeat(8, 1fr);
+          grid-template-rows: repeat(8, 1fr);
+          place-items: stretch;
         }
-        #uno {
-        	grid-column-start: 3;
-            grid-row-start: 2;
-        }
-        .row {
-          grid-column-start: 1;
-          grid-column-end: -1;
-        }
-        .column {
-          grid-row-start: 1;
-          grid-row-end: 3;
-          bg:light green;
-          bd:4;
-        }
-        .blk {
-            height:10;
-            width:10;
-            bg:black;
-        }
-
+        #a { grid-column: 1 / span 8; grid-row: -4 / span 3; }
+        #b { grid-column: 1 / span 4; grid-row: 1 / span 4; z-index: 10; }
+        #c { grid-column: 4 / span 5; grid-row: 1 / span 3; }
+        #d { grid-column: -4 / span 3; grid-row: -5 / span 3; }
+        #e { grid-column: 3 / span 4; grid-row: 3 / span 4;
+             z-index: 5; }
     </extra>
     <category label="Category uno">
-        <frame class="grid" side="top" fill="both" expand="yes">
-            <label name="uno" text="p1" bg="gray"/>
-            <label text="row2"  bg="blue"/>
-            <label text="row3"  bg="yellow"/>
-            <label text="row4"  bg="green"/>
-            <label text="row1" bg="red"/>
-            <label text="col1" bg="gray"/>
-            <label text="col2" bg="gray"/>
-            <label text="col3" bg="gray"/>
-            <label text="col4" bg="gray"/>
+        <frame name="grid" side="top" fill="both" expand="yes">
+            <label name="a" text="A" bg="gray" height="0"/>
+            <label name="b" text="B"  bg="blue"/>
+            <label name="c" text="C"  bg="yellow"/>
+            <label name="d" text="D"  bg="green"/>
+            <label name="e" text="E" bg="red"/>
+<!--            <label text="col1" bg="gray"/>-->
+<!--            <label text="col2" bg="gray"/>-->
+<!--            <label text="col3" bg="gray"/>-->
+<!--            <label text="col4" bg="gray"/>-->
 <!--            <label text="col1" bg="gray"/>-->
 <!--            <label text="col2" bg="gray"/>-->
 <!--            <label text="col3" bg="gray"/>-->
