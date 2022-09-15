@@ -5,6 +5,7 @@ import tkinter
 
 import userinterface
 
+DEBUG = True
 
 class CssGrid:
 
@@ -17,10 +18,11 @@ class CssGrid:
         self.nrows = self.ncolumns = 0
         self.row_gap = self.column_gap = 0
         self.align_items = self.justify_items = 'center'
-        self.align_content = self.justify_content = 'center'
+        self.align_content = self.justify_content = 'start'
         self.grid_auto_columns = self.grid_auto_rows = '0px'
         self.grid_auto_flow = 'row'
         self.rows_responsive = self.columns_responsive = None
+        self.static_rows = self.static_columns = False
         self.taken = set()
         self.next = 0
         self.slaves = []
@@ -193,7 +195,7 @@ class CssGrid:
         self.nrows = self.ncolumns = 0
         self.row_gap = self.column_gap = 0
         self.align_items = self.justify_items = 'center'
-        self.align_content = self.justify_content = 'center'
+        self.align_content = self.justify_content = 'start'
         self.grid_auto_columns = self.grid_auto_rows = '0px'
         self.grid_auto_flow = 'row'
         self.rows_responsive = self.columns_responsive = None
@@ -214,12 +216,14 @@ class CssGrid:
                 continue
             match attr_key:
                 case 'grid-template-rows':
+                    self.static_rows = self.static_rows or 'fr' not in template or '%' not in template
                     drow, self.row_tracks, responsive = answ
                     self.row_names.update(drow)
                     if responsive:
                         responsive, self.grid_auto_rows = responsive
                     self.rows_responsive = responsive
                 case 'grid-template-columns':
+                    self.static_columns = self.static_columns or 'fr' not in template or '%' not in template
                     dcol, self.column_tracks, responsive = answ
                     self.col_names.update(dcol)
                     if responsive:
@@ -253,11 +257,13 @@ class CssGrid:
                 case 'place-content':
                     self.align_content, self.justify_content = answ
                 case 'grid-auto-columns':
+                    self.static_columns = self.static_columns or 'fr' not in template or '%' not in template
                     self.grid_auto_columns = answ
                 case 'grid-auto-rows':
-                    self.grid_auto_rows = answ
+                    self.static_rows = self.static_rows or 'fr' not in template or '%' not in template
+                    self.grid_auto_rows = template.strip()
                 case 'grid-auto-flow':
-                    self.grid_auto_flow = answ
+                    self.grid_auto_flow = template.strip()
 
         self.nrows = self.nrows_explicit = len(self.row_tracks)
         self.ncolumns = self.ncolumns_explicit = len(self.column_tracks)
@@ -293,29 +299,39 @@ class CssGrid:
                     params.append((track_ids, dict(weight=10)))
 
             # Ajuste de gaps
-            gaps = getattr(self, f'{track_name}_gap')
-            if gaps:
-                ntracks = getattr(self, f'n{track_name}s') + 1
-                if isinstance(gaps, int):
-                    # Se excluyen la línea 0 y la línea -1
-                    track_ids = list(range(ntracks))[1:-1]
-                    if track_ids:
-                        params.append((track_ids, dict(pad=gaps // 2)))
-                else:
-                    assert isinstance(gaps, list)
-                    ctracks = collections.defaultdict(list)
-                    [ctracks[key].append(k) for k, key in enumerate(gaps)]
-                    for gap, track_ids in ctracks.items():
-                        try:
-                            track_ids.pop(ntracks - 1)
-                        except:
-                            pass
-                        if track_ids:
-                            params.append((track_ids, dict(pad=gap // 2)))
+            # gaps = getattr(self, f'{track_name}_gap')
+            # if gaps:
+            #     ntracks = getattr(self, f'n{track_name}s') + 1
+            #     if isinstance(gaps, int):
+            #         # Se excluyen la línea 0 y la línea -1
+            #         track_ids = list(range(ntracks))[1:-1]
+            #         if track_ids:
+            #             params.append((track_ids, dict(pad=gaps // 2)))
+            #     else:
+            #         assert isinstance(gaps, list)
+            #         ctracks = collections.defaultdict(list)
+            #         [ctracks[key].append(k) for k, key in enumerate(gaps)]
+            #         for gap, track_ids in ctracks.items():
+            #             try:
+            #                 track_ids.pop(ntracks - 1)
+            #             except:
+            #                 pass
+            #             if track_ids:
+            #                 params.append((track_ids, dict(pad=gap // 2)))
 
+        pos = ['start', 'end', 'center', 'stretch']
         row_place, column_place = self.justify_content, self.align_content
-        sticky = self.get_equiv_placement(row_place, column_place) or 'center'
-        answ['grid_anchor'] = [(sticky, {})]
+        if row_place == column_place == 'center':
+            sticky = ''
+        elif row_place in pos and column_place in pos:
+            sticky = self.get_equiv_placement(row_place, column_place)
+        elif row_place in pos and column_place not in pos:
+            sticky = self.get_equiv_placement(row_place, 'center')
+        elif row_place not in pos and column_place in pos:
+            sticky = self.get_equiv_placement('center', column_place)
+        elif row_place not in pos and column_place not in pos:
+            sticky = ''
+        answ['grid_anchor'] = [(sticky or 'center', {})]
         return answ
 
     def config_master(self, master):
@@ -358,6 +374,7 @@ class CssGrid:
             ('grid-row-gap', 'pady'),
             ('grid-column-gap', 'padx'),
         ]
+
         for name, item_attrs in self.get_process_item_attribs():
             wdg = master.nametowidget(name)
             # Se traduce la n-pos a su posición (x, y) de acuerdo al dato final de nrows y ncolumns
@@ -366,10 +383,83 @@ class CssGrid:
 
             # Se transforman los attributos a sus equivalentes en tkinter
             item_attrs = {key: item_attrs.pop(ckey) for ckey, key in equiv if item_attrs.get(ckey, None) is not None}
+            for key in {'row', 'column'}:
+                item_attrs[key] = 2 * item_attrs[key] + 1
+            for key in {'rowspan', 'columnspan'}:
+                item_attrs[key] = 2 * item_attrs[key] - 1
             # Se mapea el widget en el master
             wdg.grid(**item_attrs)
 
-        tkinter_params = self.tkinter_master_params()
+        nrows, ncolumns = 2 * self.nrows + 1, 2 * self.ncolumns + 1
+        h, w = self.row_gap, self.column_gap
+        row_ids, col_ids = range(0, nrows, 2)[1:-1], range(0, ncolumns, 2)[1:-1]
+        row_place, column_place = self.justify_content, self.align_content
+
+        cases = ['space-around', 'space-between', 'space-evenly']
+        gaps = {}
+        if self.static_rows:
+            data = []
+            try:
+                n = cases.index(column_place)
+                if n in (1, 2):
+                    data.append((list(row_ids), dict(minsize=h, weight=1)))
+                    if n == 2:
+                        data.append(([0, 2 * self.nrows], dict(minsize=h, weight=1)))
+                else:
+                    data.append((list(row_ids), dict(minsize=h, weight=2)))
+                    data.append(([0, 2 * self.nrows], dict(minsize=h, weight=1)))
+                gaps['rowconfigure'] = data
+            except:
+                pass
+        else:
+            gaps['rowconfigure'] = [(list(row_ids), dict(minsize=h, weight=0))]
+
+        if self.static_columns:
+            data = []
+            try:
+                n = cases.index(row_place)
+                if n in (1, 2):
+                    data.append((list(col_ids), dict(minsize=w, weight=1)))
+                    if n == 2:
+                        data.append(([0, 2 * self.ncolumns], dict(minsize=w, weight=1)))
+                else:
+                    data.append((list(col_ids), dict(minsize=w, weight=2)))
+                    data.append(([0, 2 * self.ncolumns], dict(minsize=w, weight=1)))
+                gaps['columnconfigure'] = data
+            except:
+                pass
+        else:
+            gaps['columnconfigure'] = [(list(col_ids), dict(minsize=w, weight=0))]
+
+        if DEBUG:
+            # Se dibuja la grilla
+            fval = (2 * min(self.nrows, self.ncolumns) - 2) if all([h, w]) else 1
+            it = itertools.zip_longest(row_ids, col_ids, fillvalue=fval)
+            for row in row_ids:
+                frm = tkinter.Frame(master, height=1, width=1, bg='black')
+                frm.grid(row=row, column=0, columnspan=ncolumns, sticky='ew')
+                frm.lower()  # Con esto se manda estos al fondo del stacking order
+            for col in col_ids:
+                frm = tkinter.Frame(master, height=1, width=1, bg='black')
+                frm.grid(row=0, column=col, rowspan=nrows, sticky='ns')
+                frm.lower()  # Con esto se manda estos al fondo del stacking order
+            # for row, col in it:
+            #     frm = tkinter.Frame(master, height=(h or 1), width=(w or 1), bg='black')
+            #     frm.grid(row=0*row, column=col, rowspan=nrows, sticky='nsew')
+            #     frm.lower()             # Con esto se manda estos al fondo del stacking order
+
+        tkinter_params = {}
+        track_params = self.tkinter_master_params()
+        for key in list(track_params.keys()):
+            if key not in ('rowconfigure', 'columnconfigure'):
+                tkinter_params[key] = track_params.pop(key)
+                continue
+            data = gaps.pop(key, [])
+            for track_ids, conf in track_params.pop(key):
+                track_ids = [2 * x + 1 for x in track_ids]
+                data.append((track_ids, conf))
+            tkinter_params[key] = data
+
         for method_name, params in tkinter_params.items():
             method = getattr(master, method_name)
             for arg, kwargs in params:
