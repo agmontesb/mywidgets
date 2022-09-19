@@ -1,3 +1,4 @@
+import bisect
 import collections
 import itertools
 import re
@@ -6,6 +7,7 @@ import tkinter
 import userinterface
 
 DEBUG = True
+
 
 class CssGrid:
 
@@ -216,18 +218,22 @@ class CssGrid:
                 continue
             match attr_key:
                 case 'grid-template-rows':
-                    self.static_rows = self.static_rows or 'fr' not in template or '%' not in template
+                    self.static_rows = self.static_rows or ('fr' not in template and '%' not in template)
                     drow, self.row_tracks, responsive = answ
                     self.row_names.update(drow)
                     if responsive:
-                        responsive, self.grid_auto_rows = responsive
+                        responsive, data = responsive
+                        if responsive in ('auto-fit', 'auto-fill'):
+                            self.grid_auto_rows = data
                     self.rows_responsive = responsive
                 case 'grid-template-columns':
-                    self.static_columns = self.static_columns or 'fr' not in template or '%' not in template
+                    self.static_columns = self.static_columns or ('fr' not in template and '%' not in template)
                     dcol, self.column_tracks, responsive = answ
                     self.col_names.update(dcol)
                     if responsive:
-                        responsive, self.grid_auto_columns = responsive
+                        responsive, data = responsive
+                        if responsive in ('auto-fit', 'auto-fill'):
+                            self.grid_auto_columns = data
                     self.columns_responsive = responsive
                 case 'grid-template-areas':
                     self.areas, drow, dcol = answ
@@ -264,13 +270,11 @@ class CssGrid:
                     self.grid_auto_rows = template.strip()
                 case 'grid-auto-flow':
                     self.grid_auto_flow = template.strip()
-                case 'z-index':
-                    self.grid_auto_flow = int(template.strip())
 
         self.nrows = self.nrows_explicit = len(self.row_tracks)
         self.ncolumns = self.ncolumns_explicit = len(self.column_tracks)
 
-    def tkinter_master_params(self):
+    def tkinter_master_params(self, row_span, col_span):
         answ = {}
         track_names = ('row', 'column')
         for track_name in track_names:
@@ -279,8 +283,10 @@ class CssGrid:
             [ctracks[key].append(k) for k, key in enumerate(tracks)]
 
             method = f'{track_name}configure'
-            answ[method] = params = []
-
+            params_base = []
+            minmax = {}
+            tot_min_size = 0
+            free_tracks = 0
             # Ajuste de minsize y weight
             to_process = list(ctracks.items())
             while to_process:
@@ -288,38 +294,59 @@ class CssGrid:
                 if key == 'auto':
                     key = '1fr'
                 if key.endswith('px'):
-                    params.append((track_ids, dict(minsize=int(key[:-2]), weight=0)))
+                    min_size = int(key[:-2])
+                    params_base.append((track_ids, dict(minsize=min_size, weight=0)))
+                    tot_min_size += min_size
                 elif key.endswith('fr') or key.endswith('%'):
                     key = key.rstrip('fr%')
-                    params.append((track_ids, dict(weight=int(key))))
+                    params_base.append((track_ids, dict(weight=int(key))))
+                    free_tracks += 1
                 elif key.startswith('minmax(') and key.endswith(')'):
                     min_size, max_size = [x.strip() for x in key[7:-1].split(',')]
-                    min_size = min_size.strip('px')
-                    max_size = max_size.strip('%').strip('fr')
-                    params.append((track_ids, dict(minsize=int(min_size), weight=int(max_size))))
+                    min_size = int(min_size.strip('px'))
+                    if max_size.endswith('fr') or max_size.endswith('%'):
+                        max_size = int(max_size.strip('%').strip('fr'))
+                        tot_min_size += min_size
+                        free_tracks += 1
+                    else:
+                        minmax[tuple(track_ids)] = (min_size, int(max_size.strip('px')))
+                        continue
+                    params_base.append((track_ids, dict(minsize=min_size, weight=max_size)))
                 else:
-                    params.append((track_ids, dict(weight=10)))
+                    params_base.append((track_ids, dict(weight=10)))
+                    free_tracks += 1
 
-            # Ajuste de gaps
-            # gaps = getattr(self, f'{track_name}_gap')
-            # if gaps:
-            #     ntracks = getattr(self, f'n{track_name}s') + 1
-            #     if isinstance(gaps, int):
-            #         # Se excluyen la línea 0 y la línea -1
-            #         track_ids = list(range(ntracks))[1:-1]
-            #         if track_ids:
-            #             params.append((track_ids, dict(pad=gaps // 2)))
-            #     else:
-            #         assert isinstance(gaps, list)
-            #         ctracks = collections.defaultdict(list)
-            #         [ctracks[key].append(k) for k, key in enumerate(gaps)]
-            #         for gap, track_ids in ctracks.items():
-            #             try:
-            #                 track_ids.pop(ntracks - 1)
-            #             except:
-            #                 pass
-            #             if track_ids:
-            #                 params.append((track_ids, dict(pad=gap // 2)))
+            if minmax:
+                setattr(self, f'{track_name}s_responsive', 'minmax')
+                conf = []
+                delta_size = 0
+                params_minmax = []
+                max_items = []
+                for track_ids, (tmin, tmax) in minmax.items():
+                    params_minmax.append((track_ids, dict(minsize=tmin, weight=1)))
+                    delta_size += tmin * len(track_ids)
+                    max_items.append((tmax, track_ids, tmin))
+                conf.append((tot_min_size + delta_size, params_base + params_minmax))
+                max_items.sort()
+
+                total_frs = free_tracks + sum([len(x[1]) for x in max_items])
+                for k, (tmax, track_ids, tmin) in enumerate(max_items):
+                    params_minmax = []
+                    delta_size = free_tracks * tmax
+                    for tmax, track_ids, _ in max_items[:k + 1]:
+                        delta_size += tmax * len(track_ids)
+                        params_minmax.append((track_ids, dict(minsize=tmax, weight=0)))
+                    for _, track_ids, tmin in max_items[k + 1:]:
+                        delta_size += tmax * len(track_ids)
+                        params_minmax.append((track_ids, dict(minsize=tmin, weight=1)))
+                    conf.append((min_size + delta_size, params_base + params_minmax))
+                    total_frs -= len(track_ids)
+                size_lim, params = zip(*conf)
+                n = bisect.bisect_left(size_lim, (row_span, col_span)[track_name == 'column'])
+                n = max(0, n - 1)
+                answ[method] = params[n]
+            else:
+                answ[method] = params_base
 
         pos = ['start', 'end', 'center', 'stretch']
         row_place, column_place = self.justify_content, self.align_content
@@ -348,25 +375,31 @@ class CssGrid:
         master = event.widget
         w, h = event.width, event.height
         nrows, ncols = 0, 0
-        if self.rows_responsive:
+        bflag = False
+        if self.rows_responsive in ('auto-fit', 'auto-fill'):
             base = int(self.grid_auto_rows.strip(' px')) + self.column_gap
             self.nrows = nrows = h // base
             self.row_tracks = nrows * [self.grid_auto_rows]
+            bflag = True
 
-        if self.columns_responsive:
+        if self.columns_responsive in ('auto-fit', 'auto-fill'):
             base = int(self.grid_auto_columns.strip(' px')) + self.row_gap
             self.ncolumns = ncols = w // base
             self.column_tracks = ncols * [self.grid_auto_rows]
+            bflag = True
 
-        if (nrows, ncols) != self.memory:
+        flag_minmax = 'minmax' in (self.columns_responsive, self.rows_responsive)
+        if (bflag and (nrows, ncols) != self.memory) or flag_minmax:
             [
                 master.nametowidget(name).grid_forget()
                 for name, _ in self.slaves
             ]
-            self._config_master(master)
+            self.taken = set()
+            self.next = 0
+            self._config_master(master, w, h)
             self.memory = nrows, ncols
 
-    def _config_master(self, master):
+    def _config_master(self, master, width=0, height=0):
         equiv = [
             ('grid-column-start', 'column'),
             ('grid-row-start', 'row'),
@@ -375,6 +408,7 @@ class CssGrid:
             ('sticky-self', 'sticky'),
             ('grid-row-gap', 'pady'),
             ('grid-column-gap', 'padx'),
+            ('in', 'in_'),
         ]
         order = []
         for name, item_attrs in self.get_process_item_attribs():
@@ -410,38 +444,34 @@ class CssGrid:
 
         cases = ['space-around', 'space-between', 'space-evenly']
         gaps = {}
-        if self.static_rows:
+        if column_place in cases and self.static_rows:
             data = []
-            try:
-                n = cases.index(column_place)
-                if n in (1, 2):
-                    data.append((list(row_ids), dict(minsize=h, weight=1)))
-                    if n == 2:
-                        data.append(([0, 2 * self.nrows], dict(minsize=h, weight=1)))
-                else:
-                    data.append((list(row_ids), dict(minsize=h, weight=2)))
+            n = cases.index(column_place)
+            if n in (1, 2):
+                data.append((list(row_ids), dict(minsize=h, weight=1)))
+                if n == 2:
                     data.append(([0, 2 * self.nrows], dict(minsize=h, weight=1)))
-                gaps['rowconfigure'] = data
-            except:
-                pass
+            else:
+                data.append((list(row_ids), dict(minsize=h, weight=2)))
+                data.append(([0, 2 * self.nrows], dict(minsize=h, weight=1)))
+            gaps['rowconfigure'] = data
         else:
+            width -= (self.nrows - 1) * h
             gaps['rowconfigure'] = [(list(row_ids), dict(minsize=h, weight=0))]
 
-        if self.static_columns:
+        if row_place in cases and self.static_columns:
             data = []
-            try:
-                n = cases.index(row_place)
-                if n in (1, 2):
-                    data.append((list(col_ids), dict(minsize=w, weight=1)))
-                    if n == 2:
-                        data.append(([0, 2 * self.ncolumns], dict(minsize=w, weight=1)))
-                else:
-                    data.append((list(col_ids), dict(minsize=w, weight=2)))
+            n = cases.index(row_place)
+            if n in (1, 2):
+                data.append((list(col_ids), dict(minsize=w, weight=1)))
+                if n == 2:
                     data.append(([0, 2 * self.ncolumns], dict(minsize=w, weight=1)))
-                gaps['columnconfigure'] = data
-            except:
-                pass
+            else:
+                data.append((list(col_ids), dict(minsize=w, weight=2)))
+                data.append(([0, 2 * self.ncolumns], dict(minsize=w, weight=1)))
+            gaps['columnconfigure'] = data
         else:
+            height -= (self.ncolumns - 1) * w
             gaps['columnconfigure'] = [(list(col_ids), dict(minsize=w, weight=0))]
 
         if DEBUG:
@@ -456,19 +486,16 @@ class CssGrid:
                 frm = tkinter.Frame(master, name=f'col_{col - 1}', height=1, width=1, bg='black')
                 frm.grid(row=0, column=col, rowspan=nrows, sticky='ns')
                 frm.lower()  # Con esto se manda estos al fondo del stacking order
-            # for row, col in it:
-            #     frm = tkinter.Frame(master, height=(h or 1), width=(w or 1), bg='black')
-            #     frm.grid(row=0*row, column=col, rowspan=nrows, sticky='nsew')
-            #     frm.lower()             # Con esto se manda estos al fondo del stacking order
 
         tkinter_params = {}
-        track_params = self.tkinter_master_params()
+        track_params = self.tkinter_master_params(height, width)
         for key in list(track_params.keys()):
             if key not in ('rowconfigure', 'columnconfigure'):
                 tkinter_params[key] = track_params.pop(key)
                 continue
+            track_data = track_params.pop(key)
             data = gaps.pop(key, [])
-            for track_ids, conf in track_params.pop(key):
+            for track_ids, conf in track_data:
                 track_ids = [2 * x + 1 for x in track_ids]
                 data.append((track_ids, conf))
             tkinter_params[key] = data
@@ -492,11 +519,15 @@ class CssGrid:
             while to_process:
                 key, template = to_process.pop()
                 case, val = self.parse_attr(key, template.strip())
-                _, track, *suffix = key.split('-')
-                suffix = '' if not suffix else suffix[0]
+                if case == 'to_store':
+                    grid_params[key] = val
+                    continue
                 if case == 'to_process':
                     to_process.extend(val)
-                elif track == 'area':
+                    continue
+                _, track, *suffix = key.split('-')
+                suffix = '' if not suffix else suffix[0]
+                if track == 'area':
                     grid_params.update(self.areas[val])
                 elif track == 'self':
                     grid_params[key] = val if val != 'auto' else 'center'
@@ -682,6 +713,9 @@ class CssGrid:
                     case rep, what if rep in ('auto-fit', 'auto-fill'):
                         responsive = (rep, what.strip())
                         wtemplate = ''      # acá es posible definir columnas iniciales, para despúes
+            elif m := re.search(r'minmax\(\d+px,\s*\d+px\)', template):
+                responsive = ('minmax', m.group())
+                pass
 
             # Agregamos nombre de inicio y fin de columnas
             wtemplate = f'[@]{wtemplate}[@]'
@@ -773,6 +807,10 @@ class CssGrid:
             #    template.isascii():
             key = 'span_name' if bSpan else 'item_name'
             return key, template.strip()
+
+    @staticmethod
+    def to_store(template):
+        return 'to_store', template.strip()
 
     @staticmethod
     def grid_area(template):
@@ -898,6 +936,7 @@ class CssGrid:
         'justify-self': grid_child,
         'place-self': lambda x: CssGrid.place_items(x, ('align-self', 'justify-self')),
         'z-index': grid_child,
+        'in': to_store,
     }
 
 
@@ -969,7 +1008,7 @@ def main():
     class TestCssGrid(tk.Tk):
         def __init__(self):
             super().__init__()
-            self.geometry('300x300')
+            self.geometry('500x500')
             self.memory = (0, 0)
             self.packer = {
                 'h=w': dict(anchor='news'),

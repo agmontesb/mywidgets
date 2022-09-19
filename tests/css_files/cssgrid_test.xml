@@ -4,20 +4,21 @@
     <extra id="style">
         #grid {
           display: grid;
-          grid-template-columns: repeat(8, 1fr);
-          grid-template-rows: repeat(8, 1fr);
+          grid-template-columns: 50px minmax(50px, 300px) minmax(50px, 1fr);
+          grid-template-rows: 50px 50px 50px;
           place-items: stretch;
+          gap: 10px 10px;
         }
-        #a { grid-column: 1 / span 8; grid-row: -4 / span 3; }
+/*        #a { grid-column: 1 / span 8; grid-row: -4 / span 3; }
         #b { grid-column: 1 / span 4; grid-row: 1 / span 4; z-index: 10; }
         #c { grid-column: 4 / span 5; grid-row: 1 / span 3; }
         #d { grid-column: -4 / span 3; grid-row: -5 / span 3; }
         #e { grid-column: 3 / span 4; grid-row: 3 / span 4;
-             z-index: 5; }
+             z-index: 5; } */
     </extra>
     <category label="Category uno">
         <frame name="grid" side="top" fill="both" expand="yes">
-            <label name="a" text="A" bg="gray" height="0"/>
+            <label name="a" text="A" bg="gray"/>
             <label name="b" text="B"  bg="blue"/>
             <label name="c" text="C"  bg="yellow"/>
             <label name="d" text="D"  bg="green"/>
