@@ -2,8 +2,8 @@
 <settings>
     <category label="Category uno">
         <labelframe text="Widgets Parameters" labelanchor="ne" fill="both" expand="true">
-            <button text="Boton" side="top" />
-            <label text="Label"  side="top" />
+            <button text="Boton" side="top" bg="red"/>
+            <label text="Label"  side="top" bg="light green"/>
         </labelframe>
     </category>
 </settings>

@@ -77,6 +77,8 @@ class BaseGeomngr(Protocol):
         ]
 
     def register_item(self, widget, item_attrs: dict) -> None:
+        if item_attrs.get('in'):
+            item_attrs['in_'] = item_attrs.pop('in')
         self.slaves.append((str(widget), item_attrs))
 
 
@@ -456,8 +458,8 @@ def widgetFactory(master: tk.Tk | tk.Widget,
                 parent_name = geomngr_opt.pop(ref_label).lstrip('.')
                 parent_path = widget.winfo_parent()
                 geomngr_opt[ref_label] = '.'.join((parent_path if parent_path != '.' else '', parent_name))
-            if 'in' in ref_labels:
-                geomngr_opt['in_'] = geomngr_opt.pop('in')
+            # if 'in' in ref_labels:
+            #     geomngr_opt['in_'] = geomngr_opt.pop('in')
 
         if is_widget and 'visible' not in states_eq:
             master_geomngr.register_item(widget, geomngr_opt)

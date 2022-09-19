@@ -1,3 +1,10 @@
+v0.1.0
+- Primera versión de la herramienta UiMonitor que permite cargar un layout y monitorea 
+todos los archivos asociados (archivos css, menu, etc) para su despliegue de tal manera que 
+modificando uno de estos archivos se vuelve a cargar el layout mostrando el efecto de las 
+modificaciones efectuadas.
+- Problemas para recargar layout que utilicen variables.
+
 v0.0.3
 - Funcionando responsive minmax que permite definir valores para cualquier track de la 
 forma 'minmax(min, max), mediante el cual el track tiene un ancho de 'min' y puede crecer hasta 'max'.
