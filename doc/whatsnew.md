@@ -1,3 +1,7 @@
+v0.1.1
+- Operativo la opción repeat(auto-fit, exp) y repeat(auto-fill, exp) en 
+grid-template-columns/grid-template-rows.
+
 v0.1.0
 - Primera versión de la herramienta UiMonitor que permite cargar un layout y monitorea 
 todos los archivos asociados (archivos css, menu, etc) para su despliegue de tal manera que 

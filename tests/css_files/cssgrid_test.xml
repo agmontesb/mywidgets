@@ -2,29 +2,25 @@
 <settings>
     <?xml-stylesheet type="text/css" href="#style"?>
     <extra id="style">
-        #grid {
+        .grid {
           display: grid;
-          grid-template-columns: 50px minmax(50px, 300px) minmax(50px, 1fr);
-          grid-template-rows: 50px 50px 50px;
-          place-items: stretch;
-          gap: 10px 10px;
         }
-/*        #a { grid-column: 1 / span 8; grid-row: -4 / span 3; }
-        #b { grid-column: 1 / span 4; grid-row: 1 / span 4; z-index: 10; }
-        #c { grid-column: 4 / span 5; grid-row: 1 / span 3; }
-        #d { grid-column: -4 / span 3; grid-row: -5 / span 3; }
-        #e { grid-column: 3 / span 4; grid-row: 3 / span 4;
-             z-index: 5; } */
+        .fill {
+          grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+        }
+        .fit {
+          grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+        }
     </extra>
     <category label="Category uno">
-        <frame name="grid" side="top" fill="both" expand="yes">
+        <frame class="grid fill" side="top" fill="x">
             <label name="a" text="A" bg="gray"/>
             <label name="b" text="B"  bg="blue"/>
             <label name="c" text="C"  bg="yellow"/>
             <label name="d" text="D"  bg="green"/>
             <label name="e" text="E" bg="red"/>
-<!--            <label text="col1" bg="gray"/>-->
-<!--            <label text="col2" bg="gray"/>-->
+            <label text="col1" bg="gray"/>
+            <label text="col2" bg="gray"/>
 <!--            <label text="col3" bg="gray"/>-->
 <!--            <label text="col4" bg="gray"/>-->
 <!--            <label text="col1" bg="gray"/>-->
@@ -35,6 +31,15 @@
 <!--            <label text="col2" bg="gray"/>-->
 <!--            <label text="col3" bg="gray"/>-->
 <!--            <label text="col4" bg="gray"/>-->
+        </frame>
+        <frame class="grid fit" side="bottom" fill="x">
+            <label name="a" text="A" bg="gray"/>
+            <label name="b" text="B"  bg="blue"/>
+            <label name="c" text="C"  bg="yellow"/>
+            <label name="d" text="D"  bg="green"/>
+            <label name="e" text="E" bg="red"/>
+            <label text="col1" bg="gray"/>
+            <label text="col2" bg="gray"/>
         </frame>
     </category>
 </settings>
