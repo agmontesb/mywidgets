@@ -3,6 +3,7 @@ import collections
 import itertools
 import re
 import tkinter
+from typing import Literal
 
 import userinterface
 
@@ -23,7 +24,8 @@ class CssGrid:
         self.align_content = self.justify_content = 'start'
         self.grid_auto_columns = self.grid_auto_rows = '0px'
         self.grid_auto_flow = 'row'
-        self.rows_responsive = self.columns_responsive = None
+        self.rows_responsive = {}
+        self.columns_responsive = {}
         self.taken = set()
         self.next = 0
         self.slaves = []
@@ -179,7 +181,8 @@ class CssGrid:
         self.align_content = self.justify_content = 'start'
         self.grid_auto_columns = self.grid_auto_rows = '0px'
         self.grid_auto_flow = 'row'
-        self.rows_responsive = self.columns_responsive = None
+        self.rows_responsive = {}
+        self.columns_responsive = {}
         self.taken = set()
         self.next = 0
         self.slaves = []
@@ -200,18 +203,24 @@ class CssGrid:
                     drow, self.row_tracks, responsive = answ
                     self.row_names.update(drow)
                     if responsive:
-                        responsive, data = responsive
-                        if responsive in ('auto-fit', 'auto-fill'):
+                        key, data = responsive
+                        if key in ('auto-fit', 'auto-fill'):
                             self.grid_auto_rows = data
-                    self.rows_responsive = responsive
+                            self.rows_responsive['auto'] = lambda x, y=key: y
+                        else:
+                            # De esta forma se obliga a calcular la función de entrada
+                            self.rows_responsive[key] = lambda x: id(x)
                 case 'grid-template-columns':
                     dcol, self.column_tracks, responsive = answ
                     self.col_names.update(dcol)
                     if responsive:
-                        responsive, data = responsive
-                        if responsive in ('auto-fit', 'auto-fill'):
+                        key, data = responsive
+                        if key in ('auto-fit', 'auto-fill'):
                             self.grid_auto_columns = data
-                    self.columns_responsive = responsive
+                            self.columns_responsive['auto'] = lambda x, y=key: y
+                        else:
+                            # De esta forma se obliga a calcular la función de entrada
+                            self.columns_responsive[key] = lambda x: id(x)
                 case 'grid-template-areas':
                     self.areas, drow, dcol = answ
                     self.row_names.update(drow)
@@ -266,60 +275,63 @@ class CssGrid:
             to_process = list(ctracks.items())
             while to_process:
                 key, track_ids = to_process.pop()
+                ntracks = len(track_ids)
                 if key == 'auto':
                     key = '1fr'
                 if key.endswith('px'):
                     min_size = int(key[:-2])
                     params_base.append((track_ids, dict(minsize=min_size, weight=0)))
-                    tot_min_size += min_size
+                    tot_min_size += min_size * ntracks
                 elif key.endswith('fr') or key.endswith('%'):
                     key = key.rstrip('fr%')
-                    params_base.append((track_ids, dict(weight=int(key))))
-                    free_tracks += 1
+                    params_base.append((track_ids, dict(minsize=0, weight=int(key))))
+                    free_tracks += ntracks
                 elif key.startswith('minmax(') and key.endswith(')'):
                     min_size, max_size = [x.strip() for x in key[7:-1].split(',')]
                     min_size = int(min_size.strip('px'))
-                    if max_size.endswith('fr') or max_size.endswith('%'):
-                        max_size = int(max_size.strip('%').strip('fr'))
-                        tot_min_size += min_size
-                        free_tracks += 1
-                    else:
+                    if max_size.endswith('px'):
+                        # Se trata de un track acotado por abajo (min_size) y arriba (max_size)
                         minmax[tuple(track_ids)] = (min_size, int(max_size.strip('px')))
-                        continue
-                    params_base.append((track_ids, dict(minsize=min_size, weight=max_size)))
+                    else:   # max_size.endswith('fr') or max_size.endswith('%'):
+                        max_size = int(max_size.strip('%').strip('fr'))
+                        tot_min_size += min_size * ntracks
+                        free_tracks += ntracks
+                        params_base.append((track_ids, dict(minsize=min_size, weight=max_size)))
                 else:
                     params_base.append((track_ids, dict(weight=10)))
                     free_tracks += 1
 
             if minmax:
-                setattr(self, f'{track_name}s_responsive', 'minmax')
-                conf = []
-                delta_size = 0
-                params_minmax = []
-                max_items = []
-                for track_ids, (tmin, tmax) in minmax.items():
-                    params_minmax.append((track_ids, dict(minsize=tmin, weight=1)))
-                    delta_size += tmin * len(track_ids)
-                    max_items.append((tmax, track_ids, tmin))
-                conf.append((tot_min_size + delta_size, params_base + params_minmax))
+                max_items = [(tmax, tmin, track_ids) for track_ids, (tmin, tmax) in minmax.items()]
                 max_items.sort()
-
-                total_frs = free_tracks + sum([len(x[1]) for x in max_items])
-                for k, (tmax, track_ids, tmin) in enumerate(max_items):
+                conf = []
+                tmax = 0
+                for k in range(-1, len(max_items)):
                     params_minmax = []
-                    delta_size = free_tracks * tmax
-                    for tmax, track_ids, _ in max_items[:k + 1]:
+                    delta_size = 0
+                    for tmax, _, track_ids in max_items[:k + 1]:
                         delta_size += tmax * len(track_ids)
                         params_minmax.append((track_ids, dict(minsize=tmax, weight=0)))
-                    for _, track_ids, tmin in max_items[k + 1:]:
+                    delta_size += free_tracks * tmax
+                    for _, tmin, track_ids in max_items[k + 1:]:
                         delta_size += tmax * len(track_ids)
                         params_minmax.append((track_ids, dict(minsize=tmin, weight=1)))
-                    conf.append((min_size + delta_size, params_base + params_minmax))
-                    total_frs -= len(track_ids)
+                    conf.append((tot_min_size + delta_size, params_base + params_minmax))
                 size_lim, params = zip(*conf)
-                n = bisect.bisect_left(size_lim, (row_span, col_span)[track_name == 'column'])
-                n = max(0, n - 1)
-                answ[method] = params[n]
+
+                fnc = lambda x, keys=size_lim, confs=params: confs[max(0, bisect.bisect_left(keys, x) - 1)]
+                responsive = getattr(self, f'{track_name}s_responsive')
+                responsive['minmax'] = fnc
+
+                x = (row_span, col_span)[track_name == 'column']
+                answ[method] = dmy = fnc(x)
+                track_template = list(
+                    y for _, y in sorted(
+                        (x, f'{conf["weight"]}fr' if conf["weight"] else f'{conf["minsize"]}px')
+                        for it, conf in dmy for x in it
+                    )
+                )
+                setattr(self, f'{track_name}_tracks', track_template)
             else:
                 answ[method] = params_base
 
@@ -347,63 +359,114 @@ class CssGrid:
     def resize(self, event, name=None):
         if str(event.widget) != name:
             return
+
+        def get_responsive_min_size(track_name: Literal['row', 'column']) -> int:
+            grid_auto_tracks = getattr(self, f'grid_auto_{track_name}s')
+            if m := re.match(r'minmax\((.+?),.+?\)', grid_auto_tracks):
+                min_size = m.group(1)
+            else:
+                min_size = grid_auto_tracks
+            base = int(min_size.strip(' px')) + self.column_gap
+            return base
+
+        def nRespTracks(track_name: Literal['row', 'column'], track_min_size: int, auto_type: Literal['auto-fill', 'auto-fit'], length: int) -> int:
+            '''Calcula el númerod e tracks en una dimensión para una longitud dada.'''
+            if not track_min_size:
+                return 0
+            ntracks = length // track_min_size
+            if auto_type == 'auto-fit':
+                isTrackAutoFlow = self.grid_auto_flow == track_name
+                if isTrackAutoFlow:
+                    attr = ('ncolumns', 'nrows')[track_name == 'column']
+                    base = getattr(self, attr)
+                    ntracks = self.slaves // base + (1 if self.slaves % base else 0)
+                else:
+                    ntracks = min(ntracks, len(self.slaves))
+            return ntracks
+
         master = event.widget
 
-        # Se resetea la grilla anterior para que se inicie siempre como en el principio
-        ncolumns, nrows = master.grid_size()
-        if ncolumns:
-            master.columnconfigure(list(range(ncolumns)), minsize=0, weight=0)
-        if nrows:
-            master.rowconfigure(list(range(nrows)), minsize=0, weight=0)
-
+        W, H = self.memory
         w, h = event.width, event.height
-        bflag = False
-        isRowAutoFlow = self.grid_auto_flow == 'row'
-        if self.rows_responsive in ('auto-fit', 'auto-fill'):
-            if m := re.match(r'minmax\((.+?),.+?\)', self.grid_auto_rows):
-                min_size = m.group(1)
-            else:
-                min_size = self.grid_auto_rows
-            base = int(min_size.strip(' px')) + self.column_gap
-            nrows = h // base
-            if self.rows_responsive == 'auto-fit':
-                if isRowAutoFlow:
-                    nrows = self.slaves // self.ncolumns + (1 if self.slaves % self.ncolumns else 0)
-                else:
-                    nrows = min(nrows, len(self.slaves))
-            self.nrows = nrows
-            self.row_tracks = nrows * [self.grid_auto_rows]
-            bflag = True
 
-        if self.columns_responsive in ('auto-fit', 'auto-fill'):
-            if m := re.match(r'minmax\((.+?),.+?\)', self.grid_auto_columns):
-                min_size = m.group(1)
-            else:
-                min_size = self.grid_auto_columns
-            base = int(min_size.strip(' px')) + self.row_gap
-            ncols = w // base
-            if self.columns_responsive == 'auto-fit':
-                if not isRowAutoFlow:
-                    ncols = self.slaves // self.nrows + (1 if self.slaves % self.nrows else 0)
-                else:
-                    ncols = min(ncols, len(self.slaves))
-            self.ncolumns = ncols
-            self.column_tracks = ncols * [self.grid_auto_columns]
-            bflag = True
+        bRowResponsive = False
+        if fnc := self.rows_responsive.get('auto'):
+            bRowResponsive = True
+            if self.row_tracks:
+                bRowResponsive = fnc(H) != fnc(h)
 
-        # flag_minmax = 'minmax' in (self.columns_responsive, self.rows_responsive)
-        # if bflag or flag_minmax:
+        bColResponsive = False
+        if fnc := self.columns_responsive.get('auto'):
+            bColResponsive = True
+            if self.column_tracks:
+                bColResponsive = fnc(W) != fnc(w)
 
-        # Se elimina la grilla anterior si la hubiera.
-        [x.destroy() for x in master.grid_slaves() if x.winfo_name()[:4] in ('row_', 'col_')]
-        # Se elimina el mapeo de widgets asociados al grid container
-        [
-            wdg.grid_forget()
-            for wdg in master.grid_slaves()
-        ]
-        # Se procede a mapear nuevamente los widgets en el grid container
-        self._config_master(master, w, h)
-        self.memory = w, h
+        if bRowResponsive:
+            fnc = self.rows_responsive.get('auto')
+            if not self.row_tracks:
+                auto_type = fnc('row')
+                min_size = get_responsive_min_size('row')
+                fnc = lambda x: nRespTracks('row', min_size, auto_type, x)
+                self.rows_responsive['auto'] = fnc
+            self.nrows = fnc(h)
+            self.row_tracks = self.nrows * [self.grid_auto_rows]
+
+        if bColResponsive:
+            fnc = self.columns_responsive.get('auto')
+            if not self.column_tracks:
+                auto_type = fnc('column')
+                min_size = get_responsive_min_size('column')
+                fnc = lambda x: nRespTracks('column', min_size, auto_type, x)
+                self.columns_responsive['auto'] = fnc
+            self.ncolumns = fnc(w)
+            self.column_tracks = self.ncolumns * [self.grid_auto_columns]
+
+        # Se resetea la grilla anterior para que se inicie siempre como en el principio
+        grid_ncolumns, grid_nrows = master.grid_size()
+
+        if bColResponsive and grid_ncolumns:
+            master.columnconfigure(list(range(grid_ncolumns)), minsize=0, weight=0)
+
+        if bRowResponsive and grid_nrows:
+            master.rowconfigure(list(range(grid_nrows)), minsize=0, weight=0)
+
+        if not bRowResponsive and (fnc := self.rows_responsive.get('minmax')):
+            bRowResponsive = fnc(h) != fnc(H)
+            if bRowResponsive and all('minmax' not in x for x in self.row_tracks):
+                h -= (self.nrows - 1) * self.row_gap
+                dmy = fnc(h)
+                track_template = list(
+                    y for _, y in sorted(
+                        (x, f'{conf["weight"]}fr' if conf["weight"] else f'{conf["minsize"]}px')
+                        for it, conf in dmy for x in it
+                    )
+                )
+                self.row_tracks = track_template
+
+        if not bColResponsive and (fnc := self.columns_responsive.get('minmax')):
+            bColResponsive = fnc(w) != fnc(W)
+            if bColResponsive and all('minmax' not in x for x in self.column_tracks):
+                w -= (self.ncolumns - 1) * self.column_gap
+                dmy = fnc(w)
+                track_template = list(
+                    y for _, y in sorted(
+                        (x, f'{conf["weight"]}fr' if conf["weight"] else f'{conf["minsize"]}px')
+                        for it, conf in dmy for x in it
+                    )
+                )
+                self.column_tracks = track_template
+
+        if bRowResponsive or bColResponsive:
+            # Se elimina la grilla anterior si la hubiera.
+            [x.destroy() for x in master.grid_slaves() if x.winfo_name()[:4] in ('row_', 'col_')]
+            # Se elimina el mapeo de widgets asociados al grid container
+            [
+                wdg.grid_forget()
+                for wdg in master.grid_slaves()
+            ]
+            # Se procede a mapear nuevamente los widgets en el grid container
+            self._config_master(master, w, h)
+            self.memory = w, h
 
     def _config_master(self, master, width=0, height=0):
         equiv = [
@@ -468,17 +531,18 @@ class CssGrid:
         for track_name, track_place, static_track, size in it:
             ntracks = 2 * getattr(self, f'n{track_name}') + 1
             track_ids = range(0, ntracks, 2)[1:-1]
-            size = (h, w)[track_name == 'columns']
-            key = f'{track_name[:-1]}configure'
-            if track_place in cases and static_track:
-                data = []
-                n = cases.index(column_place)
-                data.append((list(track_ids), dict(minsize=size, weight=2)))
-                weight = (1, 0, 2)[n]
-                data.append(([0, ntracks - 1], dict(minsize=size, weight=weight)))
-                gaps[key] = data
-            else:
-                gaps[key] = [(list(track_ids), dict(minsize=size, weight=0))]
+            if track_ids:
+                size = (h, w)[track_name == 'columns']
+                key = f'{track_name[:-1]}configure'
+                if track_place in cases and static_track:
+                    data = []
+                    n = cases.index(column_place)
+                    data.append((list(track_ids), dict(minsize=size, weight=2)))
+                    weight = (1, 0, 2)[n]
+                    data.append(([0, ntracks - 1], dict(minsize=size, weight=weight)))
+                    gaps[key] = data
+                else:
+                    gaps[key] = [(list(track_ids), dict(minsize=size, weight=0))]
 
         if DEBUG:
             for row in range(0, nrows, 2):
@@ -705,7 +769,7 @@ class CssGrid:
         if template != 'none':
             # Reemplazamos las macros dentro del template
             wtemplate = template
-            responsive = None
+            responsive = ''
             if m := re.search(r'repeat\(([^,]+?),(.+)\)(?=\s|$)', template):
                 linf, lsup = m.span()
                 match m.groups():
@@ -735,7 +799,7 @@ class CssGrid:
             track_sizes = split_pattern.split(wtemplate)[1:-1]
         else:
             # De acuerdo con el attr 'grid', se resetean estos parámetros
-            line_names, track_sizes, responsive = {}, [], None
+            line_names, track_sizes, responsive = {}, [], ''
         return 'to_store', (line_names, track_sizes, responsive)
 
     @staticmethod
@@ -1032,7 +1096,7 @@ def main():
                 lbl = tk.Label(self, text=f'Item {k}', bg='blue')
                 # lbl.pack(side='left', expand='yes')
 
-        def resize(self, event:tk.Event):
+        def resize(self, event: tk.Event):
             if event.widget == self:
                 cell_size = 50
                 pad_size = 10

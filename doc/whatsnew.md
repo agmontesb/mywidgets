@@ -1,3 +1,8 @@
+v0.1.2
+- Se optimiza la ejecución de los comandos responsive para actualizar el container solo
+cuando cambian las condiciones que definen el número y naturaleza de los tracks ya sea 
+en max_size (responsive minmax) o número de tracks (auto-fill/auto-fit). 
+
 v0.1.1
 - Operativo la opción repeat(auto-fit, exp) y repeat(auto-fill, exp) en 
 grid-template-columns/grid-template-rows.
