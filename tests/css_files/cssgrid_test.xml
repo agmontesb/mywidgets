@@ -21,16 +21,6 @@
             <label name="e" text="E" bg="red"/>
             <label text="col1" bg="gray"/>
             <label text="col2" bg="gray"/>
-<!--            <label text="col3" bg="gray"/>-->
-<!--            <label text="col4" bg="gray"/>-->
-<!--            <label text="col1" bg="gray"/>-->
-<!--            <label text="col2" bg="gray"/>-->
-<!--            <label text="col3" bg="gray"/>-->
-<!--            <label text="col4" bg="gray"/>-->
-<!--            <label text="col1" bg="gray"/>-->
-<!--            <label text="col2" bg="gray"/>-->
-<!--            <label text="col3" bg="gray"/>-->
-<!--            <label text="col4" bg="gray"/>-->
         </frame>
         <frame class="grid fit" side="bottom" fill="x">
             <label name="a" text="A" bg="gray"/>

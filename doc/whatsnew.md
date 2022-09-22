@@ -1,3 +1,8 @@
+v0.1.3
+- Se registra los atributos de los slaves en atributos básicos.
+- Se corrigió problema en responsive auto que se presentaba cuando la longitud era menor 
+que el min_size del track mediante el acotamiento de la respuesta en este caso a 1 como mínimo.
+
 v0.1.2
 - Se optimiza la ejecución de los comandos responsive para actualizar el container solo
 cuando cambian las condiciones que definen el número y naturaleza de los tracks ya sea 

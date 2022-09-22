@@ -373,6 +373,8 @@ class CssGrid:
             '''Calcula el númerod e tracks en una dimensión para una longitud dada.'''
             if not track_min_size:
                 return 0
+            if isinstance(length, str) or isinstance(track_min_size, str):
+                pass
             ntracks = length // track_min_size
             if auto_type == 'auto-fit':
                 isTrackAutoFlow = self.grid_auto_flow == track_name
@@ -382,7 +384,7 @@ class CssGrid:
                     ntracks = self.slaves // base + (1 if self.slaves % base else 0)
                 else:
                     ntracks = min(ntracks, len(self.slaves))
-            return ntracks
+            return max(1, ntracks)
 
         master = event.widget
 
@@ -577,68 +579,14 @@ class CssGrid:
 
         slaves = []
         ordered_slaves = sorted(zip(self.slaves_order, self.slaves), key=lambda x: x[0])
-        for priority, (name, item_attrs) in ordered_slaves:
-            # Se inicializan los parámetros del child con la proxima posición y el
-            # 'justify-self' y 'align-self' con los generales definidos a nivel del container.
-            grid_params = {'justify-self': self.justify_items, 'align-self': self.align_items}
-            to_process = list(item_attrs.items())
-            while to_process:
-                key, template = to_process.pop()
-                case, val = self.parse_attr(key, template.strip())
-                if case == 'to_store':
-                    grid_params[key] = val
-                    continue
-                if case == 'to_process':
-                    to_process.extend(val)
-                    continue
-                _, track, *suffix = key.split('-')
-                suffix = '' if not suffix else suffix[0]
-                if track == 'area':
-                    grid_params.update(self.areas[val])
-                elif track == 'self':
-                    grid_params[key] = val if val != 'auto' else 'center'
-                elif case == 'auto':
-                    # default_pos = self.get_xy_from_n(self.next)
-                    # grid_params[key] = default_pos[track == 'column']
-                    pass
-                elif case == 'item':
-                    if val < 0:
-                        # Referencia a línea negativa
-                        assert suffix
-                        base = 1 + (self.nrows_explicit if suffix == 'rows' else self.ncolumns_explicit)
-                        val = (base + val) % base
-                    grid_params[key] = val
-                elif case == 'item_name':
-                    if val == 'auto':
-                        continue
-                    track_names = self.col_names if track == 'column' else self.row_names
-                    if val in self.areas:
-                        val = f'{val}-{suffix}'
-                    try:
-                        line_name, pos = val.rsplit(' ', 1)
-                        val = track_names[line_name][int(pos) - 1]
-                    except ValueError:
-                        val = track_names[val]
-                        if isinstance(val, tuple):
-                            val = val[0]
-                    grid_params[key] = val
-                    pass
-                elif case == 'span':
-                    if suffix == 'end':
-                        grid_params[f'grid-{track}-span'] = val
-                    else:
-                        grid_params[key] = f'span {val}'
-                elif case == 'span_name':
-                    val = self.col_names[val]
-                    grid_params[f'grid-{track}-span'] = val
-                    pass
-            grid_params = self.norm_grid_params(priority, grid_params)
-            nrows, ncols = grid_params.get('grid-row-span', 1), grid_params.get('grid-column-span', 1)
-            x, y = grid_params['grid-row-start'], grid_params['grid-column-start']
-            grid_params['n-pos'] = self.norm_n_pos(x, y, nrows, ncols, slaves=slaves)
+        for priority, (name, grid_params) in ordered_slaves:
+            params = self.norm_grid_params(priority, grid_params.copy())
+            nrows, ncols = params.get('grid-row-span', 1), params.get('grid-column-span', 1)
+            x, y = params['grid-row-start'], params['grid-column-start']
+            params['n-pos'] = self.norm_n_pos(x, y, nrows, ncols, slaves=slaves)
 
-            self.update_taken(grid_params)
-            slaves.append((name, grid_params))
+            self.update_taken(params)
+            slaves.append((name, params))
         return slaves
 
     def register_item(self, widget, item_attribs: dict) -> int:
@@ -650,11 +598,67 @@ class CssGrid:
         base_attribs = self.canonalize_attribs(item_attribs)
         base_attribs = {'grid-column-end': 'span 1', 'grid-row-end': 'span 1', **base_attribs}
 
-        x, y = base_attribs.get('grid-row-start', None), base_attribs.get('grid-column-start')
+        # Se inicializan los parámetros del child con la proxima posición y el
+        # 'justify-self' y 'align-self' con los generales definidos a nivel del container.
+        grid_params = {'justify-self': self.justify_items, 'align-self': self.align_items}
+        to_process = list(base_attribs.items())
+        while to_process:
+            key, template = to_process.pop()
+            case, val = self.parse_attr(key, template.strip())
+            if case == 'to_store':
+                grid_params[key] = val
+                continue
+            if case == 'to_process':
+                to_process.extend(val)
+                continue
+            _, track, *suffix = key.split('-')
+            suffix = '' if not suffix else suffix[0]
+            if track == 'area':
+                grid_params.update(self.areas[val])
+            elif track == 'self':
+                grid_params[key] = val if val != 'auto' else 'center'
+            elif case == 'auto':
+                # default_pos = self.get_xy_from_n(self.next)
+                # grid_params[key] = default_pos[track == 'column']
+                pass
+            elif case == 'item':
+                if val < 0:
+                    # Referencia a línea negativa
+                    assert suffix
+                    base = 1 + (self.nrows_explicit if suffix == 'rows' else self.ncolumns_explicit)
+                    val = (base + val) % base
+                grid_params[key] = val
+            elif case == 'item_name':
+                if val == 'auto':
+                    continue
+                track_names = self.col_names if track == 'column' else self.row_names
+                if val in self.areas:
+                    val = f'{val}-{suffix}'
+                try:
+                    line_name, pos = val.rsplit(' ', 1)
+                    val = track_names[line_name][int(pos) - 1]
+                except ValueError:
+                    val = track_names[val]
+                    if isinstance(val, tuple):
+                        val = val[0]
+                grid_params[key] = val
+                pass
+            elif case == 'span':
+                if suffix == 'end':
+                    grid_params[f'grid-{track}-span'] = val
+                else:
+                    grid_params[key] = f'span {val}'
+            elif case == 'span_name':
+                val = self.col_names[val]
+                grid_params[f'grid-{track}-span'] = val
+                pass
+
+        self.slaves.append((str(widget), grid_params))
+
+        x, y = base_attribs.get('grid-row-start'), base_attribs.get('grid-column-start')
         x = None if x == 'auto' else x
         y = None if y == 'auto' else y
         k = self.positioning_priority(x, y)
-        self.slaves.append((str(widget), base_attribs))
         self.slaves_order.append(k)
         return k
 
