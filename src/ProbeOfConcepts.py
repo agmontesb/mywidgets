@@ -152,8 +152,56 @@ def nameElements(htmlstr, k=-1):
 
 
 if __name__ == '__main__':
-    caso = 'responsive_server'
-    if caso == 'responsive_server':
+    caso = 'track_template'
+    if caso == 'track_template':
+        import re
+        import bisect
+
+        track_template = ['50px', 'minmax(50px, 300px)', 'minmax(50px, 1fr)']
+
+        def minmax_fnc(track_template, size_offset=0):
+            size_lim = []
+            params = []
+            base = []
+            lsup_size = []
+            for k, x in enumerate(track_template):
+                if x.endswith('px'):
+                    x = int(x.strip('px'))
+                    base.append(x)
+                elif m := re.match(r'minmax\(([0-9]+)px,\s*([0-9]+)(fr|px)\)', x):
+                    min_size, max_size = map(int, m.groups()[:-1])
+                    base.append(min_size)
+                    mtype = 1 if m.group(3) == 'fr' else -1
+                    if m.group(3) == 'fr':
+                        lsup_size.append([1, max_size, k])
+                    else:
+                        lsup_size.append([-1, max_size - min_size, k])
+            lsup_size.sort()
+            size_lim.append(sum(base) + size_offset)
+            free_tracks = {k: '1fr' if mtype < 0 else f'{fr_mult}fr' for mtype, fr_mult, k in lsup_size}
+            params.append([f'{base[k]}px' if k not in free_tracks else free_tracks[k] for k in range(len(base))])
+
+            npos = 0
+            while lsup_size[npos][0] < 0:
+                n = npos
+                delta = lsup_size[npos][1]
+                while n < len(lsup_size):
+                    k = lsup_size[n][2]
+                    base[k] += delta * (1 if lsup_size[n][0] < 0 else lsup_size[n][1])
+                    if lsup_size[n][0] < 0:
+                        lsup_size[n][1] -= delta
+                    n += 1
+                size_lim.append(sum(base) + size_offset)
+                free_tracks = {k: '1fr' if mtype < 0 else f'{fr_mult}fr' for mtype, fr_mult, k in lsup_size[npos + 1:]}
+                params.append([f'{base[k]}px' if k not in free_tracks else free_tracks[k] for k in range(len(base))])
+                npos += 1
+            fnc = lambda x, keys=size_lim, confs=params: confs[max(0, bisect.bisect_left(keys, x) - 1)]
+            return fnc
+
+        fnc = minmax_fnc(track_template, 20)
+        print(fnc.__defaults__)
+
+    elif caso == 'responsive_server':
         import fnmatch
 
         class TopClass(tk.Tk):

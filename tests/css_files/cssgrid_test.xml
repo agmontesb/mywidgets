@@ -22,15 +22,15 @@
             <label text="col1" bg="gray"/>
             <label text="col2" bg="gray"/>
         </frame>
-        <frame class="grid fit" side="bottom" fill="x">
-            <label name="a" text="A" bg="gray"/>
-            <label name="b" text="B"  bg="blue"/>
-            <label name="c" text="C"  bg="yellow"/>
-            <label name="d" text="D"  bg="green"/>
-            <label name="e" text="E" bg="red"/>
-            <label text="col1" bg="gray"/>
-            <label text="col2" bg="gray"/>
-        </frame>
+<!--        <frame class="grid fit" side="bottom" fill="x">-->
+<!--            <label name="a" text="A" bg="gray"/>-->
+<!--            <label name="b" text="B"  bg="blue"/>-->
+<!--            <label name="c" text="C"  bg="yellow"/>-->
+<!--            <label name="d" text="D"  bg="green"/>-->
+<!--            <label name="e" text="E" bg="red"/>-->
+<!--            <label text="col1" bg="gray"/>-->
+<!--            <label text="col2" bg="gray"/>-->
+<!--        </frame>-->
     </category>
 </settings>
 

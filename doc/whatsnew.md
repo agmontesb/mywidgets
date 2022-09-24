@@ -1,3 +1,19 @@
+v0.1.4
+- Se creó la property self.master, de solo lectura, para guardar la referencia al master configurado.
+- Unificación del registro inicial de responsive, para:
+  - Hacer el row_tracks/column_tracks igual a ''
+  - La función de arranque entrega los parámetros para la construcción de la función que generara
+  para una longitud dada (ancho o largo) el valor adecuado de row_tracks/column_tracks.
+- Se generaliza la ejecución de las funciones de configuración responsive.
+- Solo la función resize necesita el ancho y altura de la ventana en que se va a desplegar el layout, 
+de esta manera se elimina la propagación de estas dimensiones a otros methodos de la clase como see hacía 
+antes.
+- Se corrigió el error que se presentaba cuado se tenia grid-column/grid-column apuntando a un nombre 
+de área.
+- Se agregaron nuevos métodos a CssGrid: columnconfigure, rowconfigure, gridbbox, isResponsive, 
+responsive_intervals
+- Tests actualizados y corriendo perfectamente.
+
 v0.1.3
 - Se registra los atributos de los slaves en atributos básicos.
 - Se corrigió problema en responsive auto que se presentaba cuando la longitud era menor 

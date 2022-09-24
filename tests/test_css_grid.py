@@ -1,5 +1,8 @@
+import tkinter
+
 import pytest
 
+import userinterface
 from src.Tools.uiStyle.cssgrid import CssGrid
 
 # Los casos de prueba provienen de la siguiente página
@@ -17,7 +20,7 @@ class TestCssGridParsers:
                 (
                     dict(first=0, line2=1, line3=2, col4start=3, five=4, end=5),
                     ['40px', '50px', 'auto', '50px', '40px'],
-                    None
+                    ''
                 )
             ),
             (
@@ -26,7 +29,7 @@ class TestCssGridParsers:
                 (
                     {'row1-start': 0, 'row1-end': 1, 'row2-start': 1, 'row2-end': 2},
                     ['25%', '25%'],
-                    None
+                    ''
                 )
             ),
             (
@@ -35,7 +38,7 @@ class TestCssGridParsers:
                 (
                     {'col-start': (1, 2, 3)},
                     ['20px', '20px', '20px'],
-                    None
+                    ''
                 )
             ),
             (
@@ -44,7 +47,7 @@ class TestCssGridParsers:
                 (
                     {},
                     ['30px', '1fr', '1fr', '1fr', '30px'],
-                    None
+                    ''
                 )
             ),
             (
@@ -91,7 +94,16 @@ class TestCssGridParsers:
     @pytest.mark.parametrize(
         "attrib, atemplate, required",
         [
-            ('grid-area', 'header', ('area_name', 'header')),
+            ('grid-area', 'header',
+                (
+                    'to_process', [
+                        ('grid-row-start', 'header-start'),
+                        ('grid-column-start', 'header-start'),
+                        ('grid-row-end', 'header-end'),
+                        ('grid-column-end', 'header-end')
+                    ]
+                )
+            ),
             ('grid-area', '1 / col4-start / last-line / 6',
                 (
                     'to_process', [
@@ -228,14 +240,12 @@ class TestCssGridParsers:
         }
         cssgrid.register_item('header3', item_attrs)
         slaves = dict(cssgrid.slaves)
-        if not slaves['header1'] == slaves['header2']:
-            pytest.xfail("failing different notation (but should work)")
+        assert slaves['header1'] == slaves['header2']
         assert slaves['header1'] == slaves['header3']
 
-        pos_keys = {'grid-row-span', 'grid-column-span', 'n-pos'}
+        pos_keys = {'grid-row-span', 'grid-column-span'}
         attrs = slaves['header1']
         assert attrs.keys() & pos_keys == pos_keys
-        assert attrs['n-pos'] == 0
         assert attrs['grid-row-span'] == 1
         assert attrs['grid-column-span'] == 2
 
@@ -248,7 +258,7 @@ class TestCssGridParsers:
         cssgrid = CssGrid(**grid)
         item_attrs = {
             'grid-row': '2 / span 2',
-            'grid-column': 'span 2',
+            'grid-column': '1 / span 2',
         }
         cssgrid.register_item('item1', item_attrs)
 
@@ -261,9 +271,8 @@ class TestCssGridParsers:
 
         attrs = slaves['item2']
         assert slaves['item1'] == attrs
-        pos_keys = {'grid-row-span', 'grid-column-span', 'n-pos'}
+        pos_keys = {'grid-row-span', 'grid-column-span'}
         assert attrs.keys() & pos_keys == pos_keys
-        assert attrs['n-pos'] == 3
         assert attrs['grid-row-span'] == 2
         assert attrs['grid-column-span'] == 2
 
@@ -272,27 +281,27 @@ class TestCssGridParsers:
         [
             (
                  {'grid-auto-flow': 'row'}, 'full-position-row-flow',
-                 {'grid-column-start': '2', 'grid-column-end': 'uno', 'grid-row-start': '5', 'grid-row-end': 'span 3'},
+                 {'grid-column-start': '2', 'grid-column-end': '8', 'grid-row-start': '5', 'grid-row-end': 'span 3'},
                  1
             ),
             (
                 {'grid-auto-flow': 'column'}, 'full-position-column-flow',
-                {'grid-column-start': '2', 'grid-column-end': 'uno', 'grid-row-start': '5', 'grid-row-end': 'span 3'},
+                {'grid-column-start': '2', 'grid-column-end': '8', 'grid-row-start': '5', 'grid-row-end': 'span 3'},
                 1
             ),
             (
                     {'grid-auto-flow': 'row'}, 'row-full-position-flow-row',
-                    {'grid-column-end': 'uno', 'grid-row-start': '5', 'grid-row-end': 'span 3'},
+                    {'grid-column-end': '8', 'grid-row-start': '5', 'grid-row-end': 'span 3'},
                     2
             ),
             (
                 {'grid-auto-flow': 'column'}, 'row-full-position-flow-column',
-                {'grid-column-end': 'uno', 'grid-row-start': '5', 'grid-row-end': 'span 3'},
+                {'grid-column-end': '8', 'grid-row-start': '5', 'grid-row-end': 'span 3'},
                 3
             ),
             (
                 {'grid-auto-flow': 'row'}, 'default-position',
-                {'grid-column-end': 'uno', 'grid-row-end': 'span 3'},
+                {'grid-column-end': '8', 'grid-row-end': 'span 3'},
                 4
             ),
             (
@@ -304,16 +313,6 @@ class TestCssGridParsers:
                 {'grid-auto-flow': 'row'}, 'row-position-flow-row',
                 {'grid-column': 'span 3', 'grid-row': '2 / 4'},
                 2
-            ),
-            (
-                {'grid-auto-flow': 'row'}, 'full-position-flow-row',
-                {'grid-column': 'header', 'grid-row': 'footer'},
-                1
-            ),
-            (
-                {'grid-auto-flow': 'row'}, 'full-position',
-                {'grid-area': '1 / col4-start / last-line / 6'},
-                1
             ),
         ]
     )
@@ -451,3 +450,106 @@ class TestCssGridParsers:
 
         assert n_pos(item_name) == pos
         assert area_item(item_name) == area
+
+    def test_auto_fill(self):
+        grid = {
+            'grid-template-columns': 'repeat(auto-fill, minmax(100px, 1fr))',
+        }
+        cssgrid = CssGrid(**grid)
+
+        with pytest.raises(AttributeError):
+            cssgrid.master
+
+        app = tkinter.Tk()
+        cssgrid.config_master(app)
+        for k in range(1, 8):
+            wdg = tkinter.Label(app, name=f'item{k:0>2d}')
+            cssgrid.register_item(wdg, {})
+
+        confs = [
+            {'widget': app, 'width': 12, 'height': 500},
+            {'widget': app, 'width': 500, 'height': 500},
+            {'widget': app, 'width': 700, 'height': 500},
+            {'widget': app, 'width': 1200, 'height': 500},
+            {'widget': app, 'width': 12, 'height': 500},
+        ]
+        for data in confs:
+            event = tkinter.Event()
+            [setattr(event, attr_name, value) for attr_name, value in data.items()]
+            cssgrid.resize(event, str(app))
+
+            nslaves = len(cssgrid.slaves)
+            assert cssgrid.ncolumns == max(1, data['width'] // 100)
+            delta = 1 if nslaves != cssgrid.ncolumns else 0
+            assert cssgrid.nrows == min(nslaves, nslaves // cssgrid.ncolumns + delta)
+
+    def test_auto_fit(self):
+        grid = {
+            'grid-template-columns': 'repeat(auto-fit, minmax(100px, 1fr))',
+        }
+        cssgrid = CssGrid(**grid)
+
+        with pytest.raises(AttributeError):
+            cssgrid.master
+
+        app = tkinter.Tk()
+        cssgrid.config_master(app)
+        for k in range(1, 8):
+            wdg = tkinter.Label(app, name=f'item{k:0>2d}')
+            cssgrid.register_item(wdg, {})
+
+        confs = [
+            {'widget': app, 'width': 12, 'height': 500},
+            {'widget': app, 'width': 500, 'height': 500},
+            {'widget': app, 'width': 700, 'height': 500},       # nslaves == ncolumns
+            {'widget': app, 'width': 1200, 'height': 500},      # nslaves == ncolumns
+            {'widget': app, 'width': 12, 'height': 500},
+        ]
+        for data in confs:
+            event = tkinter.Event()
+            [setattr(event, attr_name, value) for attr_name, value in data.items()]
+            cssgrid.resize(event, str(app))
+
+            nslaves = len(cssgrid.slaves)
+            assert cssgrid.ncolumns == min(nslaves, max(1, data['width'] // 100))
+            delta = 1 if nslaves != cssgrid.ncolumns else 0
+            assert cssgrid.nrows == min(nslaves, nslaves // cssgrid.ncolumns + delta)
+
+    def test_minmax(self):
+        max_size = '300px'
+        grid = {
+            'grid-template-columns': f'50px minmax(50px, {max_size}) minmax(50px, 1fr)',
+            'grid-template-rows': '50px 50px 50px',
+            'gap': '10px 10px',
+        }
+        cssgrid = CssGrid(**grid)
+
+        with pytest.raises(AttributeError):
+            cssgrid.master
+
+        assert cssgrid.isResponsive('column')
+
+        with pytest.raises(AttributeError):
+            cssgrid.isResponsive('column', 1)
+
+        app = tkinter.Tk()
+        cssgrid.config_master(app)
+        for k in range(1, 8):
+            wdg = tkinter.Label(app, name=f'item{k:0>2d}')
+            cssgrid.register_item(wdg, {})
+
+        confs = [
+            {'widget': app, 'width': 740, 'height': 500},
+            {'widget': app, 'width': 1200, 'height': 500},
+            {'widget': app, 'width': 12, 'height': 500},
+            {'widget': app, 'width': 500, 'height': 500},
+            {'widget': app, 'width': 12, 'height': 500},
+        ]
+        for data in confs:
+            event = tkinter.Event()
+            [setattr(event, attr_name, value) for attr_name, value in data.items()]
+            cssgrid.resize(event, str(app))
+
+            assert not cssgrid.isResponsive('column', 1)
+            assert not cssgrid.isResponsive('column', 2) if data['width'] >= 670 else cssgrid.isResponsive('column', 2)
+            assert cssgrid.isResponsive('column', 3)
