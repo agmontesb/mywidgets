@@ -1,3 +1,14 @@
+v0.1.5
+- Cycle Class se define como el tipo asignado a las propiedades grid-auto-rows/grid-auto-columns para
+permitir crear tracks (row o column) de forma cíclica. Por ejemplo, grid-auto-flow = 10px 20px 30px 
+va creando rows primero de 10px, luego 20px, luego 30px y entonces repite el ciclo.
+- Se actualiza el algoritmo de posicionamiento de los widgets en el layout, especialmente en el 
+ordenamiento de estos de tal manera que posiciona los elementos con priority 1 y 2, luego crea los 
+tracks necesarios para acomodar los widgets de priority 3 y 4.
+- Resuelto parse del tipo gird-row o grid-column del tipo span 2 / auto
+- Creado en el directorio doc, el directorio showcase destinado a guardar layouts que demuestran la
+operación de ciertos aspectos del desarrollo, en este caso del cssgrid.
+
 v0.1.4
 - Se creó la property self.master, de solo lectura, para guardar la referencia al master configurado.
 - Unificación del registro inicial de responsive, para:

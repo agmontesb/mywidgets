@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<settings>
+    <!--
+    fuente: https://css-tricks.com/exploring-css-grids-implicit-grid-and-auto-placement-powers/#top-of-site
+    -->
+    <?xml-stylesheet type="text/css" href="#style"?>
+    <extra id="style">
+        .grid {
+          display: grid;
+          grid-auto-flow: row; /* it's the default value (can be omitted) */
+          grid-gap: 10px;
+          bg:white;
+        }
+        .horizontal {
+          grid-auto-flow: column;
+        }
+        .grid label:first-child {
+          grid-area: span 3 / span 3;
+        }
+        label {
+          width:10;
+          height:2;
+        }
+    </extra>
+    <category label="Category uno">
+        <frame class="grid">
+            <label name="a1" text="IMG01" bg="gray"/>
+            <label name="b1" text="IMG02"  bg="blue"/>
+            <label name="c1" text="IMG03"  bg="yellow"/>
+            <label name="d1" text="IMG04"  bg="green"/>
+        </frame>
+        <frame class="grid horizontal">
+            <label name="a2" text="IMG01" bg="gray"/>
+            <label name="b2" text="IMG02"  bg="blue"/>
+            <label name="c2" text="IMG03"  bg="yellow"/>
+            <label name="d2" text="IMG04"  bg="green"/>
+        </frame>
+    </category>
+</settings>
+

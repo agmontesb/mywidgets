@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<settings>
+    <!--
+    fuente: https://css-tricks.com/exploring-css-grids-implicit-grid-and-auto-placement-powers/#top-of-site
+    -->
+    <?xml-stylesheet type="text/css" href="#style"?>
+    <extra id="style">
+     .container {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        grid-auto-rows: 1fr;
+        gap: 5px;
+        bg:white;
+        side:top;
+        fill:both;
+        expand:yes;
+     }
+
+    .grid {
+      display: grid;
+        grid-auto-columns: 1fr;
+        grid-auto-rows: 2fr 1fr 2fr;
+        gap: 5px;
+    }
+    .grid :nth-child(1):nth-last-child(odd) {
+  grid-column-start: span 2;
+}
+.grid :nth-child(4):nth-last-child(odd) {
+  grid-column-start: 2;
+}
+
+    /*
+    .grid {
+      width: 300px;
+      aspect-ratio: 1;
+      grid-gap: 5px;
+      outline: 2px solid red;
+      vertical-align: top;
+      margin: 10px;
+      counter-reset: num;
+    }
+    .grid *{
+      border: 2px solid;
+      font-size: 30px;
+      box-sizing: border-box;
+      font-family: sans-serif;
+      display: grid;
+      place-content: center;
+    }
+    .grid *:before {
+      content: counter(num);
+      counter-increment: num;
+    }
+        */
+    </extra>
+    <category label="Category uno">
+        <frame class="container">
+            <frame class="grid">
+                <label text="1" bg="yellow"/>
+            </frame>
+            <frame class="grid">
+                <label text="1" bg="yellow"/>
+                <label text="2" bg="red"/>
+            </frame>
+            <frame class="grid">
+                <label text="1" bg="yellow"/>
+                <label text="2" bg="red"/>
+                <label text="3" bg="light green"/>
+            </frame>
+            <frame class="grid">
+                <label text="1" bg="yellow"/>
+                <label text="2" bg="red"/>
+                <label text="3" bg="green"/>
+                <label text="4" bg="gray"/>
+            </frame>
+            <frame class="grid">
+                <label text="1" bg="yellow"/>
+                <label text="2" bg="red"/>
+                <label text="3" bg="green"/>
+                <label text="4" bg="gray"/>
+                <label text="5" bg="light gray"/>
+            </frame>
+            <frame class="grid">
+                <label text="1" bg="yellow"/>
+                <label text="2" bg="red"/>
+                <label text="3" bg="green"/>
+                <label text="4" bg="gray"/>
+                <label text="5" bg="light gray"/>
+                <label text="6" bg="light green"/>
+            </frame>
+        </frame>
+    </category>
+</settings>
+

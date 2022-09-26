@@ -24,7 +24,7 @@ SPLIT_PATTERN = re.compile(r'((?:(?:\:*[:\.#]*?[A-Za-z\d\-\+\_\(\)]+)|(?:\[.+?\]
 COMBINATORS = re.compile(r'([\+\>\ \~\,]+)')
 ATTRIBUTES = re.compile(r'([\&\|\^\$\*]*=)')
 CP_PATTERN = re.compile('\s*?((?:[^\{\s\*]+?\*?[^\{\*]+?)|(?:\*))\ *?(\{.+?\})', re.DOTALL)
-STYLE_PATTERN = re.compile('^\s*?([^\s]+?):\s*?([^;]+?);$', re.MULTILINE)
+STYLE_PATTERN = re.compile('^\s*?([^\s]+?):\s*([^;]+?);$', re.MULTILINE)
 
 
 class MElement(ET.Element):
@@ -179,8 +179,17 @@ class XmlSerializer:  # The target object of the parser
 
     @staticmethod
     def process_css_string(css_string):
+        # Se establece salto de línea en cada definición de selector.
         css_string = css_string.replace('{', '{\n').replace(';', ';\n').replace('\n\n', '\n')
+        # Se eliminan los comentarios
         css_string = '\n'.join(re.split('/\*.+?\*/', css_string, flags=re.DOTALL))
+        # Se hace equivalente la expresión tipo '(4n + 5)' a (4n+5)
+        css_string = re.sub(
+            r'\(\d+[a-z](\s*)[-+](\s*)\d+\)',
+            lambda m: m.group(0).replace(' ', ''),
+            css_string
+        )
+
         css_tuples = CP_PATTERN.findall(css_string)
         selectors = []
         for select_str, style_str in css_tuples:

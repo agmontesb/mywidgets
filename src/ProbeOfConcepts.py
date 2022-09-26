@@ -152,8 +152,30 @@ def nameElements(htmlstr, k=-1):
 
 
 if __name__ == '__main__':
-    caso = 'track_template'
-    if caso == 'track_template':
+    caso = 'cycle_it'
+    if caso == 'cycle_it':
+        class Cycle:
+            def __init__(self, it):
+                self.it = it
+                self.n = 0
+
+            def __iter__(self):
+                return self
+
+            def __next__(self):
+                x = self.it[self.n]
+                self.n = (self.n + 1) % len(self.it)
+                return x
+
+            def reset(self):
+                self.n = 0
+
+        it = Cycle([1, 2, 3])
+        print([next(it) for x in range(5)])
+        it.reset()
+        print([next(it) for x in range(5)])
+
+    elif caso == 'track_template':
         import re
         import bisect
 

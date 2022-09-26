@@ -183,9 +183,9 @@ def getFileUrl(resource_id, src=None):
         try:
             pckg, d_name = resource_id.split(':', 1)
             match pckg.lower():
-                case 'data' | 'tests' as case:
+                case 'data' | 'tests' | 'doc' as case:
                     args = [pckg, d_name]
-                    if case == 'tests':
+                    if case != 'data':
                         common_path = os.path.dirname(common_path)
                 case _:
                     args = ['Tools', pckg, 'res', d_name]
