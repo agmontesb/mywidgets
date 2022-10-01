@@ -1,3 +1,15 @@
+v0.1.6
+- Nuevo método CssGrid.availables(linf, lsup, step) entrega las posiciones disponibles en el grid 
+para un range(linf, lsup, step). Este método parte de las posiciones tomadas (CssGrid.taken) y 
+calcula las posiciones disponibles. 
+- Nuevo método CssGrid.grid_template_areas_equiv() que entrega un string con las características 
+del "grid-template-areas" que describe la disposición de los items registrados en el grid.
+- Clase MapTracks que hace posible el manejo de las dimensiones track y crosst para referirse a las 
+dimensiones en la dirección grid-auto-flow y la dirección alterna respectivamente.
+- Refactor de las funciones para la utilización de la clase MapTracks.
+- Cambio de nombre de algunas variables para hacerlas más parecidas al uso de nombres de atributos de
+en la especificación del grid. Ejemplo row_tracks fue renombrada a grid_template_rows.
+
 v0.1.5
 - Cycle Class se define como el tipo asignado a las propiedades grid-auto-rows/grid-auto-columns para
 permitir crear tracks (row o column) de forma cíclica. Por ejemplo, grid-auto-flow = 10px 20px 30px 

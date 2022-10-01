@@ -1,20 +1,13 @@
 # -*- coding: utf-8 -*-
 import collections
-import contextlib
-import functools
-import inspect
-import os
+import itertools
 import tkinter as tk
 import tkinter.messagebox as tkMessage
-import tkinter.ttk as ttk
 import xml.etree.ElementTree as ET
-from PIL import Image, ImageTk, ImageFont
+import re
 
-import userinterface
-from userinterface import newPanelFactory, getWidgetInstance, menuFactory
-from Widgets.kodiwidgets import formFrame
-from equations import equations_manager
-from Widgets.Custom.ImageProcessor import getLabel
+from userinterface import getWidgetInstance
+from Tools.uiStyle.cssgrid import CssGrid
 
 
 def getLayout(layoutfile):
@@ -152,8 +145,86 @@ def nameElements(htmlstr, k=-1):
 
 
 if __name__ == '__main__':
-    caso = 'cycle_it'
-    if caso == 'cycle_it':
+    caso = 'track_obj'
+    if caso == 'track_obj':
+
+        def nth_child(x):
+            if x.isdigit():
+                return lambda y: y == int(x)
+            x = x.replace(' ', '')
+            a, b = map(int, re.findall(r'(\d+)[a-z]+([+-]\d+)', x)[0])
+            return lambda y: not (y - b) % a
+
+        def last_child(nitems):
+            return lambda y: y == nitems
+
+        def apply_selector(nitems, selectors):
+            items = []
+            for k in range(1, nitems + 1):
+                item_name = f'item{k:0>2d}'
+                attribs = dict(
+                    z
+                    for w in [conf for fncs, conf in selectors if all(fnc(k) for fnc in fncs)]
+                    for z in w.items()
+                )
+                items.append((item_name, attribs))
+            return items
+
+        def process_items(cssgrid, items):
+            [
+                cssgrid.register_item(item_name, attribs)
+                for item_name, attribs in items
+            ]
+            slaves_items = cssgrid.get_process_item_attribs()
+            return dict(slaves_items)
+
+        # bbox = lambda x: (
+        #     slaves[x]['grid-row-start'], slaves[x]['grid-column-start'],
+        #     slaves[x]['grid-row-span'], slaves[x]['grid-column-span'],
+        # )
+
+        grid = {
+            'grid-template-rows': 'repeat(4, 50px)',
+            'grid-template-columns': 'repeat(6, 50px)',
+        }
+        cssgrid = CssGrid(**grid)
+        # Absolute position (x)
+        cssgrid.register_item('p(1, 1)', {'grid-row': '1', 'grid-column': '1'})
+        cssgrid.register_item('p(3, 1)', {'grid-row': '3', 'grid-column': '1 / 3'})
+        cssgrid.register_item('p(1, 3)', {'grid-row': '1 / 3', 'grid-column': '3'})
+
+        # auto-grid-flow position (y)
+        cssgrid.register_item('p(1, _)', {'grid-row': '1'})
+        cssgrid.register_item('p(3, _)', {'grid-row': '3 / 5'})
+
+        # NO auto-grid-flow position (z)
+        cssgrid.register_item('p(_, 5)', {'grid-column': '5 / 7'})
+        cssgrid.register_item('p(_, 4)', {'grid-column': '4', 'grid-row': 'span 2'})
+
+        # auto position (w)
+        cssgrid.register_item('p(_, _)', {'grid-column': 'span 2', 'grid-row': 'span 2'})
+
+        # slaves_items = cssgrid.get_process_item_attribs()
+        # keys = [key for key, _ in slaves_items]
+        # slaves = dict(slaves_items)
+        # nset = lambda x: cssgrid.enumerate_area_items(None, *bbox(x))
+        #
+        # taken = [zip(nset(key), itertools.repeat(f'item{k:0>2d}')) for k, key in enumerate(keys, start=1)]
+        # availables = [zip(cssgrid.availables(), itertools.repeat('......'))]
+        # answ = sorted(itertools.chain(*taken, *availables))
+        # step = cssgrid.ncolumns
+        # answ_str = '\n'.join(f'"{" ".join(x[1] for x in answ[k: k + step])}"' for k in range(0, len(answ), step))
+        answ_str = cssgrid.grid_template_areas_equiv()
+        req = '''
+            "item01 item04 item03 ...... item06 item06"
+            "...... ...... item03 item07 item08 item08"
+            "item02 item02 item05 item07 item08 item08"
+            "...... ...... item05 ...... ...... ......"
+        '''
+        assert answ_str == re.sub(r'\n\s+', '\n', req)[1:-1]
+
+        print(answ_str)
+    elif caso == 'cycle_it':
         class Cycle:
             def __init__(self, it):
                 self.it = it

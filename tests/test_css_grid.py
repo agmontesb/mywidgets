@@ -9,6 +9,39 @@ from src.Tools.uiStyle.cssgrid import CssGrid
 # Los casos de prueba provienen de la siguiente página
 # https://css-tricks.com/snippets/css/complete-guide-grid/#prop-grid-template
 
+def nth_child(x):
+    if x.isdigit():
+        return lambda y: y == int(x)
+    x = x.replace(' ', '')
+    a, b = map(int, re.findall(r'(\d+)[a-z]+([+-]\d+)', x)[0])
+    return lambda y: not (y - b) % a
+
+
+def last_child(nitems):
+    return lambda y: y == nitems
+
+
+def apply_selector(nitems:int, selectors:list[tuple[tuple[callable, ...], dict[str, str]]]) -> list[tuple[str, dict[str, str]]]:
+    items = []
+    for k in range(1, nitems + 1):
+        item_name = f'item{k:0>2d}'
+        attribs = dict(
+            z
+            for w in [conf for fncs, conf in selectors if all(fnc(k) for fnc in fncs)]
+            for z in w.items()
+        )
+        items.append((item_name, attribs))
+    return items
+
+
+def process_items(cssgrid, items):
+    [
+        cssgrid.register_item(item_name, attribs)
+        for item_name, attribs in items
+    ]
+    slaves_items = cssgrid.get_process_item_attribs()
+    return dict(slaves_items)
+
 
 class TestCssGridParsers:
 
@@ -333,7 +366,7 @@ class TestCssGridParsers:
             # 3 ---------------------------         ---------------------
             #   |   x   x   y   z   w   w         3 | 12 13 14 15 16 17
             # 4 ---------------------------         ---------------------
-            #  |            y                  4 | 18 19 20 21 22 23
+            #  |            y                     4 | 18 19 20 21 22 23
             # 5 ---------------------------         ---------------------
         '''
         grid = {
@@ -408,7 +441,6 @@ class TestCssGridParsers:
         cssgrid.register_item('p(1, 1)', {'grid-row': '1 / 3', 'grid-column': '1 / 3'})
 
         cssgrid.register_item(item_name, item_attribs)
-
         slaves_items = cssgrid.get_process_item_attribs()
         slaves = dict(slaves_items)
         n_pos = lambda x: slaves[x]['n-pos']
@@ -461,37 +493,6 @@ class TestCssGridParsers:
         https://css-tricks.com/exploring-css-grids-implicit-grid-and-auto-placement-powers/#top-of-site
         '''
 
-        def nth_child(x):
-            if x.isdigit():
-                return lambda y: y == int(x)
-            x = x.replace(' ', '')
-            a, b = map(int, re.findall(r'(\d+)[a-z]+([+-]\d+)', x)[0])
-            return lambda y: not (y - b) % a
-
-        def last_child(nitems):
-            return lambda y: y == nitems
-
-        def apply_selector(nitems, selectors):
-            items = []
-            for k in range(1, nitems + 1):
-                item_name = f'item{k:0>2d}'
-                attribs = dict(
-                    z
-                    for w in [conf for fncs, conf in selectors if all(fnc(k) for fnc in fncs)]
-                    for z in w.items()
-                )
-                items.append((item_name, attribs))
-            return items
-
-        def process_items(grid, items):
-            cssgrid = CssGrid(**grid)
-            [
-                cssgrid.register_item(item_name, attribs)
-                for item_name, attribs in items
-            ]
-            slaves_items = cssgrid.get_process_item_attribs()
-            return dict(slaves_items)
-
         bbox = lambda x: (
             slaves[x]['grid-row-start'], slaves[x]['grid-column-start'],
             slaves[x]['grid-row-span'], slaves[x]['grid-column-span'],
@@ -506,7 +507,8 @@ class TestCssGridParsers:
             ]
             grid = {}
             conf = apply_selector(k + 1, selectors)
-            slaves = process_items(grid, conf)
+            cssgrid = CssGrid(**grid)
+            slaves = process_items(cssgrid, conf)
             req = [(0, 0, 1, 1), (0, 1, 1, 1), (1, 0, 1, 1 if k != 2 else 2), (1, 1, 1, 1)]
             assert all(bbox(key) == req[k] for k, (key, _) in enumerate(conf))
 
@@ -519,7 +521,8 @@ class TestCssGridParsers:
             ]
             grid = {}
             conf = apply_selector(k + 1, selectors)
-            slaves = process_items(grid, conf)
+            cssgrid = CssGrid(**grid)
+            slaves = process_items(cssgrid, conf)
             req = [(0, 0, 1, 1), (0, 1, 1, 1) if k != 1 else (1, 0, 1, 1), (1, 0, 1, 1 if k != 2 else 2), (1, 1, 1, 1)]
             assert all(bbox(key) == req[k] for k, (key, _) in enumerate(conf))
 
@@ -538,7 +541,8 @@ class TestCssGridParsers:
         items = apply_selector(nitems, selectors)
 
         req = [(0, 0, 1, 2), (0, 2, 1, 1), (1, 0, 1, 1), (1, 1, 1, 2)]
-        slaves = process_items(grid, items)
+        cssgrid = CssGrid(**grid)
+        slaves = process_items(cssgrid, items)
 
         assert all(
             bbox(key) == ((pt := req[k % 4])[0] + 2 * (k // 4), pt[1], pt[2], pt[3])
@@ -562,7 +566,8 @@ class TestCssGridParsers:
         items = apply_selector(nitems, selectors)
 
         req = [(0, 0, 1, 1), (1, 0, 1, 1), (0, 1, 2, 1), (2, 0, 2, 1), (2, 1, 1, 1), (3, 1, 1, 1)]
-        slaves = process_items(grid, items)
+        cssgrid = CssGrid(**grid)
+        slaves = process_items(cssgrid, items)
 
         base = 6
         assert all(
@@ -585,7 +590,8 @@ class TestCssGridParsers:
         items = apply_selector(nitems, selectors)
 
         req = [(0, 0, 1, 1), (1, 0, 1, 1), (1, 1, 2, 1), (2, 0, 2, 1), (3, 1, 1, 1), (4, 0, 1, 1)]
-        slaves = process_items(grid, items)
+        cssgrid = CssGrid(**grid)
+        slaves = process_items(cssgrid, items)
 
         base = 6
         assert all(
@@ -614,7 +620,8 @@ class TestCssGridParsers:
             (0, 0, 2, 2), (0, 2, 1, 1), (0, 3, 1, 1), (1, 2, 1, 1), (1, 3, 1, 1),
             (2, 0, 1, 1), (2, 1, 1, 1), (3, 0, 1, 1), (3, 1, 1, 1), (2, 2, 2, 2),
         ]
-        slaves = process_items(grid, items)
+        cssgrid = CssGrid(**grid)
+        slaves = process_items(cssgrid, items)
         base = 10
         assert all(
             bbox(key) == ((pt := req[k % base])[0] + 4 * (k // base), pt[1], pt[2], pt[3])
@@ -644,12 +651,149 @@ class TestCssGridParsers:
             (0, 0, 2, 1), (0, 1, 1, 2), (0, 3, 1, 1), (1, 1, 1, 1), (1, 2, 1, 2),
             (2, 0, 1, 1), (2, 1, 1, 2), (3, 0, 1, 2), (3, 2, 1, 1), (2, 3, 2, 1),
         ]
-        slaves = process_items(grid, items)
+        cssgrid = CssGrid(**grid)
+        slaves = process_items(cssgrid, items)
         base = 10
         assert all(
             bbox(key) == ((pt := req[k % base])[0] + 4 * (k // base), pt[1], pt[2], pt[3])
             for k, (key, _) in enumerate(items)
         )
+
+    @pytest.mark.parametrize(
+        "grid, nitems, selectors, required",
+        [
+            (
+                {
+                    'grid-auto-rows': '100px',
+                    'grid-auto-columns': '1fr',
+                    'grid-gap': '5px',
+                }, 12,
+                [
+                    ((nth_child('4n + 1'),), {'grid-column': 'span 2'}),
+                    ((nth_child('4n + 4'),), {'grid-column': '2 /span 2'}),
+                ],
+                '''
+                    "item01 item01 item02"
+                    "item03 item04 item04"
+                    "item05 item05 item06"
+                    "item07 item08 item08"
+                    "item09 item09 item10"
+                    "item11 item12 item12"
+                '''
+            ),
+            (
+                {
+                    'grid-auto-flow': 'dense',
+                    'grid-auto-rows': '100px',
+                    'grid-auto-columns': '1fr',
+                    'grid-gap': '5px',
+                }, 12,
+                [
+                    ((nth_child('6n + 2'),), {'grid-column': '1'}),
+                    ((nth_child('6n + 3'),), {'grid-area': 'span 2 / 2'}),
+                    ((nth_child('6n + 4'),), {'grid-row': 'span 2'}),
+                ],
+                '''
+                    "item01 item03"
+                    "item02 item03"
+                    "item04 item05"
+                    "item04 item06"
+                    "item07 item09"
+                    "item08 item09"
+                    "item10 item11"
+                    "item10 item12"
+                '''
+            ),
+            (
+                {
+                    'grid-auto-rows': '100px',
+                    'grid-auto-columns': '1fr',
+                    'grid-gap': '5px',
+                }, 12,
+                [
+                    ((nth_child('6n + 2'),), {'grid-column': '1'}),
+                    ((nth_child('6n + 3'),), {'grid-area': 'span 2 / 2'}),
+                    ((nth_child('6n + 4'),), {'grid-area': 'span 2 / 1'}),
+                ],
+                '''
+                    "item01 ......"
+                    "item02 item03"
+                    "item04 item03"
+                    "item04 item05"
+                    "item06 item07"
+                    "item08 item09"
+                    "item10 item09"
+                    "item10 item11"
+                    "item12 ......"
+                '''
+            ),
+            (
+                {
+                        'grid-auto-flow': 'dense',
+                        'grid-auto-rows': '100px',
+                        'grid-auto-columns': '1fr',
+                        'grid-gap': '5px',
+                    }, 20,
+                [
+                    ((nth_child('10n + 8'),), {'grid-column': '1'}),
+                    ((nth_child('10n + 9'),), {'grid-column': '2'}),
+                    ((nth_child('10n + 2'),), {'grid-column': '3'}),
+                    ((nth_child('10n + 3'),), {'grid-column': '4'}),
+                    ((nth_child('10n + 1'),), {'grid-area': 'span 2 / span 2'}),
+                    ((nth_child('10n + 10'),), {'grid-area': 'span 2 / span 2'}),
+                ],
+                '''
+                    "item01 item01 item02 item03"
+                    "item01 item01 item04 item05"
+                    "item06 item07 item10 item10"
+                    "item08 item09 item10 item10"
+                    "item11 item11 item12 item13"
+                    "item11 item11 item14 item15"
+                    "item16 item17 item20 item20"
+                    "item18 item19 item20 item20"
+                '''
+            ),
+            (
+                {
+            'grid-auto-flow': 'dense',
+            'grid-auto-rows': '100px',
+            'grid-auto-columns': '1fr',
+            'grid-gap': '5px',
+        }, 20,
+                [
+                    ((nth_child('10n + 2'),), {'grid-column': 'span 2'}),
+                    ((nth_child('10n + 5'),), {'grid-column': 'span 2'}),
+                    ((nth_child('10n + 7'),), {'grid-column': 'span 2'}),
+                    ((nth_child('10n + 8'),), {'grid-column': 'span 2'}),
+                    ((nth_child('10n + 9'),), {'grid-column': '3'}),
+                    ((nth_child('10n + 3'),), {'grid-column': '4'}),
+                    ((nth_child('10n + 1'),), {'grid-row': 'span 2'}),
+                    ((nth_child('10n + 10'),), {'grid-row': 'span 2'}),
+                ],
+                '''
+                    "item01 item02 item02 item03"
+                    "item01 item04 item05 item05"
+                    "item06 item07 item07 item10"
+                    "item08 item08 item09 item10"
+                    "item11 item12 item12 item13"
+                    "item11 item14 item15 item15"
+                    "item16 item17 item17 item20"
+                    "item18 item18 item19 item20"
+                '''
+            ),
+       ]
+    )
+    def test_grid_template_area_equiv(self, nitems, grid, selectors, required):
+        cssgrid = CssGrid(**grid)
+        items = apply_selector(nitems, selectors)
+        [
+            cssgrid.register_item(item_name, attribs)
+            for item_name, attribs in items
+        ]
+        answ_str = cssgrid.grid_template_areas_equiv()
+        assert answ_str == re.sub(r'\n\s+', '\n', required)[1:-1]
+        pass
+
 
     def test_auto_fill(self):
         grid = {

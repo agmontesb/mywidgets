@@ -12,6 +12,36 @@ DEBUG = False
 split_pattern = re.compile(r'\s*(?:\[.+?\])+\s*|(?<!,)\s+?')
 
 
+class MapTracks:
+    def __init__(self, obj: 'CssGrid') -> None:
+        self.obj = obj
+        self.track = 'row' if 'row' in obj.grid_auto_flow else 'column'
+        self.crosst = ('column', 'row')[self.track == 'column']
+
+    def __getattr__(self, item):
+        name = self.get_item_equiv(item)
+        return getattr(self.obj, name)
+
+    def __setattr__(self, key, value):
+        if key in ('obj', 'track', 'crosst', 'get_item_equiv'):
+            super().__setattr__(key, value)
+        else:
+            obj = self.obj
+            fnc = self.get_item_equiv
+            name = fnc(key)
+            setattr(obj, name, value)
+
+    def get_item_equiv(self, name):
+        if 'track' in name:
+            return name.replace('track', self.track)
+        if 'crosst' in name:
+            return name.replace('crosst', self.crosst)
+        return name
+
+    def map_pos(self, x, y):
+        return (x, y) if self.track == 'row' else (y, x)
+
+
 class Cycle:
     def __init__(self, it):
         self.it = it
@@ -35,11 +65,11 @@ class CssGrid:
 
     def __init__(self, **grid):
         self._master = None
-        self.row_names, self.col_names = {}, {}
-        self.row_tracks, self.column_tracks = [], []
+        self.row_names, self.column_names = {}, {}
+        self.grid_template_rows, self.grid_template_columns = [], []
         self.areas = {}
         self.nrows = self.ncolumns = 0
-        self.row_gap = self.column_gap = 0
+        self.grid_row_gap = self.grid_column_gap = 0
         self.align_items = self.justify_items = 'center'
         self.align_content = self.justify_content = 'start'
         self._grid_auto_columns = Cycle(['0px'])
@@ -53,7 +83,7 @@ class CssGrid:
         self.slaves_order = []
         self.memory = (0, 0)
 
-        self.parse_template(grid)
+        self.parse_grid_declaration_block(grid)
 
     @property
     def grid_auto_rows(self):
@@ -78,38 +108,37 @@ class CssGrid:
         return self._master
 
     def get_n_from_xy(self, x, y):
-        if 'row' in self.grid_auto_flow:
-            return self.ncolumns * x + y
-        return self.nrows * y + x
+        mself = MapTracks(self)
+        track, crosst = mself.map_pos(x, y)
+        return mself.ncrossts * track + crosst
 
     def get_xy_from_n(self, n):
-        if 'row' in self.grid_auto_flow:
-            x = n // self.ncolumns
-            y = n % self.ncolumns
-        else:
-            y = n // self.nrows
-            x = n % self.nrows
+        mself = MapTracks(self)
+        base = mself.ncrossts
+        track, ctrack = n // base, n % base
+        x, y = mself.map_pos(track, ctrack)
         return x, y
 
     def norm_n_pos(self, x, y, nrows, ncols, slaves=None):
-        ntracks = self.ncolumns if 'row' in self.grid_auto_flow else self.nrows
+        mself = MapTracks(self)
+        ntracks = mself.ncrossts
 
         deltax = deltay = 0
         if x >= 0 and (x + nrows - 1 >= self.nrows):
             deltax = x + nrows - self.nrows
-            self.row_tracks += deltax * [self.grid_auto_rows]
+            self.grid_template_rows += deltax * [self.grid_auto_rows]
         elif x < 0:
             deltax = x
-            self.row_tracks = (-deltax) * [self.grid_auto_rows] + self.row_tracks
+            self.grid_template_rows = (-deltax) * [self.grid_auto_rows] + self.grid_template_rows
 
         if y >= 0 and (y + ncols - 1 >= self.ncolumns):
             deltay = y + ncols - self.ncolumns
-            self.column_tracks += deltay * [self.grid_auto_columns]
+            self.grid_template_columns += deltay * [self.grid_auto_columns]
         elif y < 0:
             deltay = y
-            self.column_tracks = (-deltay) * [self.grid_auto_columns] + self.column_tracks
+            self.grid_template_columns = (-deltay) * [self.grid_auto_columns] + self.grid_template_columns
 
-        deltax, deltay = (deltay, deltax) if 'row' in self.grid_auto_flow else (deltax, deltay)
+        deltax, deltay = mself.map_pos(deltay, deltax)
         deltay = min(deltay, 0)
         if self.taken:
             cases = (deltax, 0) if deltax < 0 else (0, deltax)
@@ -130,8 +159,8 @@ class CssGrid:
                     for _, x in slaves
                 ]
 
-        self.nrows = len(self.row_tracks)
-        self.ncolumns = len(self.column_tracks)
+        self.nrows = len(self.grid_template_rows)
+        self.ncolumns = len(self.grid_template_columns)
 
         x -= deltay
         y -= min(deltax, 0)
@@ -149,29 +178,21 @@ class CssGrid:
             # items sin ninguna restricción en su posicionamiento
             n = None
             if len(taken) < self.nrows * self.ncolumns:
-                taken = [-1, *sorted(self.taken), self.nrows * self.ncolumns]
-                availables = itertools.chain(
-                    *[range(x + 1, y) for x, y in zip(taken, taken[1:]) if y - x - 1 > 0]
-                )
-                n_zero = -1 if isDense else self.last_fill_pos
-                it = itertools.dropwhile(lambda x, a=n_zero: x < a, availables)
-                while True:
-                    try:
-                        n = next(it)
-                        # Se calcula el número de posiciones para posicionar el item
-                        req_pos = self.enumerate_area_items(n=n, nrows=nrows, ncols=ncols)
-                        if len(req_pos) == nrows * ncols and req_pos.isdisjoint(self.taken):
-                            x, y = self.get_xy_from_n(n)
-                            break
-                    except StopIteration:
-                        n = None
+                nreal = self.availables()
+                if not isDense:
+                    nreal = itertools.dropwhile(lambda x: x <= self.last_fill_pos, nreal)
+                for n in nreal:
+                    req_pos = self.enumerate_area_items(n=n, nrows=nrows, ncols=ncols)
+                    if len(req_pos) == nrows * ncols and req_pos.isdisjoint(self.taken):
+                        x, y = self.get_xy_from_n(n)
                         break
+                else:
+                    n = None
             if n is None:
                 n = self.ncolumns * self.nrows
                 # Si n es cero, significa que no se ha posicionado ningún elemento sobre la grilla
                 # por lo cual se manda a la primera posición (0, 0)
                 x, y = self.get_xy_from_n(n) if n else (0, 0)
-            # self.last_fill_pos = n
         else:
             if priority == 2:
                 locked_coord = x if isRowAutoFlow else y
@@ -197,12 +218,11 @@ class CssGrid:
                     linf = locked_coord
                     lsup = linf + ntracks * nother
                     step = ntracks
-                nviables = set(range(linf, lsup, step))
-                nreal = nviables - taken
+                nreal = self.availables(linf, lsup, step)
                 if not isDense:
-                    # linf = max(taken & nviables) if taken & nviables else -1
-                    nreal = {x for x in nreal if x >= self.last_fill_pos}
-                for n in sorted(nreal):
+                    nreal = itertools.dropwhile(lambda x: x <= self.last_fill_pos, nreal)
+                # for n in sorted(nreal):
+                for n in nreal:
                     req_pos = self.enumerate_area_items(n=n, nrows=nrows, ncols=ncols)
                     if req_pos.isdisjoint(self.taken):
                         x, y = self.get_xy_from_n(n)
@@ -214,15 +234,27 @@ class CssGrid:
                     x0, y0 = self.get_xy_from_n(n)
                     dx, dy = (0, 1) if priority == 2 else (1, 0)
                     x, y = x0 + dx, y0 + dy
-                # self.last_fill_pos = n
         return x, y
 
+    def availables(self, linf=None, lsup=None, step=1):
+        fnc = lambda x, linf, step: linf + step * ((x - linf) // step + 1 * ((x - linf) % step > 0))
+        linf = linf or 0
+        lsup = lsup or self.nrows * self.ncolumns
+        dmy = [-1, *sorted(self.taken), self.nrows * self.ncolumns]
+        rlist = [
+            range(xs, y, step)
+            for x, y in zip(dmy[:-1], dmy[1:])
+            if (y - (xs := fnc(x + 1, linf, step)) >= 1) and y > linf and (y <= lsup or xs < lsup < y)
+        ]
+        it = itertools.chain(*rlist)
+        return itertools.takewhile(lambda x: x < lsup, itertools.dropwhile(lambda x: x < linf, it))
+
     def init_grid_state(self):
-        self.row_names, self.col_names = {}, {}
-        self.row_tracks, self.column_tracks = [], []
+        self.row_names, self.column_names = {}, {}
+        self.grid_template_rows, self.grid_template_columns = [], []
         self.areas = {}
         self.nrows = self.ncolumns = 0
-        self.row_gap = self.column_gap = 0
+        self.grid_row_gap = self.grid_column_gap = 0
         self.align_items = self.justify_items = 'stretch'
         self.align_content = self.justify_content = 'start'
         self._grid_auto_columns = Cycle(['0px'])
@@ -236,7 +268,7 @@ class CssGrid:
         self.slaves_order = []
         self.memory = (0, 0)
 
-    def parse_template(self, grid):
+    def parse_grid_declaration_block(self, grid: dict[str, str]):
         self.init_grid_state()
         to_process: list = [(key, grid[key]) for key in grid.keys() & self.container_parsers.keys()]
         while to_process:
@@ -247,7 +279,7 @@ class CssGrid:
                 continue
             match attr_key:
                 case 'grid-template-rows':
-                    drow, self.row_tracks, responsive = answ
+                    drow, self.grid_template_rows, responsive = answ
                     self.row_names.update(drow)
                     if responsive:
                         key, data = responsive
@@ -255,36 +287,36 @@ class CssGrid:
                             self.grid_auto_rows = data
                             self.rows_responsive['auto'] = lambda x, y=key: y
                         else:
-                            row_tracks, self.row_tracks = self.row_tracks, ''
+                            row_tracks, self.grid_template_rows = self.grid_template_rows, ''
                             # De esta forma se obliga a calcular la función de entrada
                             self.rows_responsive[key] = lambda x, y=row_tracks: y
                 case 'grid-template-columns':
-                    dcol, self.column_tracks, responsive = answ
-                    self.col_names.update(dcol)
+                    dcol, self.grid_template_columns, responsive = answ
+                    self.column_names.update(dcol)
                     if responsive:
                         key, data = responsive
                         if key in ('auto-fit', 'auto-fill'):
                             self.grid_auto_columns = data
                             self.columns_responsive['auto'] = lambda x, y=key: y
                         else:
-                            column_tracks, self.column_tracks = self.column_tracks, ''
+                            column_tracks, self.grid_template_columns = self.grid_template_columns, ''
                             # De esta forma se obliga a calcular la función de entrada
                             self.columns_responsive[key] = lambda x, y=column_tracks: y
                 case 'grid-template-areas':
                     self.areas, drow, dcol = answ
                     self.row_names.update(drow)
-                    self.col_names.update(dcol)
+                    self.column_names.update(dcol)
                 case 'column-gap' | 'grid-column-gap' | 'row-gap' | 'grid-row-gap':
                     if not isinstance(answ, list):
                         answ = int(answ.strip(' px'))
                     else:
                         answ = list(map(lambda x: int(x.strip(' px')), answ))
                     if 'column' in attr_key:
-                        self.column_gap = answ
+                        self.grid_column_gap = answ
                     else:
-                        self.row_gap = answ
+                        self.grid_row_gap = answ
                 case 'gap' | 'grid-gap':
-                    self.row_gap, self.column_gap = map(lambda x: int(x.strip(' px')), answ)
+                    self.grid_row_gap, self.grid_column_gap = map(lambda x: int(x.strip(' px')), answ)
                 case 'justify-items':
                     self.justify_items = answ
                 case 'align-items':
@@ -298,23 +330,25 @@ class CssGrid:
                 case 'place-content':
                     self.align_content, self.justify_content = answ
                 case 'grid-auto-columns':
-                    self.grid_auto_columns = template.strip()
+                    if not self.columns_responsive.get('auto'):
+                        self.grid_auto_columns = template.strip()
                 case 'grid-auto-rows':
-                    self.grid_auto_rows = template.strip()
+                    if not self.rows_responsive.get('auto'):
+                        self.grid_auto_rows = template.strip()
                 case 'grid-auto-flow':
                     template = template.strip()
                     if template == 'dense':
                         template = f'row {template}'
                     self.grid_auto_flow = template
 
-        self.nrows = self.nrows_explicit = len(self.row_tracks)
-        self.ncolumns = self.ncolumns_explicit = len(self.column_tracks)
+        self.nrows = self.nrows_explicit = len(self.grid_template_rows)
+        self.ncolumns = self.ncolumns_explicit = len(self.grid_template_columns)
 
     def tkinter_master_params(self):
         answ = {}
         track_names = ('row', 'column')
         for track_name in track_names:
-            tracks = getattr(self, f'{track_name}_tracks')
+            tracks = getattr(self, f'grid_template_{track_name}s')
             ctracks = collections.defaultdict(list)
             [ctracks[key].append(k) for k, key in enumerate(tracks)]
 
@@ -384,7 +418,7 @@ class CssGrid:
             base = []
             lsup_size = []
 
-            size_offset = (len(track_template) - 1) * getattr(self, f'{track_name}_gap')
+            size_offset = (len(track_template) - 1) * getattr(self, f'grid_{track_name}_gap')
 
             for k, x in enumerate(track_template):
                 if x.endswith('px'):
@@ -430,7 +464,7 @@ class CssGrid:
                 min_size = m.group(1)
             else:
                 min_size = grid_auto_tracks
-            base = int(min_size.strip(' px')) + self.column_gap
+            base = int(min_size.strip(' px')) + self.grid_column_gap
             return base
 
         def nRespTracks(track_name: Literal['row', 'column'], track_min_size: int, auto_type: Literal['auto-fill', 'auto-fit'], length: int) -> int:
@@ -439,7 +473,7 @@ class CssGrid:
                 return 0
             if isinstance(length, str) or isinstance(track_min_size, str):
                 pass
-            gap = getattr(self, f'{track_name}_gap')
+            gap = getattr(self, f'grid_{track_name}_gap')
             ntracks = (length + gap) // (track_min_size + gap)
             if auto_type == 'auto-fit':
                 isTrackAutoFlow = self.grid_auto_flow == track_name
@@ -462,7 +496,7 @@ class CssGrid:
         def setResponsiveData(key: Literal['auto', 'minmax'], bflag: bool, track_name: str, len1: int, len2: int) -> bool:
             track_responsive = getattr(self, f'{track_name}s_responsive')
             if not bflag and (fnc := track_responsive.get(key)):
-                bflag = not getattr(self, f'{track_name}_tracks')     # No se tiene funcion generadora
+                bflag = not getattr(self, f'grid_template_{track_name}s')     # No se tiene funcion generadora
                 if bflag:
                     auto_type = fnc(track_name)     # fnc solo entrega parámetros para armar función generadora
                     fnc = responsive_catalog[key](track_name, auto_type)
@@ -470,7 +504,7 @@ class CssGrid:
                 tracks = fnc(len2)
                 bflag = bflag or fnc(len1) != tracks    # Si no había función generadora, se obliga a generar tracks
                 if bflag:
-                    setattr(self, f'{track_name}_tracks', tracks)
+                    setattr(self, f'grid_template_{track_name}s', tracks)
             return bflag
 
 
@@ -484,7 +518,7 @@ class CssGrid:
             # Se eliminan los cross tracks que hayan sido generados automáticamente
             # por el geomanager.
             # self.column_tracks = [x for x in self.column_tracks if x != self.grid_auto_columns]
-            self.column_tracks = []
+            self.grid_template_columns = []
 
         bRowResponsive = setResponsiveData('minmax', bRowResponsive, 'row', H, h)
 
@@ -493,7 +527,7 @@ class CssGrid:
             # Se eliminan los cross tracks que hayan sido generados automáticamente
             # por el geomanager.
             # self.row_tracks = [x for x in self.row_tracks if x != self.grid_auto_rows]
-            self.row_tracks = []
+            self.grid_template_rows = []
 
         bColResponsive = setResponsiveData('minmax', bColResponsive, 'column', W, w)
 
@@ -502,7 +536,7 @@ class CssGrid:
         # for key, bflag, track_name, len1, len2, in (('auto', bRowResponsive, 'row', H, h), ('auto', bColResponsive, 'column', W, w)):
         #     track_responsive = getattr(self, f'{track_name}s_responsive')
         #     if not bflag and (fnc := track_responsive.get(key)):
-        #         bflag = not getattr(self, f'{track_name}_tracks')     # No se tiene funcion generadora
+        #         bflag = not getattr(self, f'grid_template_{track_name}s')     # No se tiene funcion generadora
         #         if bflag:
         #             auto_type = fnc(track_name)     # fnc solo entrega parámetros para armar función generadora
         #             fnc = auto_responsive(track_name, auto_type)
@@ -510,7 +544,7 @@ class CssGrid:
         #         tracks = fnc(len2)
         #         bflag = bflag or fnc(len1) != tracks    # Si no había función generadora, se obliga a generar tracks
         #         if bflag:
-        #             setattr(self, f'{track_name}_tracks', tracks)
+        #             setattr(self, f'grid_template_{track_name}s', tracks)
         #     resp_state.append(bflag)
         # bRowResponsive, bColResponsive = resp_state
 
@@ -558,7 +592,7 @@ class CssGrid:
         # for bflag, track_name, len1, len2, in ((bRowResponsive, 'row', H, h), (bColResponsive, 'column', W, w)):
         #     track_responsive = getattr(self, f'{track_name}s_responsive')
         #     if not bflag and (fnc := track_responsive.get('minmax')):
-        #         bflag = not getattr(self, f'{track_name}_tracks')
+        #         bflag = not getattr(self, f'grid_template_{track_name}s')
         #         if bflag:
         #             track_template = fnc(track_name)
         #             fnc = minmax_responsive(track_name, track_template)
@@ -566,7 +600,7 @@ class CssGrid:
         #         tracks = fnc(len2)
         #         bflag = bflag or fnc(len1) != tracks
         #         if bflag:
-        #             setattr(self, f'{track_name}_tracks', tracks)
+        #             setattr(self, f'grid_template_{track_name}s', tracks)
         #     resp_state.append(bflag)
         # bRowResponsive, bColResponsive = resp_state
 
@@ -614,8 +648,8 @@ class CssGrid:
         order = []
         self.taken = set()
         self.last_fill_pos = -1
-        self.nrows = len(self.row_tracks)
-        self.ncolumns = len(self.column_tracks)
+        self.nrows = len(self.grid_template_rows)
+        self.ncolumns = len(self.grid_template_columns)
         self._grid_auto_rows.reset()
         self._grid_auto_columns.reset()
 
@@ -645,7 +679,7 @@ class CssGrid:
                 lstwdg, wdg = wdg, master.nametowidget(name)
                 wdg.lift(lstwdg)
 
-        h, w = self.row_gap, self.column_gap
+        h, w = self.grid_row_gap, self.grid_column_gap
 
         row_place, column_place = self.justify_content, self.align_content
         gaps = {}
@@ -695,9 +729,9 @@ class CssGrid:
 
         if DEBUG:
             nrows, ncolumns = self.nrows, self.ncolumns
-            if not self.row_gap and self.grid_auto_flow == 'column':
+            if not self.grid_row_gap and self.grid_auto_flow == 'column':
                 ncolumns = len(self.slaves) // nrows
-            if not self.column_gap and self.grid_auto_flow == 'row':
+            if not self.grid_column_gap and self.grid_auto_flow == 'row':
                 nrows = len(self.slaves) // ncolumns
 
             for row in range(0, 2 * nrows + 1, 2):
@@ -727,8 +761,10 @@ class CssGrid:
         # is larger than the width of the implicit grid, add columns to the end of the implicit
         # grid to accommodate that column span."
 
-        track = 'row' if 'row' in self.grid_auto_flow else 'column'
-        ctrack = ('column', 'row')[track == 'column']
+        mself = MapTracks(self)
+        track, ctrack = mself.track, mself.crosst
+        # track = 'row' if 'row' in self.grid_auto_flow else 'column'
+        # ctrack = ('column', 'row')[track == 'column']
         kpos, span = f'grid-{ctrack}-start', f'grid-{ctrack}-span'
         spans = [
             (x.get(kpos, 0), x.get(kpos, 0) + x.get(span, 1))
@@ -747,7 +783,7 @@ class CssGrid:
                 if track_offset < 0:
                     # Se tiene desplazamiento del origen en track_offset posiciones por lo cual
                     # se actualizan las posiciones de los items ya posicionados.
-                    x, y = (0, track_offset) if track == 'row' else (track_offset, 0)
+                    x, y = mself.map_pos(0, track_offset)
                     self.norm_n_pos(x, y, 1, 1, slaves=slaves)
                     # Para los items con prioridad 3, con track definido, se actualiza el
                     # track-start.
@@ -760,7 +796,7 @@ class CssGrid:
                     min_ntracks -= track_offset
                 delta = min_ntracks - getattr(self, f'n{ctrack}s')      # min_ntracks - self.nrows
                 if delta > 0:
-                    x, y = (0, self.ncolumns + delta - 1) if track == 'row' else (self.nrows + delta - 1, 0)
+                    x, y = mself.map_pos(0, self.ncolumns + delta - 1)
                     self.norm_n_pos(x, y, 1, 1, slaves=slaves)
                 bAdjust_ntracks = False
                 # 4 Position the remaining grid items. (priority >= 3)
@@ -831,7 +867,7 @@ class CssGrid:
             elif case == 'item_name':
                 if val == 'auto':
                     continue
-                track_names = self.col_names if track == 'column' else self.row_names
+                track_names = self.column_names if track == 'column' else self.row_names
                 if val in self.areas:
                     val = f'{val}-{suffix}'
                 try:
@@ -855,7 +891,7 @@ class CssGrid:
                 if delta and val in self.areas:
                     to_process.append((key, val))
                     continue
-                val = self.col_names[val]
+                val = self.column_names[val]
                 grid_params[f'grid-{track}-span'] = val + delta
                 pass
 
@@ -957,15 +993,14 @@ class CssGrid:
     def enumerate_area_items(self, n=None, row=None, col=None, nrows=1, ncols=1) -> set:
         if n is None:
             n = self.get_n_from_xy(row, col)
-        if 'row' in self.grid_auto_flow:
-            y_zero = n % self.ncolumns
-            ncols = min(self.ncolumns - y_zero, ncols)
-            return set(n + y + x * self.ncolumns for x in range(nrows) for y in range(ncols))
-        x_zero = n % self.nrows
-        nrows = min(self.nrows - x_zero, nrows)
-        return set(n + x + y * self.nrows for y in range(ncols) for x in range(nrows))
+        mself = MapTracks(self)
+        dtrack, dcrosst = mself.map_pos(nrows, ncols)
+        ncrossts = mself.ncrossts
+        z_zero = n % ncrossts
+        dcrosst = min(ncrossts - z_zero, dcrosst)
+        return set(n + y + x * ncrossts for x in range(dtrack) for y in range(dcrosst))
 
-    def update_taken(self, grid_params):
+    def update_taken(self, grid_params: dict[str, str]) -> None:
         n = grid_params['n-pos']
         nrows = grid_params.get('grid-row-span', 1)
         ncols = grid_params.get('grid-column-span', 1)
@@ -985,7 +1020,7 @@ class CssGrid:
         x, y, width, height = self.master.bbox(column, row, col2, row2)
         return ((x - 1) // 2 + 1), ((y - 1) // 2 + 1), width, height
 
-    def isResponsive(self, track_name: Literal['row', 'column'] = 'row', track_id: int | None = None):
+    def isResponsive(self, track_name: Literal['row', 'column'] = 'row', track_id: int | None = None) -> bool:
         if track_id:
             method = getattr(self, f'{track_name}configure')
             return method(track_id)['weight'] != 0
@@ -999,9 +1034,9 @@ class CssGrid:
         '''
         responsive = getattr(self, f'{track_name}s_responsive')
         if 'minmax' in responsive:
-            tracks = getattr(self, f'{track_name}_tracks')
+            tracks = getattr(self, f'grid_template_{track_name}s')
             if all('minmax' not in x for x in tracks):
-                track_gap = getattr(self, f'{track_name}_gap')
+                track_gap = getattr(self, f'grid_{track_name}_gap')
                 delta_gaps = (len(tracks) - 1) * track_gap
                 size_lims = responsive['minmax'].__defaults__[0]
                 return [x + delta_gaps for x in size_lims]
@@ -1023,6 +1058,28 @@ class CssGrid:
         to_verify = dict(to_verify)
         return to_verify
 
+    def grid_template_areas_equiv(self) -> str:
+        """
+        Entrega el grid-template-area equivalente para los slaves registrados
+        """
+        bbox = lambda x: (
+            x['grid-row-start'], x['grid-column-start'],
+            x['grid-row-span'], x['grid-column-span'],
+        )
+
+        slaves_items = self.get_process_item_attribs()
+        keys = [key for key, _ in slaves_items]
+        slaves = dict(slaves_items)
+        nset = lambda x: self.enumerate_area_items(None, *bbox(slaves[x]))
+
+        taken = [zip(nset(key), itertools.repeat(f'item{k:0>2d}')) for k, key in enumerate(keys, start=1)]
+        availables = [zip(self.availables(), itertools.repeat('......'))]
+        answ = sorted(itertools.chain(*taken, *availables))
+        step = self.ncolumns
+        answ_str = '\n'.join(f'"{" ".join(x[1] for x in answ[k: k + step])}"' for k in range(0, len(answ), step))
+        return answ_str
+
+    # =============================== Parsers =======================================================
 
     @staticmethod
     def grid_template_pattern(template):
@@ -1310,7 +1367,7 @@ def frst_main():
         'grid-template-rows': '30px 30px',
     }
 
-    container.parse_template(grid)
+    container.parse_grid_declaration_block(grid)
 
     items = [
         {'grid-column': '1', 'grid-row': '1 / 3'},      # item-a
