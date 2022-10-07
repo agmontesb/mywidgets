@@ -16,7 +16,7 @@ from Widgets import kodiwidgets
 from equations import equations_manager
 
 R = type('Erre', (object,), {})
-REFRESH_TIME = 10
+REFRESH_TIME = '10'
 
 
 class UiMonitor(tk.Tk):
@@ -76,7 +76,7 @@ class UiMonitor(tk.Tk):
         attribs = xmlwidget.attrib
         name = attribs.get('name')
         if name:
-            if name in ('parent_frame', 'tree', ):
+            if name in ('parent_frame', 'tree', 'lst_update', ):
                 setattr(self, name, widget)
             elif name == 'open_file':
                 widget.config(command=self.open_file)
@@ -90,9 +90,11 @@ class UiMonitor(tk.Tk):
         xmlfile = userinterface.getFileUrl('@data:tkinter/dlg_uimonitor_settings')
         dlg = kodiwidgets.CustomDialog(
             self,
-            title=title, xmlFile=xmlfile, isFile=True, settings=self.uimonitor_ops, dlg_type='okcancel'
+            title=title, xmlFile=xmlfile, isFile=True, settings=self.R._asdict(), dlg_type='okcancel'
         )
-        self.R = self.R._replace(**dlg.settings)
+        if dlg.allSettings:
+            settings = dict(dlg.allSettings)
+            self.R = self.R._replace(**settings)
 
     def do_popup(self):
         popup_menu = tk.Menu(self, tearoff=0)
@@ -187,7 +189,7 @@ class UiMonitor(tk.Tk):
                 setParentTo='root',
                 k=seq
             )
-        equations_manager.set_initial_widget_states()
+        # equations_manager.set_initial_widget_states()
         self.seq = seq
 
     def check_watched_files(self):
@@ -197,11 +199,13 @@ class UiMonitor(tk.Tk):
             if (new_value := os.path.getmtime(key)) != value
         ]
         if changed:
+            self.lst_update: tk.Label
+            now = datetime.now()
+            self.lst_update.configure(text=now.strftime('%H:%M:%S'))
             self.update_changed = True
-            # msg = '\n'.join(x[0] for x in changed)
-            # tkMessageBox.showinfo(title='Changed Files', message=msg)
             self.init_UI_View()
-        self.pid = self.after(self.R.refresh_time * 1000, self.check_watched_files)
+
+        self.pid = self.after(int(self.R.refresh_time) * 1000, self.check_watched_files)
 
     @contextlib.contextmanager
     def context_open(self):
@@ -247,7 +251,7 @@ class UiMonitor(tk.Tk):
         self.update_changed = True
         self.activeViewIndx.set('ui')
         if self.pid is None:
-            self.pid = self.after(self.R.refresh_time * 1000, self.check_watched_files)
+            self.pid = self.after(int(self.R.refresh_time) * 1000, self.check_watched_files)
         self.recFile(name)
 
     def recFile(self, filename):

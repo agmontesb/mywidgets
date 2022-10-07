@@ -1,3 +1,10 @@
+v0.1.7
+- Clase CssUnit que hace manejo de las dimensiones en css.
+- Integración en cálculo de responsive de CssUnit con dimensiones relativas verificando que en 
+los atributos 'grid_templaterows' y 'grid_template_columns' no se tengan CssUnits relativas tales
+como '%' o una de las relativas al viewport.
+- Corrección de bugs en UIMonitor.
+
 v0.1.6
 - Nuevo método CssGrid.availables(linf, lsup, step) entrega las posiciones disponibles en el grid 
 para un range(linf, lsup, step). Este método parte de las posiciones tomadas (CssGrid.taken) y 

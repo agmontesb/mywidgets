@@ -2,8 +2,8 @@
 <settings>
 	<category label="General" lib="Widgets.kodiwidgets">
         <label text="General" side="top" fill="x" font="Helvetica 18 bold"/>
-        <knumber id="refresh_time" label="Refresh Time (seg):" default="10"/>
-        <ktext id="geometry" label="Initial Geometry (WxH):   " default="500x500"/>
+        <ktext id="refresh_time" label="Refresh Time (seg):" default="0"/>
+        <ktext id="geometry" label="Initial Geometry (WxH):   " default="100x100"/>
         <ktext id="filters" label="Pattern of files to watch:   " default="*.xml, *.css"/>
         <kfolder id="initial_path" label="Initial Path:   " default=""/>
     </category>

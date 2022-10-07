@@ -3,10 +3,12 @@ import collections
 import itertools
 import re
 import tkinter
+import tkinter.font as tkFont
 from typing import Literal
 
 import userinterface
 
+tk = tkinter
 DEBUG = False
 
 split_pattern = re.compile(r'\s*(?:\[.+?\])+\s*|(?<!,)\s+?')
@@ -59,6 +61,103 @@ class Cycle:
         self.n = 0
 
 
+class CssUnit:
+            '''
+            Unifica la salida de las dimensiones css a pixel
+            '''
+            absolute_units = 'cm|mm|in|px|pt|pc'
+            relative_units = 'em|ex|ch|rem|vw|vh|vmin|vmax|%'
+            units = f'{absolute_units}|{relative_units}'
+
+            def __new__(cls, size_str: str):
+                m = re.match(fr'(\d+)({cls.units})', size_str)
+                try:
+                    m.groups()
+                    return super().__new__(cls)
+                except:
+                    return size_str
+
+            def __init__(self, size_str: str):
+                self._memory = (0, 0)
+                try:
+                    m = re.match(fr'(\d+)({self.units})', size_str)
+                    size, self.unit = m.groups()
+                    self.size = int(size)
+                except AttributeError:
+                    raise AttributeError('Not a valid css string unit')
+
+            def config_params(self, widget, attrib):
+                def on_config(event):
+                    if event.widget == widget.master and self._memory != (event.width, event.height):
+                        value = self._value(event, attrib)
+                        params = {attrib: value}
+                        widget.config(**params)
+                        self._memory = (event.width, event.height)
+                        print(params)
+                return on_config
+
+            def __repr__(self):
+                return f'CssUnit({self.size}{self.unit})'
+
+            def value(self, widget: tk.Widget, attrib: str):
+                if self.unit in self.absolute_units:
+                    return self._value(None, '')
+                top = widget.winfo_toplevel()
+                match self.unit:
+                    case '%':
+                        master = widget.master
+                        master.bind("<Configure>", self.config_params(widget, attrib), add=True)
+                        return 1
+                    case 'vw' | 'vh' | 'vmin' | 'vmax':
+                        top.bind("<Configure>", self.config_params(widget, attrib), add=True)
+                        return 1
+                    case 'em' | 'rem' | 'ch':
+                        # https://stackoverflow.com/questions/25548060/converting-pt-and-px
+                        wdg = widget if self.unit != 'rem' else top
+                        return self._value(wdg, attrib)
+
+            def _value(self, obj: tk.Event, attrib: str):
+                if self.unit in self.absolute_units:
+                    size, unit = self.size, self.unit
+                    if unit == 'pc':
+                        size *= 10
+                        unit = 'pt'
+                    match unit:
+                        case 'px':
+                            pass
+                        case 'cm':
+                            size = (size * 254 * 96) // 100
+                        case 'mm':
+                            size = (size * 254 * 96) // 1000
+                        case 'in':
+                            size = size * 96
+                        case 'pt':
+                            size = (size * 96) // 72
+                    return size
+                match self.unit:
+                    case '%':
+                        base_value = getattr(obj, attrib)
+                    case 'vw' | 'vh' | 'vmin' | 'vmax':
+                        vw, vh = map(lambda x: getattr(obj, x), ('width', 'height'))
+                        match self.unit:
+                            case 'vw':
+                                base_value = vw
+                            case 'vh':
+                                base_value = vh
+                            case 'vmin':
+                                base_value = min(vw, vh)
+                            case 'vmax':
+                                base_value = max(vw, vh)
+                    case 'em' | 'rem' | 'ch':
+                        wdg = obj.widget
+                        wdg = wdg if self.unit != 'rem' else wdg.winfo_toplevel()
+                        fnt_name = wdg.cget('font')
+                        fnt = tkFont.nametofont(fnt_name)
+                        size_pt = fnt.cget('size') if self.unit != 'ch' else fnt.measure('0')
+                        base_value = 100 * (size_pt * 96) // 72
+                return (base_value * self.size) // 100
+
+
 class CssGrid:
 
     manager = 'grid'
@@ -69,11 +168,11 @@ class CssGrid:
         self.grid_template_rows, self.grid_template_columns = [], []
         self.areas = {}
         self.nrows = self.ncolumns = 0
-        self.grid_row_gap = self.grid_column_gap = 0
+        self.grid_row_gap = self.grid_column_gap = CssUnit('0px')
         self.align_items = self.justify_items = 'center'
         self.align_content = self.justify_content = 'start'
-        self._grid_auto_columns = Cycle(['0px'])
-        self._grid_auto_rows = Cycle(['0px'])
+        self._grid_auto_columns = Cycle([CssUnit('0px')])
+        self._grid_auto_rows = Cycle([CssUnit('0px')])
         self.grid_auto_flow = 'row'
         self.rows_responsive = {}
         self.columns_responsive = {}
@@ -91,7 +190,8 @@ class CssGrid:
 
     @grid_auto_rows.setter
     def grid_auto_rows(self, data):
-        self._grid_auto_rows = Cycle(split_pattern.split(data))
+        auto = [CssUnit(x) for x in split_pattern.split(data)]
+        self._grid_auto_rows = Cycle(auto)
 
     @property
     def grid_auto_columns(self):
@@ -99,7 +199,8 @@ class CssGrid:
 
     @grid_auto_columns.setter
     def grid_auto_columns(self, data):
-        self._grid_auto_columns = Cycle(split_pattern.split(data))
+        auto = [CssUnit(x) for x in split_pattern.split(data)]
+        self._grid_auto_columns = Cycle(auto)
 
     @property
     def master(self):
@@ -254,11 +355,11 @@ class CssGrid:
         self.grid_template_rows, self.grid_template_columns = [], []
         self.areas = {}
         self.nrows = self.ncolumns = 0
-        self.grid_row_gap = self.grid_column_gap = 0
+        self.grid_row_gap = self.grid_column_gap = CssUnit('0px')
         self.align_items = self.justify_items = 'stretch'
         self.align_content = self.justify_content = 'start'
-        self._grid_auto_columns = Cycle(['0px'])
-        self._grid_auto_rows = Cycle(['0px'])
+        self._grid_auto_columns = Cycle([CssUnit('0px')])
+        self._grid_auto_rows = Cycle([CssUnit('0px')])
         self.grid_auto_flow = 'row'
         self.rows_responsive = {}
         self.columns_responsive = {}
@@ -279,7 +380,8 @@ class CssGrid:
                 continue
             match attr_key:
                 case 'grid-template-rows':
-                    drow, self.grid_template_rows, responsive = answ
+                    drow, track_sizes, responsive = answ
+                    self.grid_template_rows = list(map(CssUnit, track_sizes))
                     self.row_names.update(drow)
                     if responsive:
                         key, data = responsive
@@ -291,7 +393,8 @@ class CssGrid:
                             # De esta forma se obliga a calcular la función de entrada
                             self.rows_responsive[key] = lambda x, y=row_tracks: y
                 case 'grid-template-columns':
-                    dcol, self.grid_template_columns, responsive = answ
+                    dcol, track_sizes, responsive = answ
+                    self.grid_template_columns = list(map(CssUnit, track_sizes))
                     self.column_names.update(dcol)
                     if responsive:
                         key, data = responsive
@@ -308,15 +411,15 @@ class CssGrid:
                     self.column_names.update(dcol)
                 case 'column-gap' | 'grid-column-gap' | 'row-gap' | 'grid-row-gap':
                     if not isinstance(answ, list):
-                        answ = int(answ.strip(' px'))
+                        answ = CssUnit(answ)
                     else:
-                        answ = list(map(lambda x: int(x.strip(' px')), answ))
+                        answ = list(map(lambda x: CssUnit(x), answ))
                     if 'column' in attr_key:
                         self.grid_column_gap = answ
                     else:
                         self.grid_row_gap = answ
                 case 'gap' | 'grid-gap':
-                    self.grid_row_gap, self.grid_column_gap = map(lambda x: int(x.strip(' px')), answ)
+                    self.grid_row_gap, self.grid_column_gap = map(lambda x: CssUnit(x), answ)
                 case 'justify-items':
                     self.justify_items = answ
                 case 'align-items':
@@ -344,7 +447,7 @@ class CssGrid:
         self.nrows = self.nrows_explicit = len(self.grid_template_rows)
         self.ncolumns = self.ncolumns_explicit = len(self.grid_template_columns)
 
-    def tkinter_master_params(self):
+    def tkinter_master_params(self, event: tk.Event):
         answ = {}
         track_names = ('row', 'column')
         for track_name in track_names:
@@ -353,6 +456,8 @@ class CssGrid:
             [ctracks[key].append(k) for k, key in enumerate(tracks)]
 
             method = f'{track_name}configure'
+            cssunit_attr = ('width', 'height')[track_name == 'row']
+
             params_base = []
             tot_min_size = 0
             tot_min_free = 0
@@ -362,27 +467,27 @@ class CssGrid:
             while to_process:
                 key, track_ids = to_process.pop()
                 ntracks = len(track_ids)
-                if key == 'auto':
-                    key = '1fr'
-                if key.endswith('px'):
-                    min_size = int(key[:-2])
+                if isinstance(key, str):
+                    if key == 'auto':
+                        key = '1fr'
+                    if key.endswith('fr'):
+                        weight = int(key.rstrip('fr'))
+                        params_base.append((track_ids, dict(minsize=0, weight=weight)))
+                        free_tracks += ntracks
+                    elif key.startswith('minmax(') and key.endswith(')'):
+                        min_size, max_size = [x.strip() for x in key[7:-1].split(',')]
+                        # min_size = int(min_size.strip('px'))
+                        min_size = CssUnit(min_size)
+                        assert max_size.endswith('fr')
+                        weight = int(max_size.strip('fr'))
+                        tot_min_free += min_size.value(self.master, cssunit_attr) * ntracks
+                        free_tracks += ntracks
+                        params_base.append((track_ids, dict(minsize=min_size, weight=weight)))
+                else:               #isinstance(key, CssUnit)
+                    key: CssUnit
+                    min_size = key._value(event, cssunit_attr)
                     params_base.append((track_ids, dict(minsize=min_size, weight=0)))
                     tot_min_size += min_size * ntracks
-                elif key.endswith('fr') or key.endswith('%'):
-                    key = key.rstrip('fr%')
-                    params_base.append((track_ids, dict(minsize=0, weight=int(key))))
-                    free_tracks += ntracks
-                elif key.startswith('minmax(') and key.endswith(')'):
-                    min_size, max_size = [x.strip() for x in key[7:-1].split(',')]
-                    min_size = int(min_size.strip('px'))
-                    # max_size.endswith('fr') or max_size.endswith('%'):
-                    max_size = int(max_size.strip('%').strip('fr'))
-                    tot_min_free += min_size * ntracks
-                    free_tracks += ntracks
-                    params_base.append((track_ids, dict(minsize=min_size, weight=max_size)))
-                else:
-                    params_base.append((track_ids, dict(weight=10)))
-                    free_tracks += 1
 
             answ[method] = params_base
 
@@ -401,12 +506,35 @@ class CssGrid:
         answ['grid_anchor'] = [(sticky or 'center', {})]
         return answ
 
+    def tracks_with_relative_units(self, bRowResponsive, bColResponsive):
+        to_validate = (('row', bRowResponsive), ('column', bColResponsive))
+        answ = []
+        for track_name, bflag in to_validate:
+            if not bflag:
+                tracks = getattr(self, f'grid_template_{track_name}s')
+                for track in tracks:
+                    if isinstance(track, str):
+                        try:
+                            m = re.match(r'minmax\((\d+[a-z%]+),.+?\)', track)
+                            track = CssUnit(m.group(1))
+                        except:
+                            continue
+                    bflag = track.unit in f'{CssUnit.absolute_units}|em|ex|ch|rem'
+                    if bflag:
+                        break
+            answ.append(bflag)
+        bRowResponsive, bColResponsive = answ
+        return bRowResponsive, bColResponsive
+
     def config_master(self, master):
         self._master = master
-        if not self.columns_responsive and not self.rows_responsive:
+        bRowResponsive, bColResponsive = bool(self.rows_responsive), bool(self.columns_responsive)
+        bRowResponsive, bColResponsive = self.tracks_with_relative_units(bRowResponsive, bColResponsive)
+        if not bRowResponsive and not bColResponsive:
             self._config_master(master)
         else:
             master.bind("<Configure>", self.resize)
+        master.bind("<Configure>", self.resize)
 
     def resize(self, event):
         if event.widget != self.master:
@@ -417,25 +545,31 @@ class CssGrid:
             params = []
             base = []
             lsup_size = []
-
-            size_offset = (len(track_template) - 1) * getattr(self, f'grid_{track_name}_gap')
+            cssunit_attr = ('width', 'height')[track_name == 'row']
+            gap = getattr(self, f'grid_{track_name}_gap')
+            gap = gap.value(self.master, cssunit_attr)
+            size_offset = (len(track_template) - 1) * gap
 
             for k, x in enumerate(track_template):
-                if x.endswith('px'):
-                    x = int(x.strip('px'))
+                if isinstance(x, str):
+                    if x.endswith('fr'):
+                        x = int(x.strip('fr'))
+                        base.append(0)
+                        lsup_size.append([1, x, k])
+                    elif m := re.match(r'minmax\((\d+[a-z%]+),\s*(\d+[a-z%]+)\)', x):
+                        a, b = m.groups()
+                        min_size = CssUnit(a).value(self.master, cssunit_attr)
+                        base.append(min_size)
+                        if b.endswith('fr'):
+                            max_size = int(b[:-2])
+                            lsup_size.append([1, max_size, k])
+                        else:
+                            max_size = CssUnit(b).value(self.master, cssunit_attr)
+                            lsup_size.append([-1, max_size - min_size, k])
+                else:                   # isinstance(x, CssUnit)
+                    x = x.value(self.master, cssunit_attr)
                     base.append(x)
-                elif x.endswith('fr'):
-                    x = int(x.strip('fr'))
-                    base.append(0)
-                    lsup_size.append([1, x, k])
-                elif m := re.match(r'minmax\(([0-9]+)px,\s*([0-9]+)(fr|px)\)', x):
-                    min_size, max_size = map(int, m.groups()[:-1])
-                    base.append(min_size)
-                    mtype = 1 if m.group(3) == 'fr' else -1
-                    if m.group(3) == 'fr':
-                        lsup_size.append([1, max_size, k])
-                    else:
-                        lsup_size.append([-1, max_size - min_size, k])
+
             lsup_size.sort()
             size_lim.append(sum(base) + size_offset)
             free_tracks = {k: '1fr' if mtype < 0 else f'{fr_mult}fr' for mtype, fr_mult, k in lsup_size}
@@ -459,12 +593,14 @@ class CssGrid:
             return fnc
 
         def get_responsive_min_size(track_name: Literal['row', 'column']) -> int:
+            cssunit_attr = ('width', 'height')[track_name == 'row']
             grid_auto_tracks = getattr(self, f'grid_auto_{track_name}s')
             if m := re.match(r'minmax\((.+?),.+?\)', grid_auto_tracks):
                 min_size = m.group(1)
             else:
                 min_size = grid_auto_tracks
-            base = int(min_size.strip(' px')) + self.grid_column_gap
+            min_size = CssUnit(min_size).value(self.master, cssunit_attr)
+            base = min_size + self.grid_column_gap
             return base
 
         def nRespTracks(track_name: Literal['row', 'column'], track_min_size: int, auto_type: Literal['auto-fill', 'auto-fit'], length: int) -> int:
@@ -507,7 +643,6 @@ class CssGrid:
                     setattr(self, f'grid_template_{track_name}s', tracks)
             return bflag
 
-
         master = event.widget
 
         W, H = self.memory
@@ -531,55 +666,8 @@ class CssGrid:
 
         bColResponsive = setResponsiveData('minmax', bColResponsive, 'column', W, w)
 
-        # resp_state = []
-        # bRowResponsive = bColResponsive = False
-        # for key, bflag, track_name, len1, len2, in (('auto', bRowResponsive, 'row', H, h), ('auto', bColResponsive, 'column', W, w)):
-        #     track_responsive = getattr(self, f'{track_name}s_responsive')
-        #     if not bflag and (fnc := track_responsive.get(key)):
-        #         bflag = not getattr(self, f'grid_template_{track_name}s')     # No se tiene funcion generadora
-        #         if bflag:
-        #             auto_type = fnc(track_name)     # fnc solo entrega parámetros para armar función generadora
-        #             fnc = auto_responsive(track_name, auto_type)
-        #             track_responsive[key] = fnc
-        #         tracks = fnc(len2)
-        #         bflag = bflag or fnc(len1) != tracks    # Si no había función generadora, se obliga a generar tracks
-        #         if bflag:
-        #             setattr(self, f'grid_template_{track_name}s', tracks)
-        #     resp_state.append(bflag)
-        # bRowResponsive, bColResponsive = resp_state
+        bRowResponsive, bColResponsive = self.tracks_with_relative_units(bRowResponsive, bColResponsive)
 
-
-
-        # if fnc := self.rows_responsive.get('auto'):
-        #     bRowResponsive = True
-        #     if self.row_tracks:
-        #         bRowResponsive = fnc(H) != fnc(h)
-        #
-        # bColResponsive = False
-        # if fnc := self.columns_responsive.get('auto'):
-        #     bColResponsive = True
-        #     if self.column_tracks:
-        #         bColResponsive = fnc(W) != fnc(w)
-        #
-        # if bRowResponsive:
-        #     fnc = self.rows_responsive.get('auto')
-        #     if not self.row_tracks:
-        #         auto_type = fnc('row')
-        #         fnc = auto_responsive('row')
-        #         self.rows_responsive['auto'] = fnc
-        #     self.row_tracks = fnc(h)
-        #     self.column_tracks = [x for x in self.column_tracks if x != self.grid_auto_columns]
-        #
-        # if bColResponsive:
-        #     fnc = self.columns_responsive.get('auto')
-        #     if not self.column_tracks:
-        #         auto_type = fnc('column')
-        #         fnc = auto_responsive('column')
-        #         self.columns_responsive['auto'] = fnc
-        #     self.column_tracks = fnc(w)
-        #     self.row_tracks = [x for x in self.row_tracks if x != self.grid_auto_rows]
-
-        # Se resetea la grilla anterior para que se inicie siempre como en el principio
         grid_ncolumns, grid_nrows = master.grid_size()
 
         if bColResponsive and grid_ncolumns:
@@ -587,40 +675,6 @@ class CssGrid:
 
         if bRowResponsive and grid_nrows:
             master.rowconfigure(list(range(grid_nrows)), minsize=0, weight=0)
-
-        # resp_state = []
-        # for bflag, track_name, len1, len2, in ((bRowResponsive, 'row', H, h), (bColResponsive, 'column', W, w)):
-        #     track_responsive = getattr(self, f'{track_name}s_responsive')
-        #     if not bflag and (fnc := track_responsive.get('minmax')):
-        #         bflag = not getattr(self, f'grid_template_{track_name}s')
-        #         if bflag:
-        #             track_template = fnc(track_name)
-        #             fnc = minmax_responsive(track_name, track_template)
-        #             track_responsive['minmax'] = fnc
-        #         tracks = fnc(len2)
-        #         bflag = bflag or fnc(len1) != tracks
-        #         if bflag:
-        #             setattr(self, f'grid_template_{track_name}s', tracks)
-        #     resp_state.append(bflag)
-        # bRowResponsive, bColResponsive = resp_state
-
-        # if not bRowResponsive and (fnc := self.rows_responsive.get('minmax')):
-        #     if not self.row_tracks:
-        #         track_template = fnc('row')
-        #         fnc = minmax_responsive(track_template, (len(track_template) - 1) * self.row_gap)
-        #         self.rows_responsive['minmax'] = fnc
-        #     bRowResponsive = (track_template := fnc(h)) != fnc(H)
-        #     if bRowResponsive:
-        #         self.row_tracks = track_template
-        #
-        # if not bColResponsive and (fnc := self.columns_responsive.get('minmax')):
-        #     if not self.column_tracks:
-        #         track_template = fnc('column')
-        #         fnc = minmax_responsive(track_template, (len(track_template) - 1) * self.column_gap)
-        #         self.columns_responsive['minmax'] = fnc
-        #     bColResponsive = (track_template := fnc(w)) != fnc(W)
-        #     if bColResponsive:
-        #         self.column_tracks = track_template
 
         if bRowResponsive or bColResponsive:
             # Se elimina la grilla anterior si la hubiera.
@@ -631,10 +685,11 @@ class CssGrid:
                 for wdg in master.grid_slaves()
             ]
             # Se procede a mapear nuevamente los widgets en el grid container
-            self._config_master(master)
+            self._config_master(event)
             self.memory = w, h
 
-    def _config_master(self, master):
+    def _config_master(self, event):
+        master = self.master
         equiv = [
             ('grid-column-start', 'column'),
             ('grid-row-start', 'row'),
@@ -679,12 +734,12 @@ class CssGrid:
                 lstwdg, wdg = wdg, master.nametowidget(name)
                 wdg.lift(lstwdg)
 
-        h, w = self.grid_row_gap, self.grid_column_gap
+        h, w = map(lambda x, attr: x._value(event, attr), (self.grid_row_gap, self.grid_column_gap), ('height', 'width'))
 
         row_place, column_place = self.justify_content, self.align_content
         gaps = {}
 
-        track_params = self.tkinter_master_params()
+        track_params = self.tkinter_master_params(event)
         static_rows = all(x.get('weight', 0) == 0 for _, x in track_params.get('rowconfigure', []))
         static_columns = all(x.get('weight', 0) == 0 for _, x in track_params.get('columnconfigure', []))
 

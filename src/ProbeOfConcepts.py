@@ -2,6 +2,7 @@
 import collections
 import itertools
 import tkinter as tk
+import tkinter.font as tkFont
 import tkinter.messagebox as tkMessage
 import xml.etree.ElementTree as ET
 import re
@@ -145,85 +146,119 @@ def nameElements(htmlstr, k=-1):
 
 
 if __name__ == '__main__':
-    caso = 'track_obj'
-    if caso == 'track_obj':
+    caso = 'css_units'
+    if caso == 'css_units':
+        class CssUnit:
+            '''
+            Unifica la salida de las dimensiones css a pixel
+            '''
+            absolute_units = 'cm|mm|in|px|pt|pc'
+            relative_units = 'em|ex|ch|rem|vw|vh|vmin|vmax|%'
+            units = f'{absolute_units}|{relative_units}'
 
-        def nth_child(x):
-            if x.isdigit():
-                return lambda y: y == int(x)
-            x = x.replace(' ', '')
-            a, b = map(int, re.findall(r'(\d+)[a-z]+([+-]\d+)', x)[0])
-            return lambda y: not (y - b) % a
+            def __new__(cls, size_str: str):
+                m = re.match(fr'(\d+)({cls.units})', size_str)
+                try:
+                    m.groups()
+                    return super().__new__(cls)
+                except:
+                    return size_str
 
-        def last_child(nitems):
-            return lambda y: y == nitems
 
-        def apply_selector(nitems, selectors):
-            items = []
-            for k in range(1, nitems + 1):
-                item_name = f'item{k:0>2d}'
-                attribs = dict(
-                    z
-                    for w in [conf for fncs, conf in selectors if all(fnc(k) for fnc in fncs)]
-                    for z in w.items()
-                )
-                items.append((item_name, attribs))
-            return items
+                return super().__new__(cls)
 
-        def process_items(cssgrid, items):
-            [
-                cssgrid.register_item(item_name, attribs)
-                for item_name, attribs in items
-            ]
-            slaves_items = cssgrid.get_process_item_attribs()
-            return dict(slaves_items)
+            def __init__(self, size_str: str):
+                self._memory = (0, 0)
+                try:
+                    m = re.match(fr'(\d+)({self.units})', size_str)
+                    size, self.unit = m.groups()
+                    self.size = int(size)
+                except AttributeError:
+                    raise AttributeError('Not a valid css string unit')
 
-        # bbox = lambda x: (
-        #     slaves[x]['grid-row-start'], slaves[x]['grid-column-start'],
-        #     slaves[x]['grid-row-span'], slaves[x]['grid-column-span'],
-        # )
+            def config_params(self, widget, attrib):
+                def on_config(event):
+                    if event.widget == widget.master and self._memory != (event.width, event.height):
+                        value = self._value(event, attrib)
+                        params = {attrib: value}
+                        widget.config(**params)
+                        self._memory = (event.width, event.height)
+                        print(params)
+                return on_config
 
-        grid = {
-            'grid-template-rows': 'repeat(4, 50px)',
-            'grid-template-columns': 'repeat(6, 50px)',
-        }
-        cssgrid = CssGrid(**grid)
-        # Absolute position (x)
-        cssgrid.register_item('p(1, 1)', {'grid-row': '1', 'grid-column': '1'})
-        cssgrid.register_item('p(3, 1)', {'grid-row': '3', 'grid-column': '1 / 3'})
-        cssgrid.register_item('p(1, 3)', {'grid-row': '1 / 3', 'grid-column': '3'})
+            def __repr__(self):
+                return f'{self.size}{self.unit}'
 
-        # auto-grid-flow position (y)
-        cssgrid.register_item('p(1, _)', {'grid-row': '1'})
-        cssgrid.register_item('p(3, _)', {'grid-row': '3 / 5'})
+            def value(self, widget: tk.Widget, attrib: str):
+                if self.unit in self.absolute_units:
+                    size, unit = self.size, self.unit
+                    if unit == 'px':
+                        unit = ''
+                    else:       # 'cm' | 'mm' | 'in' | 'pt' | 'pc'
+                        if unit == 'pc':
+                            size *= 10
+                            unit = 'pt'
+                        match unit:
+                            case 'cm':
+                                size = (size * 254 * 96) // 100
+                            case 'mm':
+                                size = (size * 254 * 96) // 1000
+                            case 'in':
+                                size = size * 96
+                            case 'pt':
+                                size = (size * 96) // 72
+                    return size
+                top = widget.winfo_toplevel()
+                match self.unit:
+                    case '%':
+                        master = widget.master
+                        master.bind("<Configure>", self.config_params(widget, attrib), add=True)
+                        return 1
+                    case 'vw' | 'vh' | 'vmin' | 'vmax':
+                        top.bind("<Configure>", self.config_params(widget, attrib), add=True)
+                        return 1
+                    case 'em' | 'rem' | 'ch':
+                        # https://stackoverflow.com/questions/25548060/converting-pt-and-px
+                        wdg = widget if self.unit != 'rem' else top
+                        return self._value(wdg, attrib)
 
-        # NO auto-grid-flow position (z)
-        cssgrid.register_item('p(_, 5)', {'grid-column': '5 / 7'})
-        cssgrid.register_item('p(_, 4)', {'grid-column': '4', 'grid-row': 'span 2'})
+            def _value(self, obj: tk.Event, attrib: str):
+                match self.unit:
+                    case '%':
+                        base_value = getattr(obj, attrib)
+                    case 'vw' | 'vh' | 'vmin' | 'vmax':
+                        vw, vh = map(lambda x: getattr(obj, x), ('width', 'height'))
+                        match self.unit:
+                            case 'vw':
+                                base_value = vw
+                            case 'vh':
+                                base_value = vh
+                            case 'vmin':
+                                base_value = min(vw, vh)
+                            case 'vmax':
+                                base_value = max(vw, vh)
+                    case 'em' | 'rem' | 'ch':
+                        fnt_name = obj.cget('font')
+                        fnt = tkFont.nametofont(fnt_name)
+                        size_pt = fnt.cget('size') if self.unit != 'ch' else fnt.measure('0')
+                        base_value = 100 * (size_pt * 96) // 72
+                return (base_value * self.size) // 100
 
-        # auto position (w)
-        cssgrid.register_item('p(_, _)', {'grid-column': 'span 2', 'grid-row': 'span 2'})
-
-        # slaves_items = cssgrid.get_process_item_attribs()
-        # keys = [key for key, _ in slaves_items]
-        # slaves = dict(slaves_items)
-        # nset = lambda x: cssgrid.enumerate_area_items(None, *bbox(x))
-        #
-        # taken = [zip(nset(key), itertools.repeat(f'item{k:0>2d}')) for k, key in enumerate(keys, start=1)]
-        # availables = [zip(cssgrid.availables(), itertools.repeat('......'))]
-        # answ = sorted(itertools.chain(*taken, *availables))
-        # step = cssgrid.ncolumns
-        # answ_str = '\n'.join(f'"{" ".join(x[1] for x in answ[k: k + step])}"' for k in range(0, len(answ), step))
-        answ_str = cssgrid.grid_template_areas_equiv()
-        req = '''
-            "item01 item04 item03 ...... item06 item06"
-            "...... ...... item03 item07 item08 item08"
-            "item02 item02 item05 item07 item08 item08"
-            "...... ...... item05 ...... ...... ......"
-        '''
-        assert answ_str == re.sub(r'\n\s+', '\n', req)[1:-1]
-
-        print(answ_str)
+        print(CssUnit('25fr'))
+        width1 = CssUnit('5in')
+        width2 = CssUnit('75%')
+        top = tk.Tk()
+        top.geometry('500x500')
+        lbl1 = tk.Frame(top, bg='green', height=50)
+        size = width1.value(lbl1, 'width')
+        lbl1.configure(width=size)
+        lbl1.pack()
+        lbl2 = tk.Frame(top, bg='red')
+        # size = width2.value(lbl2, 'width')
+        lbl2.configure(width=size, height=50)
+        lbl2.pack()
+        top.mainloop()
+        pass
     elif caso == 'cycle_it':
         class Cycle:
             def __init__(self, it):

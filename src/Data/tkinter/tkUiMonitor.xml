@@ -3,23 +3,23 @@
     <?xml-stylesheet type="text/css" href="#style"?>
     <extra id="style">
         .section {
-            side:left;
-            fill:y;
-            geomanager:grid;
-            rowconfigure0:weight=1;
+            side: left;
+            fill: y;
+            geomanager: grid;
+            rowconfigure0: weight=1;
         }
         .boton {
-            font:Helvetica 8;
-            compound:top;
-            relief:flat;
-            wraplength:64;
+            font: Helvetica 8;
+            compound: top;
+            relief: flat;
+            wraplength: 64;
         }
         .command {
-            font:Helvetica 8;
-            image:@drawable/btn_question;
-            compound:top;
-            relief:flat;
-            wraplength:64;
+            font: Helvetica 8;
+            image: @drawable/btn_question;
+            compound: top;
+            relief: flat;
+            wraplength: 64;
         }
     </extra>
     <category label="Category uno">
@@ -33,6 +33,8 @@
             <label text="Views: " side="left" />
             <radiobutton name="btn0" variable="srv_view_sel" text="WATCHED" value="wtch" width="10" indicatoron="0" side="left"/>
             <radiobutton name="btn1" variable="srv_view_sel" text="UI" value="ui" width="10" indicatoron="0" side="left"/>
+            <label name="lst_update" text="0:00 a.m." relief="sunken" padx="3" pady="3" side="right"/>
+            <label text="Last updated: " relief="flat" side="right"/>
         </frame>
         <frame side="top" fill="both" expand="yes">
              <widgetexplorer name="tree" lib="Widgets.Custom" visible="eq(srv_view_sel, 'wtch')"
