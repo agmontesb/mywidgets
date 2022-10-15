@@ -25,7 +25,7 @@ from Widgets import specialwidgets
 from Widgets.Custom import ImageProcessor as imgp
 from Widgets.Custom.network import network
 from equations import equations_manager
-from Tools.uiStyle import uicss, cssgrid
+from Tools.uiStyle import uicss, cssgrid, cssflexbox
 import cbwidgetstate
 
 MODULE_STACK = [(-1, tk), (-1, specialwidgets)]
@@ -363,10 +363,13 @@ def widgetFactory(master: tk.Tk | tk.Widget,
 
     def set_geomanager(selpane) -> BaseGeomngr:
         if 'display' in selpane:
-            if selpane.get('display'):
-                master_geomngr = cssgrid.CssGrid
-            else:
-                raise Exception('Not Geometric Manager supported')
+            match selpane['display']:
+                case 'grid' | 'inline-grid':
+                    master_geomngr = cssgrid.CssGrid
+                case 'flex' | 'inline-flex':
+                    master_geomngr = cssflexbox.CssFlexBox
+                case _:
+                    raise Exception('Not Geometric Manager supported')
         else:
             gmanager: Literal['pack', 'place', 'grid'] = selpane.get('geomanager', 'pack')
             master_geomngr: BaseGeomngr = tkgeomanager_mapping[gmanager]

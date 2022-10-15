@@ -69,7 +69,9 @@ class CssUnit:
             relative_units = 'em|ex|ch|rem|vw|vh|vmin|vmax|%'
             units = f'{absolute_units}|{relative_units}'
 
-            def __new__(cls, size_str: str):
+            def __new__(cls, size_str: str | int) -> 'CssUnit':
+                if size_str.isdigit():
+                    size_str = f'{size_str}px'
                 m = re.match(fr'(\d+)({cls.units})', size_str)
                 try:
                     m.groups()
@@ -77,12 +79,16 @@ class CssUnit:
                 except:
                     return size_str
 
-            def __init__(self, size_str: str):
+            def __init__(self, size_str: str | int) -> None:
                 self._memory = (0, 0)
+                if size_str.isdigit():
+                    size_str = f'{size_str}px'
                 try:
                     m = re.match(fr'(\d+)({self.units})', size_str)
                     size, self.unit = m.groups()
                     self.size = int(size)
+                    if self.size == 0:
+                        self.unit = 'px'
                 except AttributeError:
                     raise AttributeError('Not a valid css string unit')
 
@@ -534,7 +540,6 @@ class CssGrid:
             self._config_master(master)
         else:
             master.bind("<Configure>", self.resize)
-        master.bind("<Configure>", self.resize)
 
     def resize(self, event):
         if event.widget != self.master:
@@ -1134,7 +1139,7 @@ class CssGrid:
         answ_str = '\n'.join(f'"{" ".join(x[1] for x in answ[k: k + step])}"' for k in range(0, len(answ), step))
         return answ_str
 
-    # =============================== Parsers =======================================================
+    # ==============================- Parsers -======================================================
 
     @staticmethod
     def grid_template_pattern(template):

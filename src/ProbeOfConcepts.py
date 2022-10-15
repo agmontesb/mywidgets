@@ -146,8 +146,17 @@ def nameElements(htmlstr, k=-1):
 
 
 if __name__ == '__main__':
-    caso = 'css_units'
-    if caso == 'css_units':
+    caso = 'tkinter_pixels'
+    if caso == 'tkinter_pixels':
+        def cb():
+            print(f'lbl width = {lbl["width"]}, lbl height = {lbl["height"]}')
+        top = tk.Tk()
+        btn = tk.Button(top, text='hit me', command=cb)
+        btn.place(x=0, y=0)
+        lbl = tk.Label(top, text='Este es un texto largo', bg='red')
+        lbl.place(x=0, y=50, width=200, height=200)
+        top.mainloop()
+    elif caso == 'css_units':
         class CssUnit:
             '''
             Unifica la salida de las dimensiones css a pixel

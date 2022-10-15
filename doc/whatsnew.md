@@ -1,3 +1,13 @@
+v0.1.8
+- CssFlexBox Geometric Manager
+- Clase CssFlexBox implementa el Css Flex Box geometric manager teniendo como referencia la 
+especificación [Css Flexible Box Layout](https://www.w3.org/TR/css-flexbox-1/)
+- Despliegue gráfico implementado con tkinter.pack como primera aproximación. Limitado con widgets 
+que no aceptan diensiones en pixels (e.j. Label que acepta número de caracteres en "width" y número de 
+líneas en "height")
+- test_css_flexbox.py, set de tests a la implementación de flex box layout.
+- Modificado userinterface para aceptar el nevo layout.
+
 v0.1.7
 - Clase CssUnit que hace manejo de las dimensiones en css.
 - Integración en cálculo de responsive de CssUnit con dimensiones relativas verificando que en 

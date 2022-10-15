@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<settings>
+    <?xml-stylesheet type="text/css" href="#style"?>
+    <extra id="style">
+    .flex-container{
+        display: flex;
+        background: #333;
+        gap: 5px 5px;
+        /* margin:20px; */
+    }
+    .flex-item{
+        width:50px;
+        height:50px;
+        background: #eee;
+        /* line-height: 50px;
+        text-align: center;
+        margin:20px; */
+    }
+
+
+    .flex-direction-row {
+        flex-direction : row;
+    }
+
+    .flex-direction-row-reverse {
+        flex-direction : row-reverse;
+    }
+
+    .flex-direction-column {
+        flex-direction : column;
+    }
+    .flex-direction-column-reverse {
+        flex-direction : column-reverse;
+    }
+
+    </extra>
+    <category label="Category uno" geomanager="grid" columnconfigure0_1="weight=1" rowconfigure1_3_5="weight=1">
+        <label text="flex-direction:row" row="0" column="0" columnspan="2"/>
+        <frame class="flex-container flex-direction-row" row="1" column="0" columnspan="2" sticky="nesw">
+          <frame class="flex-item" bg="red"/>
+          <frame class="flex-item" bg="green"/>
+          <frame class="flex-item" bg="blue"/>
+        </frame>
+        <label text="flex-direction:row-reverse" row="2" column="0" columnspan="2"/>
+        <frame class="flex-container flex-direction-row-reverse" row="3" column="0" columnspan="2" sticky="nesw">
+          <frame class="flex-item" bg="red"/>
+          <frame class="flex-item" bg="green"/>
+          <frame class="flex-item" bg="blue"/>
+        </frame>
+        <label text="flex-direction:column" row="4" column="0"/>
+        <frame class="flex-container flex-direction-column" row="5" column="0" sticky="nesw" padx="0 2">
+          <frame class="flex-item" bg="red"/>
+          <frame class="flex-item" bg="green"/>
+          <frame class="flex-item" bg="blue"/>
+        </frame>
+        <label text="flex-direction:column-reverse" row="4" column="1"/>
+        <frame class="flex-container flex-direction-column-reverse" row="5" column="1" sticky="nesw" padx="2 0">
+          <frame class="flex-item" bg="red"/>
+          <frame class="flex-item" bg="green"/>
+          <frame class="flex-item" bg="blue"/>
+        </frame>
+    </category>
+</settings>
+

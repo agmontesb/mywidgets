@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<settings>
+    <?xml-stylesheet type="text/css" href="#style"?>
+    <extra id="style">
+    .flex-container {
+      bg: #333;
+      display: flex;
+      flex-flow: row wrap;
+      align-items: stretch;
+      gap: 5px 5px;
+      justify-content: flex-start;
+      align-content: center;
+    }
+
+    .flex-container > frame {
+      width: 95px;
+      /* bg: #f1f1f1;
+      margin: 10px;
+      padx: 5px;
+      pady: 5px;
+      font: Helvetica 24;
+      side: left;
+      anchor: n;
+      expand: yes;
+      fill: y; */
+    }
+    .flex-container :last-child {
+        align-self: flex-start;
+        flex: 1 1 75px;
+    }
+    .flex-container :nth-child(3n + 1) {
+        align-self: flex-end;
+        flex: 1 1 75px;
+        bg: gray;
+    }
+
+    </extra>
+    <category label="Category uno">
+        <label text="Create a Flex Container" />
+        <frame class="flex-container" side="top" fill="both" expand="yes">
+          <frame height="50px"/>
+          <frame bg="green" height="150"/>
+          <frame bg="blue" height="25"/>
+          <frame height="25"/>
+          <frame bg="lightgreen" height="25"/>
+          <frame bg="yellow" height="25"/>
+          <frame height="50"/>
+          <frame bg="green" height="150"/>
+          <frame bg="blue" height="25"/>
+        </frame>
+    </category>
+</settings>
+
