@@ -1,3 +1,12 @@
+v0.1.9
+- CssFlexBox Geometric Manager implementado a través del tkinter.place geomanager.
+- Permite disponer en el layout widgets cuyas dimensiones no son exactamente pixeles (e.j. label)
+- Se crea el "@doc:showcase/cssflexbox_container_properties" que muestra la disposición de los widgets
+una vez se utiliza el CssFlexBox.
+- Corrección de errores asociados al tipo de selector '.clase > :pseudoattr'.
+- Queda por implementar una función que determine cuando un widget es RESPONSiVE de tal manera que 
+se pueda ajustar su tamaño sin producir parpadeo en la pantalla. 
+
 v0.1.8
 - CssFlexBox Geometric Manager
 - Clase CssFlexBox implementa el Css Flex Box geometric manager teniendo como referencia la 

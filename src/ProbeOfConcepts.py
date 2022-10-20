@@ -1,12 +1,14 @@
 # -*- coding: utf-8 -*-
 import collections
 import itertools
+import tkinter
 import tkinter as tk
 import tkinter.font as tkFont
 import tkinter.messagebox as tkMessage
 import xml.etree.ElementTree as ET
 import re
 
+from Tools.uiStyle.cssflexbox import CssFlexBox
 from userinterface import getWidgetInstance
 from Tools.uiStyle.cssgrid import CssGrid
 
@@ -146,16 +148,170 @@ def nameElements(htmlstr, k=-1):
 
 
 if __name__ == '__main__':
-    caso = 'tkinter_pixels'
-    if caso == 'tkinter_pixels':
-        def cb():
-            print(f'lbl width = {lbl["width"]}, lbl height = {lbl["height"]}')
-        top = tk.Tk()
-        btn = tk.Button(top, text='hit me', command=cb)
-        btn.place(x=0, y=0)
-        lbl = tk.Label(top, text='Este es un texto largo', bg='red')
-        lbl.place(x=0, y=50, width=200, height=200)
-        top.mainloop()
+    caso = 'cssflex_place'
+    if caso == 'cssflex_place':
+
+        def set_align_self(align, wsize, msize):
+            match align:
+                case 'stretch':
+                    return 0, msize
+                case 'flex-start' | 'start' | 'self-start':
+                    return 0, wsize
+                case 'center':
+                    return (msize - wsize) // 2, wsize
+                case 'flex-end' | 'end' | 'self-end':
+                    return msize - wsize, wsize
+
+
+        def set_justify_content(self, event, widgets, axis=None, static_len=0, flex_gap=0, justify_content='center', isreverse=False):
+            flex_axis, cross_axis = axis, ('width', 'height')[axis == 'width']
+            mflex_size, mcross_size = getattr(event, flex_axis), getattr(event, cross_axis)
+            axis, cross = ('x', 'y')[:: 1 - 2 * (flex_axis == 'height')]
+
+            master = event.widget
+
+            match justify_content:
+                case 'flex-start' | 'start' | 'left':
+                    beg_gap, end_gap = (0, (static_len - (len(widgets) - 1) * flex_gap))[:: 1 - 2 * isreverse]
+                    gap_size = flex_gap
+                case 'flex-end' | 'end' | 'right':
+                    beg_gap, end_gap = ((static_len - (len(widgets) - 1) * flex_gap), 0)[:: 1 - 2 * isreverse]
+                    gap_size = flex_gap
+                case 'center':
+                    beg_gap = end_gap = (static_len - (len(widgets) - 1) * flex_gap) // 2
+                    gap_size = flex_gap
+                case 'space-between' | 'space-around' | 'space-evenly':
+                    n = len(widgets) - 1
+                    delta_n = ('space-between', 'space-around', 'space-evenly').index(justify_content)
+                    n += delta_n
+                    gap_size = static_len // n
+                    beg_gap = end_gap = (delta_n * gap_size) // 2
+
+            gaps = [
+                (tkinter.Frame(master, bg='blue', name=f'gap{axis}_{k:0>2d}'), 'stretch', gap_size, mcross_size)
+                for k, gap_size in enumerate([beg_gap, *((len(widgets) - 1) * [gap_size]), end_gap])
+            ]
+            offset = 0
+            if isreverse:
+                widgets = widgets[::-1]
+            it = itertools.chain(*zip(gaps, [*widgets, (None, None, None, None)]))
+            while True:
+                wdg, align_self, waxis_size, wcross_size = next(it)
+                if wdg is None:
+                    break
+                wcross, wcross_size = set_align_self(align_self, wcross_size, mcross_size)
+                params = {axis: offset, flex_axis: waxis_size, cross: wcross, cross_axis: wcross_size, 'in_': master}
+                wdg.place(params)
+                offset += waxis_size
+
+        def _config_master(self, event):
+            processed_slaves = self.get_process_item_attribs(event)
+            names, _ = zip(*processed_slaves)
+
+            nline = 0
+            flines = []
+            wslaves = []
+            static_size = 0
+            align_self = 'stretch'
+            while nline < len(processed_slaves):
+                _, gp = processed_slaves[nline]
+                flex_line = gp.pop('flex-line')
+                nline += flex_line['n-widgets']
+                cross_size = flex_line[cross_axis]
+                static_size += cross_size
+
+                flex_line_name = f'flex_line{len(wslaves) + 1:0>2d}'
+                gp['flex-line'] = flex_line_name
+                flex_line['name'] = flex_line_name
+                wslave = tkinter.Frame(master, name=flex_line_name, bg='red')
+                wslaves.append([wslave, align_self, cross_size])
+                flines.append((wslave, flex_line))
+
+            cross_size = getattr(event, cross_axis)
+            static_size = cross_size - static_size
+            [x.append(cross_size) for x in wslaves]
+            line_attr = {
+                'axis': cross_axis, 'static_len': static_size, 'flex_gap': cross_gap,
+                'justify_content': self.align_content, 'isreverse': 'reverse' in self.flex_wrap,
+            }
+            master.configure(width=event.width, height=event.height)
+            set_justify_content(self, event, wslaves, **line_attr)
+
+            # ===========================================================================
+
+            wslaves = []
+            npos = 0
+            nslaves = len(processed_slaves)
+            for wmaster, fattribs in flines:
+                master_name = wmaster.winfo_name()
+                while npos < nslaves:
+                    name, item_attrs = processed_slaves[npos]
+                    if item_attrs.get('flex-line', master_name) != master_name:
+                        break
+                    wdg = master.nametowidget(name)
+                    align_self = item_attrs.pop('align-self')
+                    wflex_size, wcross_size = item_attrs.pop(flex_axis), item_attrs.pop(cross_axis)
+                    wslaves.append((wdg, align_self, wflex_size, wcross_size))
+                    npos += 1
+                frst_wdg = wslaves[0][0]
+                wmaster.lower(belowThis=frst_wdg)
+                wplace_info = wmaster.place_info()
+                event = Event(widget=wmaster, width=int(wplace_info['width']), height=int(wplace_info['height']))
+                static_size = fattribs['free-space']
+                line_attr = {
+                    'axis': flex_axis, 'static_len': static_size, 'flex_gap': flex_gap,
+                    'justify_content': self.justify_content, 'isreverse': 'reverse' in self.flex_direction
+                }
+                set_justify_content(self, event, wslaves, **line_attr)
+                wslaves = []
+            pass
+
+
+        justify_content = 'flex-start'
+        flex_axis, cross_axis = 'width', 'height'
+        flex_gap, cross_gap = 25, 25
+
+        req_width, max_width, min_width = 300, 150, 75
+        basis = 100
+        grid = {
+                  'flex-flow': 'row wrap',
+                  'align-items': 'stretch',
+                  'justify-content': 'flex-start',
+                  'align-content': 'space-evenly',
+                  'gap': f'{flex_gap} {cross_gap}',
+        }
+        cssflex = self = CssFlexBox(**grid)
+        items = [
+            (
+                'flexible',
+                {'flex': f'1 1 {basis}px', 'width': '100px', 'height': '50px'}
+            ),
+            (
+                'inflexible',
+                {'flex': f'0 0 {basis}px', 'width': '100px', 'height': '75px'}
+            ),
+            (
+                'flex-grow',
+                {'flex': f'1 0 {basis}px', 'width': '100px', 'height': '25px', 'max-width': f'{max_width}px'}
+            ),
+            (
+                'flex-shrink',
+                {'flex': f'0 1 {basis}px', 'width': '100px', 'height': '50px', 'min-width': f'{min_width}px'}
+            ),
+        ]
+
+        master = tk.Tk()
+
+        for k, (name, attrib) in enumerate(items):
+            wdg = tkinter.Label(master, name=name.replace('-', '_'), text=str(k + 1), bg='green')
+            cssflex.register_item(wdg, attrib)
+
+        Event = collections.namedtuple('Event', 'widget width height')
+        event = Event(widget=master, width=req_width, height=req_width)
+
+        _config_master(self, event)
+
+        master.mainloop()
     elif caso == 'css_units':
         class CssUnit:
             '''
@@ -827,6 +983,5 @@ if __name__ == '__main__':
 li > a[href*="en-US"] > .inline-warning
 :nth-of-type
 :nth-of-type(3n)
-        
         
         """

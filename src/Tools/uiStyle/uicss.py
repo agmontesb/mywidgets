@@ -597,11 +597,11 @@ class ElementFactory:
                 key, sel_str = sel_str, ''
             key = key.split('[', 1)[0]
             comb, key = key[0], key[1:]
-            if any(map(lambda x: x in key, ('.', '#', ':'))) :
+            if any(map(lambda x: x in key, ('.', '#', ':'))):
                 key = srch_regex.tag_pattern
                 if key == MarkupRe.TAG_PATTERN_DEFAULT:
                     req_attrs = srch_regex.req_attrs['tagpholder']
-                    key = '*' if '__TAG__' not in req_attrs else req_attrs['__TAG__'].pattern.rstrip(r'\Z')
+                    key = '*' if not req_attrs.get('__TAG__', '') else req_attrs['__TAG__'].pattern.rstrip(r'\Z')
             if comb in (' ', '>'):
                 npos = len(self.patterns)
                 srch_bin = self.srch_mapping[key]
@@ -648,7 +648,7 @@ class ElementFactory:
                     case '>':  # div > p, Selects all <p> elements where the parent is a <div> element.
                         level = self.patterns[npos][0]
                         bflag = in_level == level + 1
-                        assert req_attrs.pop('__TAG__').match(key)
+                        # assert req_attrs.pop('__TAG__').match(key)
                     case '+':  # div + p, Selects the first <p> element that is placed immediately after <div> elements
                         level = self.patterns[npos][0]
                         bflag = in_level == level
