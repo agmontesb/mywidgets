@@ -1,7 +1,6 @@
 import functools
 import itertools
 import random
-
 import pytest
 
 import src.Tools.uiStyle.uicss as uicss

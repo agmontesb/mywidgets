@@ -9,6 +9,7 @@ from equations import equations_manager
 from Widgets.Custom import ImageProcessor
 from Widgets.kodiwidgets import FormFrame
 
+
 class ImgProcessorE(tk.Tk):
     def __init__(self):
         super().__init__()

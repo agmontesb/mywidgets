@@ -18,6 +18,7 @@ from equations import equations_manager
 RECYCLEBIN = '_recyclebin/'
 LOCK_CHR = '🔒'
 
+
 class Winzip(tk.Tk):
 
     def __init__(self):
@@ -881,6 +882,7 @@ class Winzip(tk.Tk):
             selected = self.zip_panel.selected_data(col_id='Name')
         selected = [x.rstrip(' ' + LOCK_CHR) for x in selected]
         return selected
+
 
 def main():
     top = Winzip()

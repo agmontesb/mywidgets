@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<settings>
+    <?xml-stylesheet type="text/css" href="#style"?>
+    <extra id="style">
+    .grid {
+      display: grid;
+        grid-auto-columns: 1fr;
+        grid-auto-rows: 1fr;
+        /* gap: 5px; */
+        side: top;
+        fill: both;
+        expand: yes;
+    }
+.grid :nth-child(3):last-child {
+  grid-column-start: span 2;
+}
+.grid :nth-child(4) {
+  grid-column-start: 2;
+}
+    </extra>
+    <category label="Category uno">
+            <frame class="grid">
+                <label name="item1" text="1" bg="yellow"/>
+                <label name="item2" text="2" bg="red"/>
+                <label name="item3" text="3" bg="light green"/>
+            </frame>
+    </category>
+</settings>
+

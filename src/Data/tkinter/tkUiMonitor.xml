@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<settings>
+    <?xml-stylesheet type="text/css" href="#style"?>
+    <extra id="style">
+        .section {
+            side: left;
+            fill: y;
+            geomanager: grid;
+            rowconfigure0: weight=1;
+        }
+        .boton {
+            font: Helvetica 8;
+            compound: top;
+            relief: flat;
+            wraplength: 64;
+        }
+        .command {
+            font: Helvetica 8;
+            image: @drawable/btn_question;
+            compound: top;
+            relief: flat;
+            wraplength: 64;
+        }
+    </extra>
+    <category label="Category uno">
+        <var type="string" name="srv_view_sel" value="ui"/>
+        <frame side="top" fill="x">
+            <button name="open_file" text="Open" image="@data:drawable/btn_open_folder" side="left"/>
+            <button name="open_recent" image="@data:drawable/btn_caret_down" relief="flat" side="left"/>
+            <button name="app_settings" text="Settings" image="@data:drawable/btn_cog" side="right"/>
+        </frame>
+        <frame side="bottom" fill="x">
+            <label text="Views: " side="left" />
+            <radiobutton name="btn0" variable="srv_view_sel" text="WATCHED" value="wtch" width="10" indicatoron="0" side="left"/>
+            <radiobutton name="btn1" variable="srv_view_sel" text="UI" value="ui" width="10" indicatoron="0" side="left"/>
+            <label name="lst_update" text="0:00 a.m." relief="sunken" padx="3" pady="3" side="right"/>
+            <label text="Last updated: " relief="flat" side="right"/>
+        </frame>
+        <frame side="top" fill="both" expand="yes">
+             <widgetexplorer name="tree" lib="Widgets.Custom" visible="eq(srv_view_sel, 'wtch')"
+                             side="top" fill="both" expand="yes"
+                             show="headings"
+                             displaycolumns="#all" />
+            <frame name="parent_frame" visible="eq(srv_view_sel, 'ui')"
+                   side="top" fill="both" expand="yes" />
+        </frame>
+    </category>
+</settings>

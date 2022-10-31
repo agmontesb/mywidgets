@@ -24,7 +24,7 @@ SPLIT_PATTERN = re.compile(r'((?:(?:\:*[:\.#]*?[A-Za-z\d\-\+\_\(\)]+)|(?:\[.+?\]
 COMBINATORS = re.compile(r'([\+\>\ \~\,]+)')
 ATTRIBUTES = re.compile(r'([\&\|\^\$\*]*=)')
 CP_PATTERN = re.compile('\s*?((?:[^\{\s\*]+?\*?[^\{\*]+?)|(?:\*))\ *?(\{.+?\})', re.DOTALL)
-STYLE_PATTERN = re.compile('^\s*?([^\s]+?):\s*?([^;]+?);$', re.MULTILINE)
+STYLE_PATTERN = re.compile('^\s*?([^\s]+?)\s*:\s*([^;]+?);$', re.MULTILINE)
 
 
 class MElement(ET.Element):
@@ -179,8 +179,17 @@ class XmlSerializer:  # The target object of the parser
 
     @staticmethod
     def process_css_string(css_string):
+        # Se establece salto de línea en cada definición de selector.
         css_string = css_string.replace('{', '{\n').replace(';', ';\n').replace('\n\n', '\n')
+        # Se eliminan los comentarios
         css_string = '\n'.join(re.split('/\*.+?\*/', css_string, flags=re.DOTALL))
+        # Se hace equivalente la expresión tipo '(4n + 5)' a (4n+5)
+        css_string = re.sub(
+            r'\(\d+[a-z](\s*)[-+](\s*)\d+\)',
+            lambda m: m.group(0).replace(' ', ''),
+            css_string
+        )
+
         css_tuples = CP_PATTERN.findall(css_string)
         selectors = []
         for select_str, style_str in css_tuples:
@@ -576,6 +585,7 @@ class ElementFactory:
         self.srch_mapping = collections.defaultdict(list)
         self.end_tag_patterns = collections.defaultdict(list)
         self.css_selectors = None
+        self.attrs_equiv = {}
 
     def add_to_patterns(self, cp_patterns, level):
         for sel_ndx, cp, sel_str in cp_patterns:
@@ -587,11 +597,11 @@ class ElementFactory:
                 key, sel_str = sel_str, ''
             key = key.split('[', 1)[0]
             comb, key = key[0], key[1:]
-            if any(map(lambda x: x in key, ('.', '#', ':'))) :
+            if any(map(lambda x: x in key, ('.', '#', ':'))):
                 key = srch_regex.tag_pattern
                 if key == MarkupRe.TAG_PATTERN_DEFAULT:
                     req_attrs = srch_regex.req_attrs['tagpholder']
-                    key = '*' if '__TAG__' not in req_attrs else req_attrs['__TAG__'].pattern.rstrip(r'\Z')
+                    key = '*' if not req_attrs.get('__TAG__', '') else req_attrs['__TAG__'].pattern.rstrip(r'\Z')
             if comb in (' ', '>'):
                 npos = len(self.patterns)
                 srch_bin = self.srch_mapping[key]
@@ -600,7 +610,10 @@ class ElementFactory:
             else:
                 self.end_tag_patterns[level - 1].append((sel_ndx, pattern, sel_str, key, srch_regex, comb))
 
-    def check_elem(self, in_level, tag, attrs):
+    def check_elem(self, in_level, tag, attrs_in:dict):
+        attrs = attrs_in.copy()
+        [attrs.__setitem__(ckey, attrs.pop(key)) for key, ckey in self.attrs_equiv.items() if key in attrs]
+
         to_check = ['*', tag]
         if 'id' in attrs:
             to_check.append(f'#{attrs["id"]}')
@@ -635,7 +648,7 @@ class ElementFactory:
                     case '>':  # div > p, Selects all <p> elements where the parent is a <div> element.
                         level = self.patterns[npos][0]
                         bflag = in_level == level + 1
-                        assert req_attrs.pop('__TAG__').match(key)
+                        # assert req_attrs.pop('__TAG__').match(key)
                     case '+':  # div + p, Selects the first <p> element that is placed immediately after <div> elements
                         level = self.patterns[npos][0]
                         bflag = in_level == level
@@ -689,6 +702,7 @@ class ElementFactory:
     def getElements(self, htmlstr, tcase='.xml'):
         if tcase == '.xml':
             serializer = XmlSerializer()
+            self.attrs_equiv = dict(name='id')
         elif tcase == '.html':
             serializer = HtmlSerializer()
         else:

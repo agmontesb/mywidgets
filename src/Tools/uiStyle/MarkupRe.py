@@ -525,7 +525,7 @@ class CompoundRegexObject(ExtRegexObject):
                     tag_pattern = TAG_PATTERN_DEFAULT
                 else:
                     spattern = f'__TAG__ {spattern}'
-                    req_tagpholder[TAG] = ''
+                    # req_tagpholder[TAG] = ''
             srchRegexObj.tag_pattern = tag_pattern
             # req_attrs = srchRegexObj.req_attrs
             srchRegexObj.pattern = f'(?#<{spattern}>)'
