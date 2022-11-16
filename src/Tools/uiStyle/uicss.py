@@ -20,7 +20,8 @@ TENS = 2
 ONES = 3
 
 PATTERN = re.compile(r'(?:\:*[:\.#]*?[A-Za-z\d\-\+\_\(\)]+)|(?:\[.+?\])')
-SPLIT_PATTERN = re.compile(r'((?:(?:\:*[:\.#]*?[A-Za-z\d\-\+\_\(\)]+)|(?:\[.+?\]))+)')
+# SPLIT_PATTERN = re.compile(r'((?:(?:\:*[:\.#]*?[A-Za-z\d\-\+\_\(\)]+)|(?:\[.+?\]))+)')
+SPLIT_PATTERN = re.compile('((?:(?:\\:*[:\\.#]*?[A-Za-z\\d\\_\\-]+(?:\\([A-Za-z\\d\\-\\+]+\\))*)|(?:\\[.+?\\]))+)')
 COMBINATORS = re.compile(r'([\+\>\ \~\,]+)')
 ATTRIBUTES = re.compile(r'([\&\|\^\$\*]*=)')
 CP_PATTERN = re.compile('\s*?((?:[^\{\s\*]+?\*?[^\{\*]+?)|(?:\*))\ *?(\{.+?\})', re.DOTALL)
@@ -516,7 +517,10 @@ class Selector:
         selectors, combinators = split_selectors[linf:lsup:2], split_selectors[linf + 1:lsup:2]
 
         basic_patterns = [f'(?#<{self._get_basic_pattern(x)}>)' for x in selectors]
-        cp_selectors = [MarkupRe.compile(basic_pattern) for basic_pattern in basic_patterns]
+        try:
+            cp_selectors = [MarkupRe.compile(basic_pattern) for basic_pattern in basic_patterns]
+        except Exception as e:
+            raise UiCssError(f"SelectorStrError: {str(e)}")
 
         CPatterns = MarkupRe.CPatterns
         combinators_map = {
@@ -648,7 +652,7 @@ class ElementFactory:
                     case '>':  # div > p, Selects all <p> elements where the parent is a <div> element.
                         level = self.patterns[npos][0]
                         bflag = in_level == level + 1
-                        # assert req_attrs.pop('__TAG__').match(key)
+                        assert req_attrs.pop('__TAG__').match(key)
                     case '+':  # div + p, Selects the first <p> element that is placed immediately after <div> elements
                         level = self.patterns[npos][0]
                         bflag = in_level == level

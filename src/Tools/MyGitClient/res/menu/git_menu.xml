@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<menu label="Git" tearoff="false">
+    <command label="Version" accelerator="" command="" />
+    <command label="Html Path" accelerator="" command="" />
+    <command label="Man Path" command="" />
+    <command label="Info Path" accelerator="" command="" />
+    <command label="Exec Path" accelerator="" command="" />
+    <separator />
+    <checkbutton label="Bare" variable="is_bare" />
+    <separator/>
+    <command label="Git Dir" command="" />
+    <command label="Work Tree" command="" />
+    <command label="Namespace" command="" />
+    <command label="Exec Path" command="" />
+    <separator/>
+    <command label="Open" command="" />
+    <separator/>
+    <command label="Configuration" command="" />
+</menu>

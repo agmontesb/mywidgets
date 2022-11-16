@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<settings>
+    <?xml-stylesheet type="text/css" href="#style"?>
+    <extra id="style">
+        .ltabs {
+            padx:2;
+            pady:2;
+            read:BtoT;
+            indicatoron:0;
+        }
+        .ltop {
+            variable:tree_top_sel;
+            side:top;
+        }
+        .lbottom {
+            variable:tree_btm_sel;
+            side:bottom;
+        }
+        .btabs {
+            variable:view_sel;
+            padx:2;
+            pady:2;
+            indicatoron:0;
+            side:left;
+        }
+        .panel {
+            side:top;
+            fill:both;
+            expand:yes;
+        }
+        .frst {
+            in:.frstwidget;
+        }
+        .scnd {
+            in:.scndwidget;
+        }
+    </extra>
+    <category label="Category uno">
+        <var type="int" name="view_sel" value="128"/>
+        <var type="boolean" name="view_recycle" value="0"/>
+        <var type="boolean" name="cipher" value="0"/>
+        <var type="boolean" name="view_files" value="0"/>
+        <var type="boolean" name="view_actions" value="0"/>
+        <var type="string" name="add_folder" value="last_folder"/>
+        <!-- Variables asociadas al menu UNZIP   -->
+        <var type="string" name="unzip_scope" value="all"/>
+        <!-- Variables asociadas al menu ZIP   -->
+        <var type="string" name="zip_type" value="zip"/>
+        <var type="string" name="zip_method" value="NOCOMPRESSION"/>
+        <var type="int" name="zip_filters" value="1"/>
+        <ribbon lib="Widgets.Custom" name="main_menu" src="@layout/gitclient_ribbon" side="top" fill="x"/>
+        <collapsingframe class="panel" lib="Widgets.Custom" name="lframe" orientation="vertical" inisplit="0.2" buttconf="hR">
+            <panel class="panel frst" name="files_panel" lib="Tools.mywinzip" column_ids="Modified Size"/>
+            <collapsingframe class="panel scnd" lib="Widgets.Custom" name="rframe" orientation="vertical" inisplit="0.8" hide="right">
+                <panel class="panel frst" name="zip_panel" lib="Tools.mywinzip" column_ids="Length Method Size Ratio Offset DateTime CRC32 Name" />
+                <label class="panel scnd" text="ACTIONS"/>
+            </collapsingframe>
+        </collapsingframe>
+    </category>
+</settings>
+

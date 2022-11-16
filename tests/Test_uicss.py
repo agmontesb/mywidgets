@@ -107,9 +107,9 @@ class TestSelector:
     @pytest.mark.parametrize(
         "sel_str, start_list",
         [
+            ('div + p', ['<p>My best friend is Mickey.</p>']),
             ('div p', ['<p>I live in Duckburg.</p>', '<p>I will not be styled.</p>']),
             ('div > p', ['<p>I live in Duckburg.</p>']),
-            ('div + p', ['<p>My best friend is Mickey.</p>']),
             # ('p ~ ul', ''),
         ]
     )

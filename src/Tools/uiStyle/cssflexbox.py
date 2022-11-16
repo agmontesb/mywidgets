@@ -6,7 +6,7 @@ import userinterface
 from Tools.uiStyle.cssgrid import CssUnit
 
 DEBUG = False
-TEST_ID = 1
+TEST_ID = 0
 TESTFILE = [
     '@tests:css_files/cssflexbox_test',
     '@doc:showcase/cssflexbox_container_properties',

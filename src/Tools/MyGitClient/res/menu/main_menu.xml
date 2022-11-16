@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<menu label="master" tearoff="false">
+    <cascade label="Git" tearoff="false" src="./Tools/mygitclient/res/menu/git_menu.xml"/>
+</menu>

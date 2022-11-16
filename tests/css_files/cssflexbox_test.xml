@@ -5,24 +5,24 @@
     .flex-container {
       bg: #333;
       display: flex;
-      flex-flow: row wrap;
+      flex-flow: row;
       align-items: stretch;
       gap: 5px 5px;
       justify-content: flex-start;
       align-content: center;
     }
 
-    .flex-container > frame {
-      width: 95px;
-      /* bg: #f1f1f1;
+/*    .flex-container > label {
+      width: 45px;
+      bg: #f1f1f1;
       margin: 10px;
       padx: 5px;
       pady: 5px;
-      font: Helvetica 24;
       side: left;
+      font: Helvetica 24;
       anchor: n;
       expand: yes;
-      fill: y; */
+      fill: y;
     }
     .flex-container :last-child {
         align-self: flex-start;
@@ -32,21 +32,31 @@
         align-self: flex-end;
         flex: 1 1 75px;
         bg: gray;
-    }
+    } */
+
+        button {
+            height: 50;
+            width: 100;
+        }
 
     </extra>
     <category label="Category uno">
         <label text="Create a Flex Container" />
         <frame class="flex-container" side="top" fill="both" expand="yes">
-          <frame height="50px"/>
-          <frame bg="green" height="150"/>
-          <frame bg="blue" height="25"/>
-          <frame height="25"/>
-          <frame bg="lightgreen" height="25"/>
-          <frame bg="yellow" height="25"/>
-          <frame height="50"/>
-          <frame bg="green" height="150"/>
-          <frame bg="blue" height="25"/>
+<!--          <label text="lbl1" height="50px"/>-->
+            <button text="Version" height="50px" command="Git/Version"/>
+            <button text="Html Path" command="Git/Html_Path"/>
+            <button text="Man Path" command="Git/Man_Path"/>
+            <button text="Info Path" command="Git/Info_Path"/>
+            <button text="Exec Path" command="Git/Info_Path"/>
+<!--          <label text="lbl2" bg="green" height="150"/>-->
+<!--          <label text="lbl3" bg="blue" height="25"/>-->
+<!--          <label text="lbl4" height="25"/>-->
+<!--          <label text="lbl5" bg="lightgreen" height="25"/>-->
+<!--          <label text="lbl6" bg="yellow" height="25"/>-->
+<!--          <label text="lbl7" height="50"/>-->
+<!--          <label text="lbl8" bg="green" height="150"/>-->
+<!--          <label text="lbl9" bg="blue" height="25"/>-->
         </frame>
     </category>
 </settings>

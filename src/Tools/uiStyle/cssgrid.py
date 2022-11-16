@@ -10,6 +10,14 @@ import userinterface
 
 tk = tkinter
 DEBUG = False
+TEST_ID = -1
+TESTFILE = [
+    '@tests:css_files/cssgrid_test',
+    '@doc:showcase/cssgrid_dynamic_layout',
+    '@doc:showcase/cssgrid_image_galery',
+    '@doc:showcase/cssgrid_patterns',
+    '@mygitclient:layout/gitclient_ribbon',
+]
 
 split_pattern = re.compile(r'\s*(?:\[.+?\])+\s*|(?<!,)\s+?')
 
@@ -483,10 +491,10 @@ class CssGrid:
                     elif key.startswith('minmax(') and key.endswith(')'):
                         min_size, max_size = [x.strip() for x in key[7:-1].split(',')]
                         # min_size = int(min_size.strip('px'))
-                        min_size = CssUnit(min_size)
+                        min_size = CssUnit(min_size).value(self.master, cssunit_attr)
                         assert max_size.endswith('fr')
                         weight = int(max_size.strip('fr'))
-                        tot_min_free += min_size.value(self.master, cssunit_attr) * ntracks
+                        tot_min_free += min_size * ntracks
                         free_tracks += ntracks
                         params_base.append((track_ids, dict(minsize=min_size, weight=weight)))
                 else:               #isinstance(key, CssUnit)
@@ -604,8 +612,11 @@ class CssGrid:
                 min_size = m.group(1)
             else:
                 min_size = grid_auto_tracks
-            min_size = CssUnit(min_size).value(self.master, cssunit_attr)
-            base = min_size + self.grid_column_gap
+            lbase = [
+                CssUnit(min_size),
+                getattr(self, f'grid_{track_name}_gap'),
+            ]
+            base = sum(x.value(self.master, cssunit_attr) for x in lbase)
             return base
 
         def nRespTracks(track_name: Literal['row', 'column'], track_min_size: int, auto_type: Literal['auto-fill', 'auto-fit'], length: int) -> int:
@@ -615,6 +626,8 @@ class CssGrid:
             if isinstance(length, str) or isinstance(track_min_size, str):
                 pass
             gap = getattr(self, f'grid_{track_name}_gap')
+            cssunit_attr = ('width', 'height')[track_name == 'row']
+            gap = gap.value(self.master, cssunit_attr)
             ntracks = (length + gap) // (track_min_size + gap)
             if auto_type == 'auto-fit':
                 isTrackAutoFlow = self.grid_auto_flow == track_name
@@ -1457,7 +1470,7 @@ def main():
                 'h>w': dict(anchor='w'),
                 'h<w': dict(side='left'),
             }
-            filename = '@tests:css_files/cssgrid_test'
+            filename = TESTFILE[TEST_ID]
 
             self.wdg_tree = userinterface.getLayout(filename, withCss=True)
             self.grid()
