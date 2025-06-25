@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "Widgets"
+name = "myidgets"
 version = "0.1.0"
 description = "Conjunto de herramientas para el desarrollo de aplicaciones en python"
 authors = ["agmontesb <agmontesb@gmail.com>"]
