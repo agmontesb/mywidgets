@@ -25,6 +25,3 @@ testpaths = [
 requires = ["poetry-core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
 
-[tool.setuptools]
-package-dir = {"" = "src"}
-packages = ["Widgets"]
