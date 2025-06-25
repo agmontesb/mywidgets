@@ -4,9 +4,6 @@ version = "0.1.0"
 description = "Conjunto de herramientas para el desarrollo de aplicaciones en python"
 authors = ["agmontesb <agmontesb@gmail.com>"]
 license = "MIT"
-packages = [
-    {include = "Widgets", from = "src"}
-]
 
 [tool.poetry.dependencies]
 python = "^3.10"
