@@ -12,13 +12,13 @@ import urllib.request, urllib.parse, urllib.error
 
 import urllib.parse
 import re
-import src.Tools.uiStyle.MarkupRe as MarkupRe
-from src.Tools.uiStyle.uicss import Selector
-from . import network, CollapsingFrame
+import mywidgets.Tools.uiStyle.MarkupRe as MarkupRe
+from mywidgets.Tools.uiStyle.uicss import Selector
+from mywidgets.Widgets.Custom import network, CollapsingFrame
 import queue
-from src.Widgets.kodiwidgets import CustomDialog
+from mywidgets.Widgets.kodiwidgets import CustomDialog
 import threading
-from . import ImageProcessor as imgp
+from mywidgets.Widgets.Custom import ImageProcessor as imgp
 from functools import reduce
 
 

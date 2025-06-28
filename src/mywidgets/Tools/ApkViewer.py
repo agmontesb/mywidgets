@@ -23,7 +23,7 @@ class ApkViewer(tk.Tk):
 
         self.setGui()
 
-        self.attributes('-zoomed', True)
+        self.state('zoomed')
 
         # Contenido habilitado solo para desarrolllo
         #

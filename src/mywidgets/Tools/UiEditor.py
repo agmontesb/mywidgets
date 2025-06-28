@@ -29,9 +29,9 @@ class UiEditor(tk.Tk):
 
         self.setGui()
         self.newFile()
-        self.state = tk.NORMAL
+        # self.state = tk.NORMAL
 
-        self.attributes('-zoomed', True)
+        self.state('zoomed')
         pass
 
     def setGui(self):

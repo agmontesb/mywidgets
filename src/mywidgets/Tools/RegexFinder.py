@@ -1,5 +1,5 @@
 import tkinter as tk
-from src.Widgets.Custom.regexframe import StatusBar, RegexpFrame
+from mywidgets.Widgets.Custom.regexframe import StatusBar, RegexpFrame
 
 def main():
     top = tk.Tk()
