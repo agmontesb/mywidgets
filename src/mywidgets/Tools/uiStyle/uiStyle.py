@@ -1,6 +1,6 @@
 import tkinter as tk
 
-from src import userinterface as ui
+import mywidgets.userinterface as ui
 
 
 class UiStyle(tk.Toplevel):

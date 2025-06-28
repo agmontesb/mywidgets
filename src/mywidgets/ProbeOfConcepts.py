@@ -8,9 +8,9 @@ import tkinter.messagebox as tkMessage
 import xml.etree.ElementTree as ET
 import re
 
-from Tools.uiStyle.cssflexbox import CssFlexBox
-from userinterface import getWidgetInstance
-from Tools.uiStyle.cssgrid import CssGrid
+from mywidgets.Tools.uiStyle.cssflexbox import CssFlexBox
+from mywidgets.userinterface import getWidgetInstance
+from mywidgets.Tools.uiStyle.cssgrid import CssGrid
 
 
 def getLayout(layoutfile):
@@ -96,7 +96,7 @@ class Example(tk.Frame):
         print("main widget binding")
 
 def nameElements(htmlstr, k=-1):
-    import src.Tools.uiStyle.CustomRegEx as CustomRegEx
+    import mywidgets.Tools.uiStyle.CustomRegEx as CustomRegEx
     htmlstr = '''<!DOCTYPE html>
     <html>
     <head>
@@ -583,7 +583,7 @@ if __name__ == '__main__':
     #
     #     pass
     # if caso == 'kodiwidgets_custom_dialog':
-    #     from Widgets import kodiwidgets
+    #     from mywidgets.Widgets. import kodiwidgets
     #
     #     top = tk.Tk()
     #     top.attributes('-zoomed', True)
@@ -721,7 +721,7 @@ if __name__ == '__main__':
     #     for sel in xmlserializer.selectors:
     #         print(sel)
     # elif caso == 'css_selectors':
-    #     from Tools.uiStyle import uicss
+    #     from mywidgets.Tools.uiStyle import uicss
     #     selector_str = 'body #touchnav-wrapper div strong'
     #     sel = uicss.Selector(selector_str)
     #     cs = sel.compiled_selector

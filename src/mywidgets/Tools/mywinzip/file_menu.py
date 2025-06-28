@@ -4,7 +4,7 @@ import tkinter.messagebox as tkMessageBox
 import tkinter.filedialog as tkFileDialog
 from contextlib import contextmanager
 
-import userinterface
+import mywidgets.userinterface as userinterface
 
 
 class FileMenu:

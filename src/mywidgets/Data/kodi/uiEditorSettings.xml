@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <settings>
-	<category label="General" lib="Widgets.kodiwidgets">
+	<category label="General" lib="mywidgets.Widgets.kodiwidgets">
         <kcontainer label="General Settings" scrolled="true">
             <kfolder id="initial_path" label="Initial Path:   " default="../data/tkinter"/>
             <ktext id="default_name" label="New File Name" default="LayoutDefault.xml" />

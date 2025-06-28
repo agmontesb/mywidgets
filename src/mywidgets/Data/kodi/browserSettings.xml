@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <settings>
-  <category label="Settings" lib="Widgets.kodiwidgets">
+  <category label="Settings" lib="mywidgets.Widgets.kodiwidgets">
 	  <kcontainer label="General Settings" scrolled="true">
 			<ktext id="user-agent"  label="User Agent:   " default=""/>
 			<kfolder id="working-dir"  label="Default directory:   " default=""/>

@@ -2,8 +2,8 @@ import collections
 import itertools
 import tkinter
 
-import userinterface
-from Tools.uiStyle.cssgrid import CssUnit
+import mywidgets.userinterface as userinterface
+from mywidgets.Tools.uiStyle.cssgrid import CssUnit
 
 DEBUG = False
 TEST_ID = 1

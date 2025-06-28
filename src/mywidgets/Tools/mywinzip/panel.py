@@ -3,8 +3,8 @@ import tkinter as tk
 import zipfile
 from datetime import datetime
 
-import userinterface
-from Widgets.Custom import navigationbar
+import mywidgets.userinterface as userinterface
+from mywidgets.Widgets.Custom import navigationbar
 
 
 class Panel(tk.Frame):

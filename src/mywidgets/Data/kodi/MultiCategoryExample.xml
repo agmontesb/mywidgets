@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <settings>
-  <category label="Addon" scrolled="true" lib="Widgets.kodiwidgets">
+  <category label="Addon" scrolled="true" lib="mywidgets.Widgets.kodiwidgets">
     <ktext id="addon_id"  label="ID:   " default="plugin.video.xbmcide"/>
     <ktext id="addon_name"  label="Name:   " default="xbmcIDEdefault"/>
     <ktext id="addon_version"  label="Version:   " default="1.0.0.0.0"/>
@@ -13,7 +13,7 @@
     <kbool id="addon_program"  label ="Executable" default="false"/>
     <koptionlst id="addon_requires"  default="xbmc.python,2.1.0,|script.module.urlresolver,2.4.0," label="Requires" columnsheadings = "Description, Version, Optional" />  
   </category>
-  <category label="Metadata" lib="Widgets.kodiwidgets">
+  <category label="Metadata" lib="mywidgets.Widgets.kodiwidgets">
     <ktext id="addon_summary"  label="Summary:   " default="Your summary here"/>
     <ktext id="addon_description"  label="Description:   " default="Your description here"/>
     <ktext id="addon_disclaimer"  label="Disclaimer:   " default=""/>
@@ -26,7 +26,7 @@
     <ktext id="addon_email"  label="Email:   " default=""/>
     <ktext id="addon_source"  label="Source:   " default=""/>
   </category>
-  <category label="resources" lib="Widgets.kodiwidgets">
+  <category label="resources" lib="mywidgets.Widgets.kodiwidgets">
     <kfile id="addon_icon"  label="Icon:   " default=""/>
     <kfile id="addon_fanart"  label="Fanart:   " default=""/>
     <kfile id="addon_license"  label="License:   " default=""/>

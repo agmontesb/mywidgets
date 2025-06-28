@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <settings>
     <category label="Category uno">
-        <ribbon lib="Widgets.Custom" name="main_menu" src="@mywinzip:layout/winzip_ribbon" side="top" fill="x"/>
+        <ribbon lib="mywidgets.Widgets.Custom" name="main_menu" src="@mywinzip:layout/winzip_ribbon" side="top" fill="x"/>
         <Frame bg="blue" side="top" fill="both" expand="yes" />
     </category>
 </settings>

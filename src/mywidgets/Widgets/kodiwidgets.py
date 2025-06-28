@@ -18,8 +18,8 @@ import fnmatch
 import operator
 import platform
 
-import userinterface
-from equations import equations_manager
+import mywidgets.userinterface
+from mywidgets.equations import equations_manager
 
 
 def getWidgetClass(widgetName):
@@ -545,7 +545,7 @@ class settOptionList(baseWidget):
     def xmlDlgWindow(self, tupleSett, isEdit=False, isTree=False):
         header = """<?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <settings>
-    <category label="TCombobox" lib="%s">
+    <category label="TCombobox" lib="mywidgets.%s">
 """
         footer = """    </category>
 </settings>
@@ -1030,7 +1030,7 @@ class FormFrame(tk.Frame):
                             por el usuario.
         :return: None.
         '''
-        from userinterface import newPanelFactory
+        from mywidgets.userinterface import newPanelFactory
 
         # En este punto se debe incluir la lógica para la visibleEc
         newPanelFactory(self, selPane, genPanelModule=formModule, registerWidget=self.regWidget)

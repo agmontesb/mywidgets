@@ -13,7 +13,7 @@ from typing import Tuple, Callable, Any
 from html.parser import HTMLParser
 from enum import Enum
 
-from src import tokenizer
+import mywidgets.tokenizer as tokenizer
 
 TAG_PATTERN_DEFAULT = r'[a-zA-Z][^\s>]*'
 

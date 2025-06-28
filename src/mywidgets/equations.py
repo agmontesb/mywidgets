@@ -3,8 +3,8 @@ import re
 import tkinter as tk
 import functools
 
-import tokenizer
-import userinterface
+import mywidgets.tokenizer as tokenizer
+import mywidgets.userinterface as userinterface
 
 SCANNER = re.compile(r'''
 (?P<FUNCTION>(?:

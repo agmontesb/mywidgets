@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <settings>
-	<category label="getLabels Parameters" lib="Widgets.kodiwidgets">
+	<category label="getLabels Parameters" lib="mywidgets.Widgets.kodiwidgets">
 		<kcontainer label="Positional Arguments" >
             <ktext id="label" label="label:   " default=""/>
 			<kfile id="font" label="font:   " default="/usr/share/fonts/truetype/ubuntu/UbuntuMono-B.ttf" initialdir="/usr/share/fonts/truetype"/>

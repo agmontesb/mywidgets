@@ -19,14 +19,14 @@ from typing import Callable, ClassVar, Any, MutableMapping, Iterable, Tuple, Lit
 from typing_extensions import Protocol, runtime_checkable
 from types import ModuleType
 from abc import abstractmethod
-import Widgets.Custom.ImageProcessor as imageprocessor
+from mywidgets.Widgets.Custom import ImageProcessor as imageprocessor
 
-from Widgets import specialwidgets
-from Widgets.Custom import ImageProcessor as imgp
-from Widgets.Custom.network import network
-from equations import equations_manager
-from Tools.uiStyle import uicss, cssgrid, cssflexbox
-import cbwidgetstate
+from mywidgets.Widgets import specialwidgets
+from mywidgets.Widgets.Custom import ImageProcessor as imgp
+from mywidgets.Widgets.Custom.network import network
+from mywidgets.equations import equations_manager
+from mywidgets.Tools.uiStyle import uicss, cssgrid, cssflexbox
+import mywidgets.cbwidgetstate as cbwidgetstate
 
 MODULE_STACK = [(-1, tk), (-1, specialwidgets)]
 
@@ -193,9 +193,10 @@ def getFileUrl(resource_id, src=None):
         except ValueError:
             d_name = resource_id
             src = os.path.dirname(src or sys.argv[0]).lower()
-            join = os.path.join
-            if any(map(lambda x: src.startswith(join(common_path, x)), ('tools', 'data'))):
-                base_path = os.path.join(os.path.dirname(src), d_name)
+            fnc = lambda x: os.path.commonpath((src, os.path.join(common_path, x))) == common_path
+            if any(map(fnc, ('tools', 'data'))):
+                # base_path = os.path.join(os.path.dirname(src), d_name)
+                base_path = os.path.join(src, 'res', d_name)
             else:
                 base_path = src
         f_names = fnmatch.filter(os.listdir(base_path), f'{f_name}.*')
@@ -231,8 +232,10 @@ class SignedContent(str):
 
 def getContent(fileurl):
     fileurl = getFileUrl(fileurl)
-    bflag = not urllib.parse.urlparse(fileurl).scheme
+    bflag = urllib.parse.urlparse(fileurl).scheme not in ('http', 'https', 'ftp')
     if bflag:
+        if fileurl is None:
+            raise FileNotFoundError(f"Resource not found: {fileurl}")
         basepath = os.path.dirname(__file__)
         layoutpath = os.path.join(basepath, fileurl)
         layoutfile = os.path.abspath(layoutpath)

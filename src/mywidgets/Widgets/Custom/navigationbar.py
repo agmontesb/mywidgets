@@ -6,7 +6,7 @@ import tkinter.ttk as tkk
 import tkinter.font as tkFont
 from abc import ABC, abstractmethod
 
-import userinterface
+import mywidgets.userinterface as userinterface
 
 MENU_WINDOW = 20
 DOWN_ARROW = 'ᐁ'  #     '▼'    # 'ᐯ'

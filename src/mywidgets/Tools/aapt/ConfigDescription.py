@@ -7,8 +7,8 @@ import re
 import ctypes
 from functools import wraps
 
-import Tools.aapt.AconfigurationConst as AconfigurationConst
-from Tools.aapt.ResourcesTypes import ResTable_config
+import mywidgets.Tools.aapt.AconfigurationConst as AconfigurationConst
+from mywidgets.Tools.aapt.ResourcesTypes import ResTable_config
 
 SDK_CUPCAKE = 3
 SDK_DONUT = 4

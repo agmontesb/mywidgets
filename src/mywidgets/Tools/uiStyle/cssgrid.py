@@ -6,7 +6,7 @@ import tkinter
 import tkinter.font as tkFont
 from typing import Literal
 
-import userinterface
+import mywidgets.userinterface as userinterface
 
 tk = tkinter
 DEBUG = False
@@ -1472,7 +1472,7 @@ def main():
                 lbl = tk.Label(self, text=f'Item {k}', bg='blue')
                 # lbl.pack(side='left', expand='yes')
 
-        def resize(self, event: tk.Event):
+        def resize(self, event: "tk.Event"):
             if event.widget == self:
                 cell_size = 50
                 pad_size = 10

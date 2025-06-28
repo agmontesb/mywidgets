@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <settings>
-	<category label="getLabels Parameters" lib="Widgets.kodiwidgets">
+	<category label="getLabels Parameters" lib="mywidgets.Widgets.kodiwidgets">
 		<kcontainer label="Positional Arguments" >
 			<kfile id="imagefile" label="Image File:   " default="" initialdir="/mnt/c/Users/Alex Montes/OneDrive"/>
 			<knumber id="width" label="Width:   " default="400"/>

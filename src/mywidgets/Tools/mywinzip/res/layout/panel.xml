@@ -14,8 +14,8 @@
     </extra>
     <category label="Category uno">
         <label class="row" name="name" text="text" font="Helvetica 32 bold" bg="#919F84"/>
-        <navigationbar class="row" lib="Widgets.Custom" path_obj="__file__" name="tree_path"/>
-        <widgetexplorer class="panel" lib="Widgets.Custom" name="tree"
+        <navigationbar class="row" lib="mywidgets.Widgets.Custom" path_obj="__file__" name="tree_path"/>
+        <widgetexplorer class="panel" lib="mywidgets.Widgets.Custom" name="tree"
                         show="headings"
                         displaycolumns="#all"
         />

@@ -11,8 +11,8 @@ import urllib
 from html.parser import HTMLParser
 import xml.etree.ElementTree as ET
 
-import src.Tools.uiStyle.MarkupRe as MarkupRe
-from Widgets.Custom.network import network
+import mywidgets.Tools.uiStyle.MarkupRe as MarkupRe
+from mywidgets.Widgets.Custom.network import network
 
 THOUSANDS = 0
 HUNDRES = 1
@@ -765,7 +765,7 @@ class ElementFactory:
 def main():
     test = 'in_study'
     if test == 'in_study':
-        import userinterface
+        import mywidgets.userinterface as userinterface
         file_path = '/mnt/c/Users/Alex Montes/PycharmProjects/mywidgets/src/Tools/mypycharm/res/layout/pycharm_css.xml'
         xmlObj = userinterface.getLayout(file_path, withCss=True)
         eroot = ET.ElementTree(xmlObj)

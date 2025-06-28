@@ -4,8 +4,8 @@ import re
 
 import pytest
 
-import userinterface
-from Tools.uiStyle.cssgrid import CssUnit
+import mywidgets.userinterface as userinterface
+from mywidgets.Tools.uiStyle.cssgrid import CssUnit
 from src.Tools.uiStyle.cssflexbox import CssFlexBox
 
 # Los casos de prueba provienen de la siguiente página

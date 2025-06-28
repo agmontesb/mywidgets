@@ -3,7 +3,7 @@ import re
 
 import pytest
 
-import userinterface
+import mywidgets.userinterface as userinterface
 from src.Tools.uiStyle.cssgrid import CssGrid
 
 # Los casos de prueba provienen de la siguiente página

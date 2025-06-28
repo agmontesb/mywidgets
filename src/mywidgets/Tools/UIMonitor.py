@@ -11,9 +11,9 @@ import tkinter.messagebox as tkMessageBox
 import tkinter.filedialog as tkFileDialog
 from datetime import datetime
 
-import userinterface
-from Widgets import kodiwidgets
-from equations import equations_manager
+import mywidgets.userinterface as userinterface
+from mywidgets.Widgets import kodiwidgets
+from mywidgets.equations import equations_manager
 
 R = type('Erre', (object,), {})
 REFRESH_TIME = '10'

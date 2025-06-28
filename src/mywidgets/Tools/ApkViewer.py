@@ -7,9 +7,9 @@ import tkinter.filedialog as tkFileDialog
 import ctypes
 import zipfile
 
-import userinterface
-import Tools.aapt as aapt
-from equations import equations_manager
+import mywidgets.userinterface as userinterface
+import mywidgets.Tools.aapt as aapt
+from mywidgets.equations import equations_manager
 
 
 class ApkViewer(tk.Tk):

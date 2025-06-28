@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <settings>
-    <category label="kodiwidgets" scrolled="true" lib="Widgets.kodiwidgets">
+    <category label="kodiwidgets" scrolled="true" lib="mywidgets.Widgets.kodiwidgets">
       <ktext id="addon_id"  label="ID:   " default="plugin.video.xbmcide"/>
       <ktext id="addon_name"  label="Name:   " default="xbmcIDEdefault"/>
     </category>
@@ -10,7 +10,7 @@
           <label text="Label" side="left" />
       </labelframe>
     </category>
-    <category label="tkinter container inside kodiwidgets category" scrolled="true" lib="Widgets.kodiwidgets">
+    <category label="tkinter container inside kodiwidgets category" scrolled="true" lib="mywidgets.Widgets.kodiwidgets">
       <ktext id="addon_id"  label="ID:   " default="plugin.video.xbmcide"/>
       <labelframe text="tkinter widgets" bg="light green" lib="tkinter" labelanchor="nw" fill="both" expand="true">
           <button text="Boton" side="left" />
@@ -20,8 +20,8 @@
     </category>
     <category label="kodiwidgets container inside tkinter category" scrolled="true">
         <button text="Boton" side="top" />
-        <ktext id="addon_id" bg="red" lib="Widgets.kodiwidgets" label="ID:   " default="plugin.video.xbmcide"/>
+        <ktext id="addon_id" bg="red" lib="mywidgets.Widgets.kodiwidgets" label="ID:   " default="plugin.video.xbmcide"/>
         <label text="Label" side="top" />
-        <ktext id="addon_name" bg="red" lib="Widgets.kodiwidgets" label="Name:   " default="xbmcIDEdefault"/>
+        <ktext id="addon_name" bg="red" lib="mywidgets.Widgets.kodiwidgets" label="Name:   " default="xbmcIDEdefault"/>
     </category>
 </settings>

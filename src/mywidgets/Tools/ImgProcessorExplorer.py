@@ -4,10 +4,10 @@ import tkinter as tk
 import tkinter.messagebox as tkMessageBox
 from PIL import Image, ImageTk, ImageFont
 
-import userinterface
-from equations import equations_manager
-from Widgets.Custom import ImageProcessor
-from Widgets.kodiwidgets import FormFrame
+import mywidgets.userinterface as userinterface
+from mywidgets.equations import equations_manager
+from mywidgets.Widgets.Custom import ImageProcessor
+from mywidgets.Widgets.kodiwidgets import FormFrame
 
 
 class ImgProcessorE(tk.Tk):

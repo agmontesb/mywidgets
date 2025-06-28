@@ -6,10 +6,10 @@ import tkinter.messagebox as tkMessageBox
 import tkinter.filedialog as tkFileDialog
 import xml.etree.ElementTree as ET
 
-import userinterface
-from Widgets.kodiwidgets import CustomDialog
-from Widgets.Custom import SintaxEditor
-from equations import equations_manager
+import mywidgets.userinterface as userinterface
+from mywidgets.Widgets.kodiwidgets import CustomDialog
+from mywidgets.Widgets.Custom import SintaxEditor
+from mywidgets.equations import equations_manager
 
 R = type('Erre', (object,), {})
 
@@ -447,7 +447,7 @@ class UiEditor(tk.Tk):
                 tag = allSettings['widget']
                 attribs = allSettings['parameters']
                 if allSettings['lib']:
-                    attribs += f' lib="{allSettings["lib"]}"'
+                    attribs += f' lib="mywidgets.{allSettings["lib"]}"'
                 nodo = ET.XML(f'<{tag} {attribs} />')
 
                 selPane.append(nodo)

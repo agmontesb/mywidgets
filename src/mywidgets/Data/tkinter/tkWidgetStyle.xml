@@ -4,6 +4,6 @@
         <label text="label" name="lbl" padx="10"/>
         <labelframe text="labelframe" height="50" width="50" />
         <button text="boton" name="btn" padx="10"/>
-        <koptionlst id="widget_attrs" name="op_param" anchor="n" fill="x" lib="Widgets.kodiwidgets" default="" label=".option_add params" columnsheadings="Pattern, Value" />
+        <koptionlst id="widget_attrs" name="op_param" anchor="n" fill="x" lib="mywidgets.Widgets.kodiwidgets" default="" label=".option_add params" columnsheadings="Pattern, Value" />
     </category>
 </settings>

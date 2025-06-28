@@ -11,7 +11,7 @@
         <frame name="procedure" width="200" side="left" fill="y">
             <form name="getlabelargs" visible="eq(vis_var, 'getlabelargs')" src="Data/tkinter/tkGetLabelArgs.xml" side="left" fill="y" anchor="w" />
             <frame name="fontawesome" visible="eq(vis_var, 'fontawesome')" side="top" fill="both" expand="yes" >
-                <widgetexplorer name="chartree" lib="Widgets.Custom" side="top" fill="both" expand="yes" />
+                <widgetexplorer name="chartree" lib="mywidgets.Widgets.Custom" side="top" fill="both" expand="yes" />
                 <form name="getfontawesomeicon" src="Data/tkinter/tkGetFontAwesomeArgs.xml" side="left" fill="y" anchor="w" />
             </frame>
             <form name="gettextureargs" visible="eq(vis_var, 'gettextureargs')" src="Data/tkinter/tkGetTextureArgs.xml" side="left" fill="y" anchor="w" />

@@ -1,7 +1,7 @@
 import tkinter as tk
 
-from equations import equations_manager
-from Widgets.kodiwidgets import formFrame
+from mywidgets.equations import equations_manager
+from mywidgets.Widgets.kodiwidgets import formFrame
 
 
 def getWidgetClass(wdg_name):
@@ -26,7 +26,7 @@ def var(master, **kwargs):
 
 
 def form(master, **kwargs):
-    import userinterface as ui
+    import mywidgets.userinterface as ui
 
     options = {key: value for key, value in kwargs.items() if key in ('src', 'name')}
     layout_name = options.get('src')

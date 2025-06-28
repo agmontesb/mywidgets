@@ -3,14 +3,14 @@
     <category label="Category uno">
         <var name="vis_var" type="string" value="text" />
         <var name="show_var" type="string" value="false" />
-        <menubar lib="Widgets.Custom" name="main_menu" src="Data/menu/apkviewer_menu.xml" side="top" fill="x"/>
-        <collapsingframe lib="Widgets.Custom" name="cframe" orientation="vertical" inisplit="0.2" buttconf="RM" side="top" fill="both" expand="yes">
-            <widgetexplorer name="apktree" visible="eq(vis_var, 'text')" lib="Widgets.Custom" side="top" fill="both" expand="yes" in=".frstwidget"/>
-            <widgetexplorer name="rawtree" visible="eq(vis_var, 'raw')*eq(show_var, 'true')" lib="Widgets.Custom" side="top" fill="both" expand="yes" in=".frstwidget"/>
+        <menubar lib="mywidgets.Widgets.Custom" name="main_menu" src="Data/menu/apkviewer_menu.xml" side="top" fill="x"/>
+        <collapsingframe lib="mywidgets.Widgets.Custom" name="cframe" orientation="vertical" inisplit="0.2" buttconf="RM" side="top" fill="both" expand="yes">
+            <widgetexplorer name="apktree" visible="eq(vis_var, 'text')" lib="mywidgets.Widgets.Custom" side="top" fill="both" expand="yes" in=".frstwidget"/>
+            <widgetexplorer name="rawtree" visible="eq(vis_var, 'raw')*eq(show_var, 'true')" lib="mywidgets.Widgets.Custom" side="top" fill="both" expand="yes" in=".frstwidget"/>
             <frame side="top" fill="both" expand="yes" in=".scndwidget" >
                 <navigationbar path_obj="apktree" name="apk_path" visible="eq(vis_var, 'raw')" before=".output"  side="top" fill="x" />
-                <widgetexplorer name="fields" visible="eq(vis_var, 'raw')*eq(show_var, 'true')" lib="Widgets.Custom" columns="field value nlin loff size" show='headings' displaycolumns="field value nlin loff size" before=".output" side="bottom" fill="x" expand="yes"/>
-                <sintaxeditor name="output" lib="Widgets.Custom" hrzslider="true" vrtslider="true" side="top" fill="both" expand="yes"/>
+                <widgetexplorer name="fields" visible="eq(vis_var, 'raw')*eq(show_var, 'true')" lib="mywidgets.Widgets.Custom" columns="field value nlin loff size" show='headings' displaycolumns="field value nlin loff size" before=".output" side="bottom" fill="x" expand="yes"/>
+                <sintaxeditor name="output" lib="mywidgets.Widgets.Custom" hrzslider="true" vrtslider="true" side="top" fill="both" expand="yes"/>
             </frame>
         </collapsingframe>
         <frame side="bottom" fill="x">

@@ -1,6 +1,6 @@
 import tkinter as tk
 
-from Widgets.Custom import ImageProcessor as imgp
+from mywidgets.Widgets.Custom import ImageProcessor as imgp
 
 
 BAND_WIDTH = 18

@@ -48,11 +48,11 @@
         <var type="string" name="zip_type" value="zip"/>
         <var type="string" name="zip_method" value="NOCOMPRESSION"/>
         <var type="int" name="zip_filters" value="1"/>
-        <ribbon lib="Widgets.Custom" name="main_menu" src="@mywinzip:layout/winzip_ribbon" side="top" fill="x"/>
-        <collapsingframe class="panel" lib="Widgets.Custom" name="lframe" orientation="vertical" inisplit="0.2" buttconf="hR">
-            <panel class="panel frst" name="files_panel" lib="Tools.mywinzip" column_ids="Modified Size"/>
-            <collapsingframe class="panel scnd" lib="Widgets.Custom" name="rframe" orientation="vertical" inisplit="0.8" hide="right">
-                <panel class="panel frst" name="zip_panel" lib="Tools.mywinzip" column_ids="Length Method Size Ratio Offset DateTime CRC32 Name" />
+        <ribbon lib="mywidgets.Widgets.Custom" name="main_menu" src="@mywinzip:layout/winzip_ribbon" side="top" fill="x"/>
+        <collapsingframe class="panel" lib="mywidgets.Widgets.Custom" name="lframe" orientation="vertical" inisplit="0.2" buttconf="hR">
+            <panel class="panel frst" name="files_panel" lib="mywidgets.Tools.mywinzip" column_ids="Modified Size"/>
+            <collapsingframe class="panel scnd" lib="mywidgets.Widgets.Custom" name="rframe" orientation="vertical" inisplit="0.8" hide="right">
+                <panel class="panel frst" name="zip_panel" lib="mywidgets.Tools.mywinzip" column_ids="Length Method Size Ratio Offset DateTime CRC32 Name" />
                 <label class="panel scnd" text="ACTIONS"/>
             </collapsingframe>
         </collapsingframe>

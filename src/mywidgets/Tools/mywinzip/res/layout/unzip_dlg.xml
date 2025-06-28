@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <settings>
-	<category label="Unzip dialog" lib="Widgets.kodiwidgets">
+	<category label="Unzip dialog" lib="mywidgets.Widgets.kodiwidgets">
         <klabel id="msg" label="" default=""/>
 		<ksep type="lsep" label="What to do?" />
         <kbool id="replace" label="Replace the file" group="what_to_do"/>

@@ -8,12 +8,12 @@ import zipfile
 from datetime import datetime
 import tempfile
 
-import userinterface
-import file_menu as fm
-from Widgets import kodiwidgets
-from Widgets.Custom import navigationbar
-from equations import equations_manager
-from winzipactions import WinzipActions
+import mywidgets.userinterface as userinterface
+import mywidgets.Tools.mywinzip.file_menu as fm
+from mywidgets.Widgets import kodiwidgets
+from mywidgets.Widgets.Custom import navigationbar
+from mywidgets.equations import equations_manager
+from mywidgets.Tools.mywinzip.winzipactions import WinzipActions
 
 RECYCLEBIN = '_recyclebin/'
 LOCK_CHR = chr(0x0001F512)
@@ -27,7 +27,8 @@ class WinzipUI(WinzipActions, tk.Tk):
         self.bind_all('<<MENUCLICK>>', self.onMenuClick)
         self.bind_all('<<VAR_CHANGE>>', self.onVarChange)
         self.bind_all('<Button-3>', self.onRightClick)
-        self.attributes('-zoomed', True)
+        # self.attributes('-zoomed', True)
+        self.state('zoomed')
 
         self.project_path = '/mnt/c/Users/Alex Montes/PycharmProjects/mywidgets'
         self.menu_file = menu_file = fm.FileMenu(self)

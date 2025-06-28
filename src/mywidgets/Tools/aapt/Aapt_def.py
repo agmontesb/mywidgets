@@ -10,7 +10,7 @@ from collections import namedtuple
 import functools
 from ctypes import *
 
-import Tools.aapt.ResourcesTypes as ru
+import mywidgets.Tools.aapt.ResourcesTypes as ru
 
 
 def cprint(*args, sep=' ', end='\n', sfile=sys.stdout, flush=False, to_string=None):

@@ -37,7 +37,7 @@
             <label text="Last updated: " relief="flat" side="right"/>
         </frame>
         <frame side="top" fill="both" expand="yes">
-             <widgetexplorer name="tree" lib="Widgets.Custom" visible="eq(srv_view_sel, 'wtch')"
+             <widgetexplorer name="tree" lib="mywidgets.Widgets.Custom" visible="eq(srv_view_sel, 'wtch')"
                              side="top" fill="both" expand="yes"
                              show="headings"
                              displaycolumns="#all" />

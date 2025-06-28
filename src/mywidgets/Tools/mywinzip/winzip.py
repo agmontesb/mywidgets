@@ -9,11 +9,11 @@ from datetime import datetime
 import tempfile
 import fnmatch
 
-import userinterface
-import file_menu as fm
-from Widgets import kodiwidgets
-from Widgets.Custom import navigationbar
-from equations import equations_manager
+import mywidgets.userinterface as userinterface
+import mywidgets.Tools.mywinzip.file_menu as fm
+from mywidgets.Widgets import kodiwidgets
+from mywidgets.Widgets.Custom import navigationbar
+from mywidgets.equations import equations_manager
 
 RECYCLEBIN = '_recyclebin/'
 LOCK_CHR = '🔒'

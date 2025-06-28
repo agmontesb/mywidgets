@@ -1,7 +1,7 @@
 import tkinter as tk
 
-import userinterface
-from equations import equations_manager
+import mywidgets.userinterface as userinterface
+from mywidgets.equations import equations_manager
 
 
 class Pycharm(tk.Tk):

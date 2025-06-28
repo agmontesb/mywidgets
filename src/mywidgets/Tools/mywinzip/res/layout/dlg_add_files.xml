@@ -18,7 +18,7 @@
 			pady:2;
 		}
 	</extra>
-	<category label="Cipher" lib="Widgets.kodiwidgets" geomanager="grid">
+	<category label="Cipher" lib="mywidgets.Widgets.kodiwidgets" geomanager="grid">
 		<kcontainer label="primer panel" class="block" row="0" column="0" columnspan="2">
 			<label text="File Name" class="title"/>
 			<ktext id="fname" label="Zip file name: " default="NuevoZip.zip"/>

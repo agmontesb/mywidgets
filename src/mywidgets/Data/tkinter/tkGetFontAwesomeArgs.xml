@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <settings>
-	<category label="getFontAwesomeIcon Parameters" lib="Widgets.kodiwidgets">
+	<category label="getFontAwesomeIcon Parameters" lib="mywidgets.Widgets.kodiwidgets">
 		<ktext id="charname" label="Char name:   " default="fa-anchor"/>
 		<kcontainer label="Required Arguments" >
             <ktext id="size" label="Size:   " default="24"/>

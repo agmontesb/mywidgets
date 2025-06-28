@@ -1,7 +1,7 @@
 # test_-*- coding: utf-8 -*-
 import pytest
 
-from Tools.aapt.ConfigDescription import ConfigDescription
+from mywidgets.Tools.aapt.ConfigDescription import ConfigDescription
 
 @pytest.fixture
 def config():

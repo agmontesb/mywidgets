@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <settings>
-	<category label="Cipher" lib="Widgets.kodiwidgets">
+	<category label="Cipher" lib="mywidgets.Widgets.kodiwidgets">
         <label text="Cipher" side="top" fill="x" font="Helvetica 18 bold"/>
         <klsep label="Password must have:" type="lsep"/>
         <kbool id="blower" label="At least one lowercase character (a-z)"/>
@@ -13,7 +13,7 @@
 		<kbool id="aes128" label="AES 128" group="cipher_method"/>
 		<kbool id="zip20" label="Zip 2.0" group="cipher_method"/>
 	</category>
-	<category label="Folders" lib="Widgets.kodiwidgets">
+	<category label="Folders" lib="mywidgets.Widgets.kodiwidgets">
         <label text="Folders" font="Helvetica 18 bold" side="top" fill="x" expand="1" padx="1" pady="1"/>
 		<kfolder id="tmp_folder" label="Temporal folder:   " default=""/>
 		<kfolder id="wrk_folder" label="Working folder:   " default="" />

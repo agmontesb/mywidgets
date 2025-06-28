@@ -6,8 +6,8 @@ import io
 import itertools
 from ctypes import *
 
-from Tools.aapt.AconfigurationConst import *
-from Tools.aapt import LocaleDataTables
+from mywidgets.Tools.aapt.AconfigurationConst import *
+from mywidgets.Tools.aapt import LocaleDataTables
 
 
 def cmp(a, b):
@@ -1246,7 +1246,7 @@ class ResTable_config(Structure):
 
     @staticmethod
     def _getAttrGroup():
-        import Tools.aapt.AconfigurationConst as acc
+        import mywidgets.Tools.aapt.AconfigurationConst as acc
         NO_YES = ['NO', 'YES']
         grpMap = dict([
             ('layoutDir', ('LAYOUTDIR', ["ldltr", "ldrtl"], ['LTR', 'RTL']),),

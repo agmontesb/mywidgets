@@ -4,12 +4,12 @@
         <var type="int" name="view_sel" value="64"/>
         <var type="int" name="tree_top_sel" value="1"/>
         <var type="int" name="tree_btm_sel" value="1"/>
-        <menubar lib="Widgets.Custom" name="main_menu" src="Tools/mypycharm/res/menu/main_menu.xml" side="top" fill="x"/>
+        <menubar lib="mywidgets.Widgets.Custom" name="main_menu" src="Tools/mypycharm/res/menu/main_menu.xml" side="top" fill="x"/>
         <frame side="top" fill="x">
             <button text="btn3" side="right" />
             <button text="btn2" side="right" />
             <button text="btn1" side="right" />
-            <navigationbar path_obj="project_path" name="file_path" lib="Widgets.Custom" side="left" fill="x" expand="yes" anchor="w"/>
+            <navigationbar path_obj="project_path" name="file_path" lib="mywidgets.Widgets.Custom" side="left" fill="x" expand="yes" anchor="w"/>
         </frame>
         <frame name="botton_tabs" bd="2" relief="groove" side="bottom" fill="x">
             <label text="      "  side="left"/>
@@ -27,7 +27,7 @@
             <checkbutton name="tree2" variable="tree_btm_sel" padx="2" pady="2" text="Bookmarks" read="BtoT" onvalue="1" indicatoron="0" side="bottom"/>
             <checkbutton name="tree3" variable="tree_btm_sel" padx="2" pady="2" text="Structure" read="BtoT" onvalue="2" indicatoron="0" side="bottom"/>
         </frame>
-        <collapsingframe lib="Widgets.Custom" name="hframe" orientation="horizontal" inisplit="0.8" buttconf="Rm" side="top" fill="both" expand="yes">
+        <collapsingframe lib="mywidgets.Widgets.Custom" name="hframe" orientation="horizontal" inisplit="0.8" buttconf="Rm" side="top" fill="both" expand="yes">
             <label text="GIT" visible="eq(view_sel, 1)"  side="top" fill="both" expand="yes" in=".scndwidget"/>
             <label text="Run" visible="eq(view_sel, 2)"  side="top" fill="both" expand="yes" in=".scndwidget"/>
             <label text="TODO" visible="eq(view_sel, 4)"  side="top" fill="both" expand="yes" in=".scndwidget"/>
@@ -35,7 +35,7 @@
             <label text="Python Packages" visible="eq(view_sel, 16)"  side="top" fill="both" expand="yes" in=".scndwidget"/>
             <label text="Terminal" visible="eq(view_sel, 32)"  side="top" fill="both" expand="yes" in=".scndwidget"/>
             <label text="Python Console" visible="eq(view_sel, 64)"  side="top" fill="both" expand="yes" in=".scndwidget"/>
-            <collapsingframe lib="Widgets.Custom" name="vframe" orientation="vertical" inisplit="0.2" buttconf="RM" side="top" fill="both" expand="yes" in=".frstwidget">
+            <collapsingframe lib="mywidgets.Widgets.Custom" name="vframe" orientation="vertical" inisplit="0.2" buttconf="RM" side="top" fill="both" expand="yes" in=".frstwidget">
                 <label text="tree TOP" visible="ne(tree_top_sel, 0)"  side="top" fill="both" expand="yes" in=".frstwidget"/>
                 <label text="tree BOTTOM" visible="ne(tree_btm_sel, 0)"  side="top" fill="both" expand="yes" in=".frstwidget"/>
                 <label text="EDITOR" side="top" fill="both" expand="yes" in=".scndwidget"/>
