@@ -193,11 +193,10 @@ def getFileUrl(resource_id, src=None):
         except ValueError:
             d_name = resource_id
             src = os.path.dirname(src or sys.argv[0]).lower()
-            fnc = lambda x: os.path.commonpath((src, os.path.join(common_path, x))) == common_path
-            if any(map(fnc, ('tools', 'data'))):
-                # base_path = os.path.join(os.path.dirname(src), d_name)
-                base_path = os.path.join(src, 'res', d_name)
-            else:
+            # fnc = lambda x: os.path.commonpath((src, os.path.join(common_path, x))) == common_path
+            # if any(map(fnc, ('tools', 'data'))):
+            base_path = os.path.join(src, 'res', d_name)
+            if not os.path.exists(base_path):
                 base_path = src
         f_names = fnmatch.filter(os.listdir(base_path), f'{f_name}.*')
         try:
