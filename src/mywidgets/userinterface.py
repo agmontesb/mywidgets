@@ -175,6 +175,9 @@ def event_data(**params):
 
 
 def getFileUrl(resource_id, src=None):
+    # @mywinzip:layout/winzip
+    # '/Data/tkinter/tkWidgetStyle.xml'
+    # @data:tkinter/tkWidgetStyle
     filename = resource_id
     if filename.startswith('@'):
         filename = filename[1:]
@@ -218,10 +221,10 @@ class SignedContent(str):
 
     @classmethod
     def get_resourceid(cls, src_in):
-        src = os.path.splitext(src_in.lower())[0]
-        if m := re.search(r'src/tools/(.+?)/res/(.+?)/(.+)', src):
+        src = os.path.splitext(src_in.lower())[0].replace(os.sep, '/')
+        if m := re.search(r'src/mywidgets/tools/(.+?)/res/(.+?)/(.+)', src):
             pckg, res_type, res_id = m.groups()
-        elif m := re.search('/src/data/(.+?)/(.+)', src):
+        elif m := re.search('/src/mywidgets/data/(.+?)/(.+)', src):
             pckg = 'data'
             res_type, res_id = m.groups()
         else:

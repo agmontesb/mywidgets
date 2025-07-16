@@ -232,21 +232,21 @@ def listzip(infolist):
 
 def main():
     top = tk.Tk()
-    top.attributes('-zoomed', True)
+    top.state('zoomed')
     # chk = tk.Checkbutton(top, text='groupby', command=lambda: setattr(panel, 'groupby', not panel.groupby))
     # chk.pack(side=tk.TOP, fill=tk.X)
-    case = 'zip_files'
+    case = 'zip_panel'
     if case == 'zip_panel':
         panel = Panel(
             top,
-            path_obj='/mnt/c/',
+            path_obj='C:/',
             text='PRUEBA',
             column_ids="Length Method Size Ratio Offset DateTime CRC32 Name",
         )
         panel.pack(side=tk.TOP, fill=tk.BOTH, expand=tk.YES)
-        filename = '/mnt/c/users/Alex Montes/Downloads/app.zip'
+        filename = "C:/Users/agmontesb/Downloads/Attachment-FE31.zip"
         zf = zipfile.ZipFile(filename)
-        root = f'/{os.path.basename(filename)}'
+        root = f'{os.sep}{os.path.basename(filename)}'
         namelist = [os.path.join(root, x) for x in zf.namelist()]
         path_obj = navigationbar.StrListObj(namelist, root)
         def f_data(records, namelist):

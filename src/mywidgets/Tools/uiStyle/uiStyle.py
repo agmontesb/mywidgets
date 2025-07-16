@@ -12,7 +12,7 @@ class UiStyle(tk.Toplevel):
         pass
 
     def setGUI(self):
-        filename = '/Data/tkinter/tkWidgetStyle.xml'
+        filename = '@data:tkinter/tkWidgetStyle'
         panel = ui.getLayout(filename)
         ui.newPanelFactory(self, panel)
         self.nametowidget('op_param').bind('<<OptionList_Edit>>', self.doOptionListEdit)

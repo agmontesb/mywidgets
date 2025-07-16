@@ -807,9 +807,9 @@ def pathObjWrapper(obj):
 
 def main():
     top = tk.Tk()
-    top.attributes('-zoomed', True)
-    base_dir = '/mnt/c/Users/Alex Montes/PycharmProjects/mywidgets/'
-    initial_dir = '/mnt/c/Users/Alex Montes/PycharmProjects/mywidgets/src/Widgets/Custom/navigationbar.py'
+    top.state('zoomed')
+    base_dir = "C:/Users/agmontesb/PycharmProjects/mywidgets"
+    initial_dir = 'C:/Users/agmontesb/PycharmProjects/mywidgets/src/Widgets/Custom/navigationbar.py'
     path_obj = DirectoryObj(base_dir, initial_dir)
     nbar = BreadCumb(top, path_obj)
     top.mainloop()
@@ -854,9 +854,10 @@ if __name__ == '__main__':
 
 
     top = tk.Tk()
-    top.attributes('-zoomed', True)
+    top.state('zoomed')
 
-    case = 'strlistobj'
+    # options: strlistobj, tkktree, tkmenu, tkktree_methods, directory, rolling_menu
+    case = 'directory'
     if case == 'strlistobj':
         apkname = '/mnt/c/Users/Alex Montes/PycharmProjects/TestFiles/TeaTV-v9.9.6r_build_111-Mod_v2.apk'
         zf = zipfile.ZipFile(apkname)
@@ -906,7 +907,7 @@ if __name__ == '__main__':
 
         obj_name = 'treeview'
     elif case == 'tkmenu':
-        menufile = '/mnt/c/Users/Alex Montes/PycharmProjects/mywidgets/src/Data/menu/file_menu.xml'
+        menufile = 'C:/Users/agmontesb/PycharmProjects/mywidgets/src/Data/menu/file_menu.xml'
         menuPanel = userinterface.getLayout(menufile)
         menu = userinterface.menuFactory(top, selPane=menuPanel)
         path_obj = obj_name = TkMenuObj(menu)
@@ -949,8 +950,8 @@ if __name__ == '__main__':
         for path, d_names, f_names in path_obj.walk('/org'):
             print(path, d_names, f_names)
     elif case == 'directory':
-        base_dir = '/mnt/c/Users/Alex Montes/PycharmProjects/mywidgets/env/'
-        initial_dir = '/mnt/c/Users/Alex Montes/PycharmProjects/mywidgets/src/Widgets/Custom/navigationbar.py'
+        base_dir = 'C:/Users/agmontesb/PycharmProjects/mywidgets/env/'
+        initial_dir = 'C:/Users/agmontesb/PycharmProjects/mywidgets/src/Widgets/Custom/navigationbar.py'
         top.base_dir = base_dir
         obj_name = 'base_dir'
     elif case == 'rolling_menu':
@@ -982,7 +983,7 @@ if __name__ == '__main__':
             fmenu.tk_popup(10, 10)
 
 
-        base_dir = '/mnt/c/Users/Alex Montes/PycharmProjects/mywidgets/env/'
+        base_dir = 'C:/Users/agmontesb/PycharmProjects/mywidgets/env/'
         fmenu = RollingMenu(top, title='main', tearoff=0, req_nitems=4)
         fmenu['postcommand'] = lambda x=fmenu, y=base_dir: dir_menu(x, y)
 

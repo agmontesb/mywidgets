@@ -30,10 +30,10 @@ class WinzipUI(WinzipActions, tk.Tk):
         # self.attributes('-zoomed', True)
         self.state('zoomed')
 
-        self.project_path = '/mnt/c/Users/Alex Montes/PycharmProjects/mywidgets'
+        self.project_path = "C:/Users/agmontesb/PycharmProjects/mywidgets"
         self.menu_file = menu_file = fm.FileMenu(self)
         menu_file.default_file_name = 'newZip.zip'
-        menu_file.default_path = '/mnt/c/Users/Alex Montes/Downloads/'
+        menu_file.default_path = 'C:/Users/agmontesb/Downloads/'
         menu_file.default_extension = '.zip'
         menu_file.default_file_type = ('zip Files', '*.zip')
 

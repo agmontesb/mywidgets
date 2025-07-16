@@ -568,7 +568,8 @@ class UiEditor(tk.Tk):
             self.just_loaded = True
 
     def newFile(self, fileName='', xmlstr=None, panel=None):
-        initial_path = os.path.abspath('../data/tkinter')
+        initial_path = os.path.join(os.path.dirname(__file__), '../Data/tkinter')
+        initial_path = os.path.abspath(initial_path)
         default_name = os.path.join(initial_path, 'LayoutDefault.xml')
         self.openFile(name=default_name)
 
