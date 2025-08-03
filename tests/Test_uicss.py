@@ -3,7 +3,7 @@ import itertools
 import random
 import pytest
 
-import src.Tools.uiStyle.uicss as uicss
+import mywidgets.Tools.uiStyle.uicss as uicss
 
 P = 'div > p'
 

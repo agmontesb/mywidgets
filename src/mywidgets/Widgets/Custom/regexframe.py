@@ -680,15 +680,24 @@ class RegexpBar(tk.Frame):
                 'exception: ' + tag + ' tagIni: ' + tagIni + ' tagFin: ' + tagFin
             )
 
-        ngroups = len(match.groups())
-        for key in range(1, ngroups + 1):
-            tagIni, tagFin = tuple(map(f, match.span(key)))
+        gspans = [match.span(x) for x in match.groupdict().keys()]
+        gspans = sum([[x] if isinstance(x, tuple) else x for x in gspans], [])
+        for gspan in gspans:
+            tagIni, tagFin = tuple(map(f, gspan))
             self.textWidget.tag_add('group', tagIni, tagFin)
+
+        # ngroups = len(match.groups())
+        # for key in range(1, ngroups + 1):
+        #     tagIni, tagFin = tuple(map(f, match.span(key)))
+        #     self.textWidget.tag_add('group', tagIni, tagFin)
 
         urlkeys = [key for key in list(match.groupdict().keys()) if key.lower().endswith('url')]
         if not urlkeys and 'label' in match.groupdict():
             urlkeys = ['label']
-        for key in urlkeys:
+
+        gspans = [match.span(x) for x in urlkeys]
+        gspans = sum([[x] if isinstance(x, tuple) else x for x in gspans], [])
+        for key in gspans:
             tagIni, tagFin = tuple(map(f, match.span(key)))
             self.textWidget.tag_add('hyper', tagIni, tagFin)
 
@@ -1307,7 +1316,7 @@ class RegexpFrame(tk.Frame):
         self.regexBar.pack(fill=tk.X)
         self.regexBar.setZoomManager(self.zoom)
 
-        frame2 = CollapsingFrame.collapsingFrame(self, buttconf='mRM')
+        frame2 = CollapsingFrame.collapsingFrame(self, buttconf='mM')
         frame2.pack(fill=tk.BOTH, expand=1)
         self.txtEditor = PythonEditor(frame2.frstWidget)
         self.tree = TreeList(

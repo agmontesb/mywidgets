@@ -6,7 +6,7 @@ import pytest
 
 import mywidgets.userinterface as userinterface
 from mywidgets.Tools.uiStyle.cssgrid import CssUnit
-from src.Tools.uiStyle.cssflexbox import CssFlexBox
+from mywidgets.Tools.uiStyle.cssflexbox import CssFlexBox
 
 # Los casos de prueba provienen de la siguiente página
 # https://css-tricks.com/snippets/css/complete-guide-grid/#prop-grid-template

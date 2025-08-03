@@ -8,7 +8,7 @@ import random
 import pytest
 import re
 
-from src.Tools.uiStyle import MarkupRe
+import mywidgets.Tools.uiStyle.MarkupRe as MarkupRe
 
 TAGPHOLDER = MarkupRe.TAGPHOLDER
 

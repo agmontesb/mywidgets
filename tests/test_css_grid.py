@@ -4,7 +4,7 @@ import re
 import pytest
 
 import mywidgets.userinterface as userinterface
-from src.Tools.uiStyle.cssgrid import CssGrid
+from mywidgets.Tools.uiStyle.cssgrid import CssGrid
 
 # Los casos de prueba provienen de la siguiente página
 # https://css-tricks.com/snippets/css/complete-guide-grid/#prop-grid-template

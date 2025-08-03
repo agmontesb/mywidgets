@@ -669,7 +669,10 @@ class ExtMatchObject:
 
     def span(self, group=0):
         nPos = self._varIndex(group)
-        return self.varpos[nPos]
+        answ = self.varpos[nPos]
+        # if isinstance(answ, list) and len(answ) == 1:
+        #     answ = answ[0]
+        return answ
 
 
 class HTMLPointer:
@@ -1640,7 +1643,7 @@ if __name__ == '__main__':
             """
 
     console.print('Inicio')
-    test = 'ext_match'
+    test = 'extcompile'
     if test == 'ext_match':
         cmpobj = compile('(?#<__TAG__ __TAG__=mi_nametag_var id=id>)', etags_str='[<!--]')
         answer = cmpobj.findall(htmlStr2)
