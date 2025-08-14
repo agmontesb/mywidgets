@@ -406,6 +406,11 @@ class TestExtMatch:
     @pytest.mark.parametrize("pattern, required, msg",
         [
             (
+                '(?#<hijo id=varid *=label>)',
+                [('hijo1', 'primer hijo'), ('hijo2', ''), ('hijo3', 'tercer hijo')],
+                'Utilizando variables para distinguir casos'
+            ),
+            (
                 '(?#<hijo exp .*>)',
                 [('El primer comentario', 'El segundo comentario', 'El tercer comentario')],
                 'Todos los comentarios'
@@ -414,11 +419,6 @@ class TestExtMatch:
                 '(?#<hijo id="hijo1" *=label>)',
                 ['primer hijo'],
                 'Comentario y variable independiente'
-            ),
-            (
-                '(?#<hijo id=varid *=label>)',
-                [('hijo1', 'primer hijo'), ('hijo2', ''), ('hijo3', 'tercer hijo')],
-                'Utilizando variables para distinguir casos'
             ),
             (
                 '(?#<hijo id="hijo[13]"=varid *=label>)',

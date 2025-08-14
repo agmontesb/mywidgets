@@ -66,7 +66,7 @@ REGEX_SCANNER = re.compile(r'''
         (?=\s|>|<|\})             # Siempre seguida por ' ', > o }
      )) |           
     (?P<ATTRIBUTE>(?:
-        [a-zA-Z\*\.\d][a-zA-Z\d\.\[\]\*]*?        # Nombre de atributo
+        [a-zA-Z\*\.\d][a-zA-Z\d\:\.\[\]\*]*?        # Nombre de atributo
         (?=\=|>|<|\s)
      )) |           
     (?P<PREFIX>(?:
@@ -111,7 +111,7 @@ ATTR_SCANNER = re.compile(r'''
      )) |           
     (?P<ATTRIBUTE>(?:
         (?<=\ )          # Debe estar precedido por el espacio 
-        [a-zA-Z\*\.\d][a-zA-Z\d\.\[\]\*-_]*?        # Nombre de atributo
+        [a-zA-Z\*\.\d][a-zA-Z\d\:\.\[\]\*-_]*?        # Nombre de atributo
         (?=\=|>|<|\s)
      )) |           
     (?P<ATTR_PATTERN>(?:
@@ -362,7 +362,8 @@ class ExtRegexObject:
                 myfunc = lambda x: rf'<{self.tag_pattern}\s[^>]*{"=[^>]+".join(x)}=[^>]+[/]*>'
                 srch_pattern = '|'.join(map(myfunc, itertools.permutations(diff_set, len(diff_set))))
             else:
-                srch_pattern = rf'<(?:{self.tag_pattern}).*?/*>'
+                # srch_pattern = rf'<(?:{self.tag_pattern}).*?/*>'
+                srch_pattern = rf'<(?:{self.tag_pattern})( .*?)*/*>'
             self._seeker = re.compile(srch_pattern, re.DOTALL | re.IGNORECASE)
         return self._seeker
 
@@ -587,11 +588,11 @@ class CompoundRegexObject(ExtRegexObject):
                             seek_to_end=bflag, parameters=params
                         )
                     case CPatterns.NXTTAG | CPatterns.PRECEDES:
-                        beg_pos = html_string[span_end_pos + 1: endpos].find('<')
-                        if beg_pos > 0:
+                        beg_pos = html_string[span_end_pos: endpos].find('<')
+                        if beg_pos >= 0:
                             method_name = 'match' if self.cpattern == CPatterns.NXTTAG else 'search'
                             method = getattr(self.srchRegexObj, method_name)
-                            beg_pos += span_end_pos + 1
+                            beg_pos += span_end_pos
                             # if self.cpattern == CPatterns.NXTTAG:
                             #     tag = re.split('[\s>]', html_string[beg_pos:], 1)[0].strip('<')
                             #     end_tag = f'</{tag}>'
@@ -662,14 +663,17 @@ class ExtMatchObject:
         return {key: value for key, value in zip(keys, values)}
 
     def start(self, group=0):
-        return self.span(group)[0]
+        nPos = self._varIndex(group)
+        span = self.varpos[nPos] or (self.pos, self.pos) # Si no hay TEXTO span es [] así aseguramos que el texto es nulo
+        return span[0] if isinstance(span, tuple) else span[0][0]
 
     def end(self, group=0):
-        return self.span(group)[1]
+        nPos = self._varIndex(group)
+        span = self.varpos[nPos] or (self.pos, self.pos) # Si no hay TEXTO span es [] así aseguramos que el texto es nulo
+        return span[1] if isinstance(span, tuple) else span[-1][1]
 
     def span(self, group=0):
-        nPos = self._varIndex(group)
-        answ = self.varpos[nPos]
+        answ = (self.start(group), self.end(group))
         # if isinstance(answ, list) and len(answ) == 1:
         #     answ = answ[0]
         return answ
@@ -1076,11 +1080,15 @@ class MarkupParser(HTMLParser):
             req_attrs = self.req_attrs.get(TAGPHOLDER, {}).copy()
             # Se eliminan los atributos que no se encuentran en la declaración del tag,
             # por ejemplo TEXTO que se encuentra luego de procesar el tag.
+            pseudo_attrs = PSEUDO_ATTRS - {TAG}
+            non_req_keys = req_attrs.keys() & pseudo_attrs
             non_req_attrs = tuple(
-                req_attrs.pop(key) for key in (TEXTO,) if req_attrs.get(key, None) is not None
+                req_attrs.pop(key) 
+                for key in non_req_keys
             )
+            non_req_keys |= self.opt_attrs.get(TAGPHOLDER, {}).keys() & pseudo_attrs
             bflag = self.haveTagAllAttrReq(TAGPHOLDER, attrs, req_attrs)
-            cflag = not (self.req_attrs.keys() - (TAGPHOLDER, )) and len(non_req_attrs) == 0
+            cflag = not (self.req_attrs.keys() - (TAGPHOLDER, )) and len(non_req_keys) == 0
             cflag = cflag and f'{TAGPHOLDER}..*' not in self.var_map
             if bflag and cflag:
                 return TreeElement((beg_pos, end_pos), TAGPHOLDER, attrs)
@@ -1249,9 +1257,10 @@ class MarkupParser(HTMLParser):
 
     def handle_endtag(self, tag):  # startswith("</")
         posini, posfin = self.getSpan('</%s>' % tag)
+        self.tagStack: list[TreeElement]
         while self.tagStack:
             try:
-                stck_tag = self.tagStack.pop()
+                stck_tag: TreeElement = self.tagStack.pop()
                 self.tagList.append(stck_tag)
                 bflag = stck_tag.tag == tag
                 if bflag:
@@ -1274,14 +1283,15 @@ class MarkupParser(HTMLParser):
         # attrs[N_CHILD] = self.n_children[root]
         # attrs[N_CHILDREN] = 0
         attrs[TAG] = tag
-        attrs.setdefault(TEXTO, '')
+        attrs[TEXTO] = ''
         param_pos = self.get_attrs_pos(starttag_text, posini)
-        param_pos.setdefault(TEXTO, [])
+        param_pos[TEXTO] = [(-1, -1)]
         attrs[PARAM_POS] = param_pos
         tag_path = self.get_path(tag)
         # tag_path = self.get_req_path(tag_path, None)
         self.tagList.append(te := TreeElement((posini, posfin), tag, attrs))
-        self.tagStack[-1].add(te)
+        if self.tagStack:
+            self.tagStack[-1].add(te)
 
     def storeDataStr(self, dataIn):
         dSpanIn = self.getSpan(dataIn)
@@ -1319,6 +1329,26 @@ class MarkupParser(HTMLParser):
 
     def unknown_decl(self, data):
         posini, posfin = self.getSpan('<![%s]>' % data)
+
+
+def search_parent(html_str, beg_pos=0, end_pos=None):
+    end_pos = end_pos or len(html_str)
+    k = beg_pos
+    kopen = kclose = k
+    while k >= 0:
+        bflag = kclose >= kopen
+        if bflag:
+            k = kclose
+            kopen, kclose = map(html_str[:k].rfind, ('<', '</'))
+            continue
+        # print(f'{kopen=}>{kclose=}')
+        hpointer = HTMLPointer(html_str, is_file=False, it_span=[(kopen, len(html_str))])
+        linf, lsup= next(hpointer())
+        # print(html_str[linf:lsup])
+        if linf < beg_pos and lsup > end_pos:
+            break
+        kopen = html_str[:kopen].rfind('<')
+    return linf, lsup
 
 
 def compile(regex_str_in, flags=0, etags_str='[!--|style|script]'):
@@ -1580,11 +1610,9 @@ def subn(pattern, repl, string, count=0, flags=0):
     pass
 
 
-if __name__ == '__main__':
+def main():
     from rich.console import Console
     from rich.table import Table
-
-    console = Console(color_system='truecolor')
 
     htmlStr1 = """
     <span class="independiente">span0</span>
@@ -1642,6 +1670,7 @@ if __name__ == '__main__':
     <span id="4" class="independiente">span3</span>
             """
 
+    console = Console(color_system='truecolor')
     console.print('Inicio')
     test = 'extcompile'
     if test == 'ext_match':
@@ -2062,3 +2091,17 @@ if __name__ == '__main__':
     # m = search(pattern, htmlstr)
 
     console.print('Final')
+
+def in_test():
+    dmystr = '''<c r="Z21" s="1659"/><c r="AA21" s="1660"/><c r="AB21" s="700"><f>R37+1</f><v>58</v></c><c r="AC21" s="1659"><f>ROUND(+'H3 (ERI - Renta Liquida)'!J378+'H3 (ERI - Renta Liquida)'!J379+'H3 (ERI - Renta Liquida)'!J380+'H3 (ERI - Renta Liquida)'!J381,-3)</f><v>11798000</v></c><c r="AD21" s="1659"/><c r="AE21" s="700"><f>AB37+1</f><v>74</v></c><c r="AF21" s="1867"><f>ROUND(+'H3 (ERI - Renta Liquida)'!K378+'H3 (ERI - Renta Liquida)'!K379+'H3 (ERI - Renta Liquida)'!K380+'H3 (ERI - Renta Liquida)'!K381+'H3 (ERI - Renta Liquida)'!L55,-3)</f><v>0</v></c>'''
+
+    regex_str = '(?#<c v.*="[0-9][0-9]+"=rng><c v.*="[0-9][0-9]+"=val r=adr f.*=fml>)'
+    regex_obj = compile(regex_str)
+    for match in regex_obj.finditer(dmystr):
+        print(match.groupdict())
+        print(match.span())
+        print(dmystr[match.span()[0]: match.span()[1]])
+
+if __name__ == '__main__':
+    # main()
+    in_test()

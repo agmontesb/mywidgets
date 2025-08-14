@@ -18,7 +18,7 @@ import fnmatch
 import operator
 import platform
 
-import mywidgets.userinterface
+import mywidgets.userinterface as userinterface
 from mywidgets.equations import equations_manager
 
 

@@ -264,7 +264,7 @@ class RegexpBar(tk.Frame):
             )
             chkbutt.pack(side=tk.RIGHT)
         self.regex_type.set('markupre')
-        self.regex_type.trace('w', self.getPatternMatch)
+        self.regex_type.trace_add('write', lambda *args: self.getPatternMatch())
         self.regexPattern = tk.StringVar()
         cbStyle = tkinter.ttk.Style()
         cbStyle = cbStyle.configure('red.TCombobox', foreground='red')
@@ -616,11 +616,10 @@ class RegexpBar(tk.Frame):
         prefix = ['PosINI', 'PosFIN']
         if regexPattern.startswith('(?#<SPAN>)'):
             pini = 0
-            if hasattr(reg, 'params_class'):
-                prefix += reg.params_class._fields
         else:
             pini = 2
-
+        if regexPattern.startswith('(?#<PARAM>)') and hasattr(reg, 'params_class'):
+            prefix += reg.params_class._fields
         tags = prefix + tags
         self.tree['displaycolumns'] = list(range(pini, len(tags)))
         for k, colName in enumerate(tags):
@@ -853,7 +852,8 @@ class NavigationBar(tk.Frame):
         entryUrl.bind('<Control-o>', self.controlleftKey)
 
     def settingComm(self):
-        file_name = '/Data/kodi/browserSettings.xml'
+        # file_name = '/Data/kodi/browserSettings.xml'
+        file_name = '@data:kodi/browserSettings'
         settingObj = CustomDialog(
             self, title='Application Settings', xmlFile=file_name, isFile=True, settings=self.browserParam.copy()
         )
@@ -1133,6 +1133,7 @@ class PythonEditor(tk.Frame):
         textw.bind('<<CursorlineOff>>', self.onUpPress)
         textw.bind('<<CursorlineOn>>', self.onUpRelease)
         textw.bind('<<NavigationEvent>>', self.moveCursor)
+        textw.bind('<Delete>', self.selDel)
 
     def moveCursor(self, event):
         control_key = (event.state & 0x0004)
@@ -1316,7 +1317,7 @@ class RegexpFrame(tk.Frame):
         self.regexBar.pack(fill=tk.X)
         self.regexBar.setZoomManager(self.zoom)
 
-        frame2 = CollapsingFrame.collapsingFrame(self, buttconf='mM')
+        frame2 = CollapsingFrame.collapsingFrame(self, buttconf='RmM')
         frame2.pack(fill=tk.BOTH, expand=1)
         self.txtEditor = PythonEditor(frame2.frstWidget)
         self.tree = TreeList(

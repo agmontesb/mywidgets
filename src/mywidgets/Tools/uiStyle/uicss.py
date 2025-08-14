@@ -223,7 +223,8 @@ class XmlSerializer:  # The target object of the parser
 class HtmlSerializer(XmlSerializer, HTMLParser):
 
     def __init__(self):
-        super().__init__()
+        XmlSerializer.__init__(self)
+        HTMLParser.__init__(self)
 
     def __call__(self, htmlstr):
         self.feed(htmlstr)
@@ -763,17 +764,18 @@ class ElementFactory:
 
 
 def main():
-    test = 'in_study'
+    test = 'htmlserializer'
     if test == 'in_study':
         import mywidgets.userinterface as userinterface
-        file_path = '/mnt/c/Users/Alex Montes/PycharmProjects/mywidgets/src/Tools/mypycharm/res/layout/pycharm_css.xml'
+        # file_path = '/mnt/c/Users/Alex Montes/PycharmProjects/mywidgets/src/Tools/mypycharm/res/layout/pycharm_css.xml'
+        file_path = '@mypycharm:layout/pycharm_css'
         xmlObj = userinterface.getLayout(file_path, withCss=True)
         eroot = ET.ElementTree(xmlObj)
         ET.indent(eroot, space="\t", level=0)
         ET.dump(eroot)
 
     if test == 'htmlserializer':
-        html_filename = '/mnt/c/Users/Alex Montes/PycharmProjects/mywidgets/tests/css_files/generic.html'
+        html_filename = r'C:\Users\agmontesb\Documents\GitHub\mywidgets\tests\css_files\compound_selectors.html'
         with open(html_filename, 'r') as f:
             html_string = f.read()
         serializer = HtmlSerializer()
