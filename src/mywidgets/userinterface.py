@@ -447,7 +447,7 @@ def widgetFactory(master: tk.Tk | tk.Widget,
         if read in ('TtoB', 'BtoT'):
             text = widget.cget('text')
             angle = 90 if read == 'BtoT' else -90
-            font = imgp._eqTkFont('/usr/share/fonts/truetype/ubuntu/UbuntuMono-B.ttf', size=12)
+            font = imgp._eqTkFont('C:\Windows\Fonts\ConsolaB.ttf', size=12)
             image = imgp.getLabel(text, font, 'black', angle=angle, isPhotoImage=True)
             widget.image = image
             widget.config(image=image)

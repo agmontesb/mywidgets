@@ -176,8 +176,8 @@ class RegexpBar(tk.Frame):
     CRGFLAGSPAT = ['(?#<SPAN>)', '(?#<PARAM>)']
     FLAGS = RGXFLAGS + CRGFLAGS
 
-    def __init__(self, master, messageVar):
-        tk.Frame.__init__(self, master)
+    def __init__(self, master, messageVar, *args, **kwargs):
+        tk.Frame.__init__(self, master, *args, **kwargs)
         self.dropDownFiler = None
         self.textWidget = None
         self.actMatchIndx = 0
@@ -810,8 +810,8 @@ class NavigationBar(tk.Frame):
         ["Connection", "keep-alive"]
     ]
 
-    def __init__(self, master):
-        tk.Frame.__init__(self, master)
+    def __init__(self, master, *args, **kwargs):
+        tk.Frame.__init__(self, master, *args, **kwargs)
         self.urlContent = None
         self.mutex = _thread.allocate_lock()
         self.activeUrl = tk.StringVar(master)
@@ -1082,8 +1082,8 @@ class NavigationBar(tk.Frame):
 
 
 class PythonEditor(tk.Frame):
-    def __init__(self, master):
-        tk.Frame.__init__(self, master)
+    def __init__(self, master, *args, **kwargs):
+        tk.Frame.__init__(self, master, *args, **kwargs)
         self.customFont = tkinter.font.Font(family='Consolas', size=18)
         self.prompt = ''
         self.cellInput = ''
@@ -1271,31 +1271,41 @@ class PythonEditor(tk.Frame):
 
 
 class StatusBar(tk.Frame):
-    def __init__(self, master, statusList):
-        tk.Frame.__init__(self, master)
+    def __init__(self, master, statusList, *args, **kwargs):
+        tk.Frame.__init__(self, master, *args, **kwargs)
         self.setGUI(statusList)
 
     def setGUI(self, statusList):
+        if isinstance(statusList, str):
+            statusList = [(key, tk.StringVar()) for key in statusList.split(' ')]
         kwargs = dict(bd=3, relief=tk.SUNKEN, height=1, width=40, anchor=tk.NW, padx=5)
-        frame = tk.Frame(self, bd=5)
-        frame.pack(side=tk.TOP, fill=tk.X)
+        frame = self
+        frame.config(bd=5)
+        # frame = tk.Frame(self, bd=5)
+        # frame.pack(side=tk.TOP, fill=tk.X)
         for ltext, str_var in statusList[:-1]:
             label = tk.Label(frame, text=ltext, bd=3)
             label.pack(side=tk.LEFT)
             kwargs['textvariable'] = str_var
-            label = tk.Label(frame, **kwargs)
+            label = tk.Label(frame, name=ltext.lower(), **kwargs)
             label.pack(side=tk.LEFT)
 
-        kwargs['textvariable'] = statusList[-1][1]
+        ltext, kwargs['textvariable'] = statusList[-1]
         label = tk.Label(frame, **kwargs)
         label.pack(side=tk.RIGHT, fill=tk.X, expand=1)
-        label = tk.Label(frame, text=statusList[-1][0], bd=3)
+        label = tk.Label(frame, name=ltext.lower(), **kwargs)
         label.pack(side=tk.RIGHT)
+
+    def __getattr__(self, attr):
+        wdg = self.children.get(attr.lower(), None)
+        if wdg:
+            return wdg
+        raise AttributeError(attr)
 
 
 class RegexpFrame(tk.Frame):
-    def __init__(self, master, messageVar):
-        tk.Frame.__init__(self, master)
+    def __init__(self, master, messageVar, *args, **kwargs):
+        tk.Frame.__init__(self, master, *args, **kwargs)
         self.dropDownFiler = None
         self.popUpMenu = None
         self.state = None

@@ -17,7 +17,8 @@ class Pycharm(tk.Tk):
 
         self.setGui()
 
-        self.attributes('-zoomed', True)
+        # self.attributes('-zoomed', True)
+        self.state('zoomed')
         pass
 
     def onMenuClick(self, event):

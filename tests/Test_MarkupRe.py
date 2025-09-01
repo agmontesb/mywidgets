@@ -129,6 +129,7 @@ class TestHTMLPointer:
         required = ['<blk1 num="7">']
         assert answer == required, 'it_span: List error'
 
+
 class TestExtcompile:
 
     def test_ExtCompile(self):
@@ -779,3 +780,137 @@ class TestNestedCPatterns:
         answer = match.parameters._asdict()
         required = dict(idp='root', idh='hijo2')
         assert answer == required
+
+
+class TestPseudoParams:
+    htmlString = """\
+    <html>
+        <head>
+            <style> 
+                p:nth-last-of-type(2) {
+                background: red;
+                }
+
+                li:nth-last-of-type(3) {
+                background: yellow;
+                }
+            </style>
+        </head>
+        <body>
+
+            <h1>Demo of :nth-last-of-type()</h1>
+
+            <p>The first paragraph.</p>
+            <p>The second paragraph.</p>
+            <p>The third paragraph.</p>
+            <p>The fourth paragraph.</p>
+
+            <div>
+                <p>The first paragraph in a div.</p>
+                <p>The second paragraph in a div.</p>
+                <p>The third paragraph in a div.</p>
+                <p>The fourth paragraph in a div.</p>
+            </div>
+            <blk>
+                <p>Ony child paragraph in a blk.</p>
+            </blk>
+            <ul>
+                <li>First list item</li>
+                <ti>Second list item</ti>
+                <mi>Third list item</mi>
+                <mi>Fourth list item</mi>
+                <li>Fifth list item</li>
+                <li>Sixth list item</li>
+                <li>Seventh list item</li>
+                <mi>Eight list item</mi>
+                <li>Ninth list item</li>
+            </ul>
+
+        </body>
+    </html>
+    """
+
+    n_fst = {1: 'First', 2:'Second', 3:'Third', 4:'Fourth', 5:'Fifth', 6:'Sixth', 
+        7:'Seventh', 8:'Eight', 9:'Ninth'
+    }
+
+    @pytest.mark.parametrize(
+        "regex_str, req_range, err_msg",
+        [
+         ('(?#<__TAG__ __TAG__="mi|ti|li" __NCHILD__="1" *=lbl>)', [1], ':first-child'),
+         ('(?#<__TAG__ __TAG__="mi|ti|li" __LCHILD__="1" *=lbl>)', [9], ':last-child'),
+         ('(?#<__TAG__ __TAG__="mi|ti|li" __NTAG__="1" *=lbl>)', [1, 2, 3], ':first-of-type'),
+         ('(?#<__TAG__ __TAG__="mi|ti|li" __LTAG__="1" *=lbl>)', [2, 8, 9], ':last-of-type'),
+         ('(?#<__TAG__ __TAG__="mi|ti|li" __NTAG__="1" __LTAG__="1" *=label>)', [2], ':only-of-type'),
+         ('(?#<__TAG__ __TAG__="mi|ti|li" __NCHILD__="2n+1" *=label>)', range(1, 10, 2), ':nth-child[odd]'),
+         ('(?#<__TAG__ __TAG__="mi|ti|li" __LCHILD__="2n" *=label>)', range(2, 10, 2), ':nth-last-child[even]'),
+         ('(?#<__TAG__ __TAG__="mi|ti|li" __NTAG__="2n+1" *=label>)', [1, 2, 3, 6, 8, 9], ':nth-of-type[odd]'),
+         ('(?#<__TAG__ __TAG__="mi|ti|li" __LTAG__="2n" *=label>)', [4, 5, 7], ':nth-last-of-type[even]'),
+         ('(?#<__TAG__ __TAG__="mi|ti|li" __NCHILD__="-n+5" *=label>)', range(1, 6), 'first 5 elements'),
+         ('(?#<__TAG__ __TAG__="mi|ti|li" __LCHILD__="-n+5" *=label>)', range(5, 10), 'first 5 elements'),
+         ('(?#<__TAG__ __TAG__="li|ti|mi" __NCHILD__="-n+7" __LCHILD__="-n+5" *=lbl>)', [5, 6, 7], 'rango [5, 7] elements'),
+        ]
+    )
+
+    def test_csspseudoclass(self, regex_str, req_range, err_msg):
+        required = [f'{self.n_fst[i]} list item' for i in req_range]
+        answer = MarkupRe.findall(regex_str, self.htmlString)
+        assert answer == required, err_msg
+
+
+class TestMatchTreeAttribs:
+
+    def test_init_and_add(self):
+        mta = MarkupRe.MatchTreeAttribs('test')
+        assert mta.attrib == 'test'
+        assert mta.patterns == []
+        mta.add('2n+1')
+        assert mta.patterns == [(2, 1)]
+
+    def test_equivalent_patterns(self):
+        mta = MarkupRe.MatchTreeAttribs('test')
+        patterns = ['2n+1', '1+2n', '+2n+1', '+1+2n', '2xyz+1', '1+2k']
+        [mta.add(pattern_str) for pattern_str in patterns]
+        unique = set(mta.patterns)
+        assert len(unique) == 1
+        assert unique.pop() == (2, 1)
+
+    def test_match_nth_child_positive(self):
+        mta = MarkupRe.MatchTreeAttribs('test')
+        mta.add('2n+1')
+        # Should match odd numbers: 1, 3, 5, 7, ...
+        assert mta.match('1')
+        assert mta.match('3')
+        assert mta.match('5')
+        assert not mta.match('2')
+        assert not mta.match('4')
+
+    def test_match_nth_child_zero(self):
+        mta = MarkupRe.MatchTreeAttribs('test')
+        mta.add('0')
+        assert mta.match('0')
+        assert not mta.match('1')
+
+    def test_match_nth_child_negative(self):
+        mta = MarkupRe.MatchTreeAttribs('test')
+        mta.add('-2n+4')
+        # Should match even numbers <= 4: 4, 2, 0, -2, ...
+        assert mta.match('4')
+        assert mta.match('2')
+        assert not mta.match('6')
+        assert not mta.match('5')
+
+    def test_eq(self):
+        mta1 = MarkupRe.MatchTreeAttribs('test')
+        mta2 = MarkupRe.MatchTreeAttribs('test')
+        mta1.add('2n+1')
+        mta2.add('2n+1')
+        assert mta1 == mta2
+        mta2.add('3n+2')
+        assert mta1 != mta2
+
+    def test_bool(self):
+        mta = MarkupRe.MatchTreeAttribs('test')
+        assert not mta
+        mta.add('2n+1')
+        assert mta

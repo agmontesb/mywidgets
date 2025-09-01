@@ -4,6 +4,8 @@ Created on 19/09/2015
 
 @author: Alex Montes Barrios
 '''
+import bisect
+import collections
 import functools
 from builtins import StopIteration, ValueError
 from collections import namedtuple, defaultdict, deque
@@ -26,14 +28,13 @@ TEXTO = r'*'
 PARAM_POS = r'*ParamPos*'
 TAG = r'__TAG__'
 N_CHILDREN = r'__NCHILDREN__'
-N_CHILD = r'__N_CHILD__'
-N_TAG = r'__N_TAG__'
 NCHILD = '__NCHILD__'
 LCHILD = '__LCHILD__'
 NTAG = '__NTAG__'
 LTAG = '__LTAG__'
+PSPAN = '__PARENTSPAN__'
 
-PSEUDO_ATTRS = set([TEXTO, PARAM_POS, TAG, N_CHILDREN, N_CHILD, N_TAG, NCHILD, LCHILD, NTAG, LTAG])
+PSEUDO_ATTRS = set([TEXTO, PARAM_POS, TAG, N_CHILDREN, NCHILD, LCHILD, NTAG, LTAG, PSPAN])
 
 REGEX_SCANNER = re.compile(r'''
     (?P<SEPARATOR>(?:
@@ -150,11 +151,34 @@ class MarkupReError(Exception):
     pass
 
 
+class MarkupContent(str):
+
+    def __new__(cls, value, *, special_zones='[--|style|script]'):
+        if isinstance(value, cls):
+            return value
+        obj = str.__new__(cls, value)
+        beg_pos, end_pos = 0, len(value)
+
+        it_span, _ = HTMLPointer.set_iterator_exczones(value, [(0, len(value))], f'^{special_zones}')
+        
+        # Se almacena en sectors los sectores válidos (sectors[2k:2k + 2]) y sectores no válidos
+        # (sectors[2k + 1:2k + 3]) para validar puntos de búsqueda.
+        # obj.sectors = sectors = [beg_pos, *sum((tpl for tpl in hpointer.it_span), ()), end_pos]
+        obj.sectors = sectors = [beg_pos, *sum((tpl for tpl in it_span), ()), end_pos]
+
+        # # Si se tiene un posición x en  sectors[2k + 1:2k + 3] (sector no válido)
+        # validate_pos mapea x a un sector[2k:2k + 2] (sector válido) según up:
+        # #  up=True  : x -> sectors[2k + 2] (final del sector válido anterior)
+        # #  up=False : x -> sectors[2k]   (inicio del sector válido siguiente)
+        obj.validate_pos = lambda x, up=True: x if x == -1 or (spos := bisect.bisect(sectors, x)) % 2 else max(0, sectors[spos - up] + 1 - 2*up)
+        return obj
+
+
 class MatchPattern:
 
     def __init__(self, attrib):
         self.attrib = attrib
-        self._index = 0
+        self._index = None
         self.patterns = []
 
     def __bool__(self):
@@ -172,6 +196,8 @@ class MatchPattern:
 
     def add(self, pattern_str):
         self.patterns.append(re.compile(pattern_str + '\\Z', re.DOTALL))
+        if self._index is None:
+            self._index = 0
 
     def match(self, str_to_match):
         bflag = all(cpattern.match(str_to_match) for cpattern in self.patterns)
@@ -183,16 +209,27 @@ class MatchPattern:
         ndx = max(0, min(len(self.patterns) - 1, ndx))
         self._index = ndx
 
+    def get_master_pattern(self):
+        try:
+            ndx = self._index or 0
+            return self.patterns[ndx].pattern
+        except IndexError:
+            return None
+
+    @property
+    def pattern(self):
+        return self.patterns[self._index].pattern if self.patterns else None
+
     @property
     def groups(self):
-        return self.patterns[0].groups
+        return self.patterns[self._index].groups if self.patterns else None
 
     def span(self, str_to_match):
         try:
-            m = self.patterns[0].match(str_to_match)
+            m = self.pattern[self._index].match(str_to_match)
             answ = m.group(1)
         except IndexError:
-            answ = m.string
+            answ = m.group()
         except AttributeError as e:
             raise e
         return answ
@@ -215,18 +252,30 @@ class MatchTreeAttribs:
             return False
         if isinstance(other, (bytes, str)):
             return self.patterns[self._index].pattern == other
-        if isinstance(other, MatchPattern):
+        if isinstance(other, self.__class__):
             return self.patterns == other.patterns
 
     def add(self, pattern_str):
-        pattern_str = pattern_str.replace(' ', '').replace('-n', '-1n').replace('+n', '+1')
-        pattern = r'(?P<a>(?:\+|\-)*\d*?n)*(?P<b>(?:\+|\-)*\d+?)*(?P<c>(?:\+|\-)*\d*?n)*'
-        a, b, c = re.match(pattern, pattern_str).groups()
-        a = a or c or '0'
-        b = b or '0'
-        a = a.strip('n')
-        a, b = int(a), int(b)
-        self.patterns.append((a, b))
+        # pattern_str: 'an+b' where a, b: integers, n: str of only letters
+        vars = re.findall('((?:\+|\-)*\d*[a-zA-Z]+)', pattern_str)
+        lvars = len(vars)
+        coef = re.findall('((?:\+|\-)*\d+)', pattern_str)
+        lcoef = len(coef)
+        try:
+            assert lvars <= 1 and lcoef <= 2
+        except AssertionError:
+            raise MarkupReError(f'Invalid nth-child pattern: {pattern_str}')
+        match (lvars, lcoef):
+            case (0, 1):   # 'b'
+                tpl = (0, int(coef[0]))
+            case (1, 0):   # '-n' or 'n' or '+n'
+                tpl = (1 if vars[0][0] != '-' else -1, 0)
+            case (1, 1):   # 'an' or '-an' or '+an' or 'b-n' or 'b+n'
+                tpl = (int(coef[0]), 0) if vars[0].startswith(coef[0]) else (1 if vars[0][0] != '-' else -1, int(coef[0]))
+            case (1, 2):   # 'an+b' or 'an-b' or '-an+b' or '-an-b' or '+an+b' or '+an-b'
+                ndx = sum(k if vars[0].startswith(x) else 0 for k, x in enumerate(coef, 1)) - 1
+                tpl = (int(coef[ndx]), int(coef[1 - ndx]))
+        self.patterns.append(tpl)
 
     @staticmethod
     def nth_child(x, A, B):
@@ -266,8 +315,9 @@ class TreeElement:
     def __eq__(self, other):
         return self.span == other.span
 
-    def add(self, *children):
-        self.children.extend(children)
+    def add(self, *children, ezones=None):
+        ezones = ezones or []
+        self.children.extend(child for child in children if child.tag not in ezones)
 
     @property
     def root_path(self):
@@ -280,8 +330,11 @@ class TreeElement:
 
     @property
     def full_path(self):
-        n = self.attrs.get(N_TAG, 1)
-        full_path = f'{self._root}.{self.tag}[{n}]'.strip('.').replace('[1]', '')
+        full_path = f'{self._root}.{self.tag}'
+        if self.tag != TAGPHOLDER:
+            n = self.attrs.get(NTAG, 1)
+            full_path = f'{full_path}[{n}]'
+        full_path = full_path.strip('.').replace('[1]', '')
         return full_path
 
     def attr_span(self, key=None):
@@ -332,6 +385,9 @@ class ExtRegexObject:
             if not req_tags[element_path]:
                 req_tags.pop(element_path)
 
+        self.need_markupcontent = bool(
+            (self.req_attrs.get(TAGPHOLDER, {}).keys() | self.opt_attrs.get(TAGPHOLDER, {}).keys()) & {PSPAN, NCHILD, LCHILD, NTAG, LTAG}
+        )
         # match_factory = MatchObjectFactory(tag_pattern, srch_attrs, var_list)
         self._seeker = None
         pass
@@ -357,10 +413,18 @@ class ExtRegexObject:
                 if attr.startswith(root_tag) and var != var.strip('_')
             ]
             exc_attr.update(opt_attrs)
-            diff_set = self.req_attrs.get(root_tag, {}).keys() - exc_attr
+            req_attrs = self.req_attrs.get(root_tag, {})
+            diff_set = req_attrs.keys() - exc_attr
             if diff_set:
-                myfunc = lambda x: rf'<{self.tag_pattern}\s[^>]*{"=[^>]+".join(x)}=[^>]+[/]*>'
-                srch_pattern = '|'.join(map(myfunc, itertools.permutations(diff_set, len(diff_set))))
+                none_pat = '[^"]*'
+                sanitize = lambda pat: pat.replace('\\Z', '').replace('.*?', '[^"]*').replace('.+?', '[^"]+')
+                myfunc = lambda x: rf'<{self.tag_pattern}\s[^>]*{"[^>]+".join(x)}[^>]*[/]*>'
+                tpls = tuple(
+                    f'{key}="{sanitize(req_attrs[key].pattern or none_pat)}"' 
+                    for key in diff_set
+                )
+                srch_pattern = '|'.join(map(myfunc, itertools.permutations(tpls, len(tpls))))
+                # srch_pattern = srch_pattern.replace('\\Z"', '"')
             else:
                 # srch_pattern = rf'<(?:{self.tag_pattern}).*?/*>'
                 srch_pattern = rf'<(?:{self.tag_pattern})( .*?)*/*>'
@@ -371,7 +435,9 @@ class ExtRegexObject:
         pos, max_pos = max(pos, 0), len(html_string)
         end_pos = endpos if endpos != -1 else max_pos
 
-        parser = MarkupParser(self.var_list, self.req_attrs, self.opt_attrs)
+        parser = MarkupParser(self.var_list, self.req_attrs, self.opt_attrs, ezones=self._e_zones)
+        if self.need_markupcontent:
+            html_string = MarkupContent(html_string, special_zones=self._e_zones)
         varPos = parser.check_match(html_string, pos, end_pos)
         if varPos:
             if self.var_list and f'{TAGPHOLDER}..*' in self.var_list[0][0]:
@@ -401,7 +467,8 @@ class ExtRegexObject:
                 if m:
                     span_gen.send(m.end())
                     yield m
-
+        if self.need_markupcontent:
+            html_string = MarkupContent(html_string, special_zones=e_zones)
         return match_gen(html_string, pointer_pos)
 
     def search(self, html_string, spos=-1, sendpos=-1, parameters=None):
@@ -700,19 +767,39 @@ class HTMLPointer:
         if is_file:
             with open(html_str, 'r') as f:
                 html_str = f.read()
-        self.html_str = html_str
         it_span = it_span or [(0, len(html_str))]
         if isinstance(it_span, list):
             it_span = iter(it_span)
+        it_span, special_zones = self.set_iterator_exczones(html_str, it_span, special_zones)
+        self.html_str = html_str
         self.it_span = it_span
-        self.exc_zones = self.get_special_zones(special_zones)
+        self.special_zones = special_zones
+        self.exc_zones = None
         pattern = next_pattern or self.next_pattern
         if isinstance(pattern, str):
             pattern = re.compile(pattern, re.IGNORECASE)
         self.next_tag = pattern
-        self.span = next(self.it_span)
-        self.pos = self.span[0]
+        self._span = self._pos = None
+        self.init_exc_zones()
         self.seek_to_end = seek_to_end
+
+    @property
+    def pos(self):
+        self._pos = self._pos or self.span[0]
+        return self._pos
+
+    @pos.setter
+    def pos(self, value):
+        self._pos = value
+
+    @property
+    def span(self):
+        self._span = self._span or next(self.it_span)
+        return self._span
+    
+    @span.setter
+    def span(self, value):
+        self._span = value
 
     def __call__(self):
         while True:
@@ -736,13 +823,14 @@ class HTMLPointer:
                 if not beg_inner:
                     continue
             end_pos = self.pos
-            new_end_pos = yield beg_pos, end_pos
-            if new_end_pos is None:
-                if not self.seek_to_end:
-                    self.pos = end_inner
-            else:  # new_end_pos is not None
-                self.pos = new_end_pos
-                yield end_pos if self.seek_to_end else end_inner
+            seek_to_end = yield beg_pos, end_pos
+            bflag = seek_to_end is None and not self.seek_to_end
+            bflag |= seek_to_end is not None and not seek_to_end
+            if bflag:
+                self.pos = end_inner
+                self.init_exc_zones()
+            if seek_to_end is not None:  # new_end_pos is not None
+                yield end_pos if seek_to_end else end_inner
 
     def find(self, cp_pattern, use_sectors=True):
         '''
@@ -778,39 +866,73 @@ class HTMLPointer:
                 self.pos = m.end() + linf
                 return beg_pos + linf
         return None
-
-    def get_special_zones(self, special_zones):
-        '''
-
-        :param special_zones:
-        :return:
-        '''
+    
+    @classmethod
+    def set_iterator_exczones(cls, html_str, it_span, special_zones):
         zones = special_zones.split('^')[:2]  # Solo se tiene en cuenta las dos primeras zonas.
         try:
             special_zones, inc_tags = zones
             comment_pat = tag_pat = ''
             if '!--' in inc_tags:
-                inc_tags = f'{inc_tags[1:-1]}|'.replace('!--|', '')
+                inc_tags = f'{inc_tags[1:-1]}'.replace('!--|', '')
                 inc_tags = f'[{inc_tags}]'
                 comment_pat = r'(?:<!--.+?-->)'
             if inc_tags[1:-1]:
                 tag_pat = rf'(?:<(?:{inc_tags[1:-1]})(?:>|\s.+?(?<!/)>))'
             full_pat = '|'.join([comment_pat, tag_pat]).strip('|')
             cp_pattern = re.compile(full_pat, re.DOTALL | re.IGNORECASE)
-            sectors = self.__class__(
-                self.html_str,
-                it_span=self.it_span,
+            sectors = cls(
+                html_str,
+                it_span=it_span,
                 next_pattern=cp_pattern,
                 special_zones=special_zones
             )()
-            self.it_span = sectors
+            it_span = sectors
         except Exception as e:
             pass
+        return it_span, special_zones
+    
+    def init_exc_zones(self): 
         exc_zones = []
-        for exc_tag in special_zones[1:-1].split('|'):
-            pattern = f'(?:<!--|-->)' if exc_tag == '!--' else f'<\\s*?/*{exc_tag}(?:\\s|>)'
-            exc_zones.append((re.compile(pattern, re.IGNORECASE), 0))
-        return exc_zones
+        if self.special_zones:
+            for exc_tag in self.special_zones[1:-1].split('|'):
+                pattern = f'(?:<!--|-->)' if exc_tag == '!--' else f'<\\s*?/*{exc_tag}(?:\\s|>)'
+                exc_zones.append((re.compile(pattern, re.IGNORECASE), -1))
+        self.exc_zones = exc_zones
+
+    # def get_special_zones(self, special_zones):
+    #     '''
+
+    #     :param special_zones:
+    #     :return:
+    #     '''
+    #     zones = special_zones.split('^')[:2]  # Solo se tiene en cuenta las dos primeras zonas.
+    #     try:
+    #         special_zones, inc_tags = zones
+    #         comment_pat = tag_pat = ''
+    #         if '!--' in inc_tags:
+    #             inc_tags = f'{inc_tags[1:-1]}'.replace('!--|', '')
+    #             inc_tags = f'[{inc_tags}]'
+    #             comment_pat = r'(?:<!--.+?-->)'
+    #         if inc_tags[1:-1]:
+    #             tag_pat = rf'(?:<(?:{inc_tags[1:-1]})(?:>|\s.+?(?<!/)>))'
+    #         full_pat = '|'.join([comment_pat, tag_pat]).strip('|')
+    #         cp_pattern = re.compile(full_pat, re.DOTALL | re.IGNORECASE)
+    #         sectors = self.__class__(
+    #             self.html_str,
+    #             it_span=self.it_span,
+    #             next_pattern=cp_pattern,
+    #             special_zones=special_zones
+    #         )()
+    #         self.it_span = sectors
+    #     except Exception as e:
+    #         pass
+    #     exc_zones = []
+    #     if special_zones:
+    #         for exc_tag in special_zones[1:-1].split('|'):
+    #             pattern = f'(?:<!--|-->)' if exc_tag == '!--' else f'<\\s*?/*{exc_tag}(?:\\s|>)'
+    #             exc_zones.append((re.compile(pattern, re.IGNORECASE), 0))
+    #     return exc_zones
 
     def confirm_position(self, pos):
         '''
@@ -885,7 +1007,7 @@ class MatchObjectFactory:
     def start_tag(self, span, tag, attribs):
         root = self.path
         self.path = path = self.get_path(tag)
-        attribs.append((N_CHILD, self.n_children[root]))
+        attribs.append((NCHILD, self.n_children[root]))
         self.stack.append([tag, path, span, attribs])
         pass
 
@@ -906,7 +1028,7 @@ class MatchObjectFactory:
     def start_end_tag(self, span, tag, attribs):
         root = self.path
         path = self.get_path(tag)
-        attribs.append([N_CHILD, self.n_children[root]])
+        attribs.append([NCHILD, self.n_children[root]])
         attribs.append([N_CHILDREN, 0])
         self.bd_tags.append([span, path, attribs, -1])
         pass
@@ -925,11 +1047,12 @@ class MatchObjectFactory:
 class MarkupParser(HTMLParser):
     CDATA_CONTENT_ELEMENTS: tuple[str, ...] = tuple()
 
-    def __init__(self, var_list=None, req_attrs=None, opt_attrs=None):
+    def __init__(self, var_list=None, req_attrs=None, opt_attrs=None, ezones='[!--|style|script]'):
         super().__init__()
         self.var_list = var_list = var_list or []
         self.req_attrs = req_attrs = req_attrs or {}
         self.opt_attrs = opt_attrs = opt_attrs or {}
+        self._e_zones = ezones[1:-1].split('|') if ezones else []
 
         self.pathIndex = []
         self.var_map = {}
@@ -1025,7 +1148,61 @@ class MarkupParser(HTMLParser):
             raise MarkupReError(message)
         return x_dmy, y_dmy
 
-    def parse(self, data: str, beg_pos: int, max_pos: int, efilter: Callable[[Any], bool] = None):
+    @staticmethod
+    def root_pseudo_params(html_str: MarkupContent, beg_pos:int=0, end_pos:int=None, special_zones:str='[!--|style|script]')-> dict[str, Any]:
+        if html_str[:beg_pos].strip() == '':
+            # Se trata del tag que contiene todos los otros tags
+            return {}
+
+        srch_pattern = r'<([A-Za-z].*?)( .*?)*/*>'
+        cpattern = re.compile(srch_pattern, re.DOTALL | re.IGNORECASE)
+        
+        def find_tag(k, tag):
+            while True:
+                pos = html_str.rfind(tag, 0, k)
+                vpos = html_str.validate_pos(pos)
+                if pos == vpos:
+                    return pos
+                k = vpos
+
+        answ = {}
+        end_pos = end_pos or len(html_str)
+        k = beg_pos
+        kopen = kclose = k
+        while k >= 0:
+            bflag = kclose >= kopen
+            if bflag:
+                k = kclose
+                kopen, kclose = map(lambda tag: find_tag(k, tag), ('<', '</'))
+                continue
+            
+            hpointer = HTMLPointer(
+                html_str, is_file=False, it_span=[(kopen, len(html_str))], 
+                next_pattern=cpattern, special_zones=special_zones
+            )
+            it = hpointer()
+            linf, lsup= next(it)
+            
+            if linf < beg_pos and lsup > end_pos:
+                break
+            kopen = find_tag(kopen, '<')
+        answ[PSPAN] = (linf, lsup)
+        hpointer.span = (linf, lsup)    # Acá reducimos el sector de búsqueda al interior del tag raíz.
+        dmy = it.send(False)                  # seek_to_end = False para establecer que la búsqueda se haga en el interior.
+        fnc = hpointer.next_tag.match
+        stag = fnc(html_str[beg_pos:]).group(1)
+        ntag = 0
+        for k, span in enumerate(it, start=1):
+            tag = fnc(html_str[span[0]:span[1]]).group(1)
+            ntag += int(tag == stag)
+            if span == (beg_pos, end_pos):
+                answ[NCHILD] = k
+                answ[NTAG] = ntag
+        answ[LCHILD] = k - answ[NCHILD] + 1
+        answ[LTAG] = ntag - answ[NTAG] + 1
+        return answ
+
+    def parse(self, data: str | MarkupContent, beg_pos: int, max_pos: int, efilter: Callable[[Any], bool] = None):
         beg_pos, max_pos = self.adjust_end_points(data, beg_pos, max_pos)
         efilter = efilter or (lambda x: False)
         pos = beg_pos
@@ -1048,19 +1225,34 @@ class MarkupParser(HTMLParser):
         root.tag = TAGPHOLDER
         root.root_path = ''
 
+        if isinstance(data, MarkupContent):
+            # Solo cuando se requiere que el tag raíz tenga los pseudo atributos, entonces data 
+            # debe ser un objeto MarkupContent.
+            rpseudo_map = self.root_pseudo_params(data, *root.span)
+            pspan = rpseudo_map.pop(PSPAN)
+            root.attrs[PSPAN] = data[slice(*pspan)]
+            root.attrs[PARAM_POS][PSPAN] = pspan
+            root.attrs.update(rpseudo_map)
+
         stack = deque([('', root)])
         to_process = []
         while stack:
             root_path, elem = stack.pop()
             elem.root_path = root_path
-            elem.attrs[N_CHILDREN] = len(elem.children)
+            elem.attrs[N_CHILDREN] = nchildren = len(elem.children)
             if efilter(elem):
                 to_process.append(elem)
+            tag_map = collections.Counter(
+                child.attrs[TAG] for child in elem.children
+            )
             n_child: dict[str, int] = defaultdict(int)
             for k, child in enumerate(elem.children):
+                child.attrs[PSPAN] = elem.span
                 n_child[child.tag] += 1
-                child.attrs[N_TAG] = n_child[child.tag]
-                child.attrs[N_CHILD] = k + 1
+                child.attrs[NTAG] = n_child[child.tag]
+                child.attrs[LTAG] = tag_map[child.tag] - n_child[child.tag] + 1
+                child.attrs[NCHILD] = k + 1
+                child.attrs[LCHILD] = nchildren - k
                 stack.insert(0, (elem.full_path, child))
         return to_process or root
 
@@ -1265,10 +1457,10 @@ class MarkupParser(HTMLParser):
                 bflag = stck_tag.tag == tag
                 if bflag:
                     stck_tag.span = (stck_tag.span[0], posfin)
-                    self.tagStack[-1].add(stck_tag)
+                    self.tagStack[-1].add(stck_tag, ezones=self._e_zones)
                     break
                 # Transferimos los hijos al nivel superior
-                self.tagStack[-1].add(stck_tag, *stck_tag.children)
+                self.tagStack[-1].add(stck_tag, *stck_tag.children, ezones=self._e_zones)
                 stck_tag.children = []
             except:
                 break
@@ -1291,7 +1483,7 @@ class MarkupParser(HTMLParser):
         # tag_path = self.get_req_path(tag_path, None)
         self.tagList.append(te := TreeElement((posini, posfin), tag, attrs))
         if self.tagStack:
-            self.tagStack[-1].add(te)
+            self.tagStack[-1].add(te, ezones=self._e_zones)
 
     def storeDataStr(self, dataIn):
         dSpanIn = self.getSpan(dataIn)
@@ -1305,10 +1497,16 @@ class MarkupParser(HTMLParser):
             attrs[TEXTO] = ' '.join([texto, dataIn]).strip()
 
     def handle_data(self, data):
-        b_pos = self.pos
-        e_pos = self.rawdata[b_pos:].find('<') + b_pos
-        new_data = self.rawdata[b_pos: e_pos]
-        self.storeDataStr(new_data)
+        # Este código no se para que se hace. Lo dejo comentado por si acaso.
+        # b_pos = self.pos
+        # try:
+        #     e_pos = re.search('</*[a-zA-Z].*?>', self.rawdata[b_pos:]).start() + b_pos
+        # except AttributeError:
+        #     e_pos = len(self.rawdata)
+        # new_data = self.rawdata[b_pos: e_pos]
+        # self.storeDataStr(new_data)
+        self.storeDataStr(data)
+        pass
 
     def handle_entityref(self, name):  # startswith('&')
         data = '&%s;' % name
@@ -1329,26 +1527,6 @@ class MarkupParser(HTMLParser):
 
     def unknown_decl(self, data):
         posini, posfin = self.getSpan('<![%s]>' % data)
-
-
-def search_parent(html_str, beg_pos=0, end_pos=None):
-    end_pos = end_pos or len(html_str)
-    k = beg_pos
-    kopen = kclose = k
-    while k >= 0:
-        bflag = kclose >= kopen
-        if bflag:
-            k = kclose
-            kopen, kclose = map(html_str[:k].rfind, ('<', '</'))
-            continue
-        # print(f'{kopen=}>{kclose=}')
-        hpointer = HTMLPointer(html_str, is_file=False, it_span=[(kopen, len(html_str))])
-        linf, lsup= next(hpointer())
-        # print(html_str[linf:lsup])
-        if linf < beg_pos and lsup > end_pos:
-            break
-        kopen = html_str[:kopen].rfind('<')
-    return linf, lsup
 
 
 def compile(regex_str_in, flags=0, etags_str='[!--|style|script]'):
@@ -1507,7 +1685,7 @@ def compile(regex_str_in, flags=0, etags_str='[!--|style|script]'):
                 attribute = '.'.join([prefix, token.value])
                 element, attr = attribute.rsplit('.', 1)
                 attr_dict = tags.setdefault(element, {})
-                if token.value == TAG:
+                if token.value in (TAG, PSPAN):
                     attr_dict.setdefault(attr, MatchPattern(attr))
                 elif token.value in (N_CHILDREN, NCHILD, LCHILD, NTAG, LTAG):
                     attr_dict.setdefault(attr, MatchTreeAttribs(attr))
@@ -1539,14 +1717,12 @@ def compile(regex_str_in, flags=0, etags_str='[!--|style|script]'):
                 attr_dict.setdefault(attr, MatchPattern(attr))
                 varList.append([attribute, f'group{n_implicit}'])
             case 'ATTR_PATTERN':
-                attr_pattern = token.value
+                attr_pattern = token.value[1:-1]
                 match attr:
                     case '__EZONE__':
-                        maskParam = attr_pattern[1:-1]
+                        maskParam = attr_pattern
                     case _:
-                        # attr_dict = tags.setdefault(element, {})
-                        # attr_dict[attr] = re.compile(token.value[1:-1] + '\\Z', re.DOTALL)
-                        attr_dict[attr].add(token.value[1:-1])
+                        attr_dict[attr].add(attr_pattern)
             case 'ASIGNATION':
                 pass
             case 'OPEN_TAG':
@@ -1567,11 +1743,14 @@ def compile(regex_str_in, flags=0, etags_str='[!--|style|script]'):
 
 def ExtDecorator(func):
     def wrapper(*args, **kwords):
-        pattern, flagsvalue = args[0], 1 * ('flags' in kwords) and kwords.pop('flags')
-        compPat = compile(pattern, flags=flagsvalue)
-        callfunc = getattr(compPat, func.__name__)
-        return callfunc(*args[1:], **kwords)
+        pattern, *args = args
+        flagsvalue = kwords.pop('flags', 0)
+        special_zones = kwords.pop('special_zones', '[!--|style|script]')
+        compPat = compile(pattern, flags=flagsvalue, etags_str=special_zones)
 
+        fname = func.__name__
+        callfunc = getattr(compPat, fname)
+        return callfunc(*args, **kwords)
     return wrapper
 
 
@@ -1614,7 +1793,7 @@ def main():
     from rich.console import Console
     from rich.table import Table
 
-    htmlStr1 = """
+    htmlStr1 = """<body>
     <span class="independiente">span0</span>
     <script>
         <span class="bloque1">span1</span>
@@ -1641,7 +1820,7 @@ def main():
         <span class="bloque2">span2</span>
     -->
     <span class="independiente">span3</span>
-        """
+    </body>"""
     htmlStr2 = """
     <span id="1" class="independiente">span0</span>
     <scripts id="2">
@@ -1672,8 +1851,77 @@ def main():
 
     console = Console(color_system='truecolor')
     console.print('Inicio')
-    test = 'extcompile'
-    if test == 'ext_match':
+    test = 'pseudo_params'
+    if test == 'MarkupContent':
+        regex_str = '(?#<body *=answ>)'
+        cpatt = compile(regex_str)
+        m = cpatt.search(htmlStr1)
+
+        content = MarkupContent(htmlStr1, special_zones='[!--|style|script]')
+
+        pos = content.validate_pos(50)
+        m = search(regex_str, htmlStr1)
+        pass
+    if test == 'pseudo_params':
+        htmlStr1 = """<body>
+        <div>
+        <p>This text is selected!</p>
+        <p>This text isn't selected.</p>
+        </div>
+
+        <div>
+        <h2>This text isn't selected: it's not a `p`.</h2>
+        <p>This text isn't selected.</p>
+        </div>
+        </body>"""
+        regex_str = '(?#<p __LCHILD__="1" *=answ>)'
+        cp_pattern = compile(regex_str)
+        answ = cp_pattern.findall(htmlStr1)
+        pass
+    elif test == 'excluded_zones':
+        hpointer = HTMLPointer(
+            htmlStr1, is_file=False, it_span=[(0, len(htmlStr1))],
+            special_zones='^[!--|style|script]'
+        )
+        sectors = [0, *sum((tpl for tpl in hpointer.it_span), ()), len(htmlStr1)]
+        # [special_zones.extend(tpl) for tpl in hpointer.it_span]
+        # special_zones = [0, *special_zones, len(htmlStr1)]
+        pass
+    elif test == 'search_parent':
+        htmlStr1 = """<body>
+    <span class="independiente">span0</span>
+    <script>
+        <span class="bloque1">span1</span>
+        <a href="http://www.eltiempo.com.co">El Tiempo</a>
+        <span class="bloque1">span2</span>
+    </script>
+    <bloque>
+        <span class="independiente">bloque1</span>
+        <parent id="root">
+            <hijo id="hijo1">primer hijo</hijo>
+            <hijo id="hijo2" exp="hijo con varios comentarios">
+                 <h1>El primer comentario</h1>
+                 <h1>El segundo comentario</h1>
+                 <h1>El tercer comentario</h1>
+            </hijo>
+            <span class="colado">blk1</span>
+            <hijo id="hijo3">tercer hijo</hijo>
+        </parent>
+        <span class="independiente">bloque2</span>
+    </bloque>
+    <span class="independiente">span3</span>
+    </body>"""
+        root = MarkupParser().parse(htmlStr1, 0, len(htmlStr1))
+        stack = [root]
+        while stack:
+            elem = stack.pop()
+            if PSPAN in elem.attrs:
+                linf, lsup = elem.span
+                pseudo_p = MarkupParser.root_pseudo_params(htmlStr1, linf, lsup, special_zones='[!--|style]')
+                assert all(pseudo_p[k] == elem.attrs[k] for k in pseudo_p), 'Error en search_parent'
+            stack.extend(elem.children[::-1])
+        pass
+    elif test == 'ext_match':
         cmpobj = compile('(?#<__TAG__ __TAG__=mi_nametag_var id=id>)', etags_str='[<!--]')
         answer = cmpobj.findall(htmlStr2)
         required = [('span', '1'), ('scripts', '2'), ('bloque', '3'), ('span', '4')]
@@ -1809,7 +2057,7 @@ def main():
         sl = sorted(new_fact.tagList)
         console.print(
             [
-                (n, m[N_CHILD], m[N_CHILDREN]) for n, m in
+                (n, m[NCHILD], m[N_CHILDREN]) for n, m in
                 [(x[3], dict(x[4])) for x in sl if x[1] != TEXTO]
             ]
         )
@@ -2093,9 +2341,20 @@ def main():
     console.print('Final')
 
 def in_test():
-    dmystr = '''<c r="Z21" s="1659"/><c r="AA21" s="1660"/><c r="AB21" s="700"><f>R37+1</f><v>58</v></c><c r="AC21" s="1659"><f>ROUND(+'H3 (ERI - Renta Liquida)'!J378+'H3 (ERI - Renta Liquida)'!J379+'H3 (ERI - Renta Liquida)'!J380+'H3 (ERI - Renta Liquida)'!J381,-3)</f><v>11798000</v></c><c r="AD21" s="1659"/><c r="AE21" s="700"><f>AB37+1</f><v>74</v></c><c r="AF21" s="1867"><f>ROUND(+'H3 (ERI - Renta Liquida)'!K378+'H3 (ERI - Renta Liquida)'!K379+'H3 (ERI - Renta Liquida)'!K380+'H3 (ERI - Renta Liquida)'!K381+'H3 (ERI - Renta Liquida)'!L55,-3)</f><v>0</v></c>'''
+    dmystr = '''<row r="10" spans="1:34" ht="33" customHeight="1">
+<c r="AA10" s="236" t="str">
+<f>IF(OR(H10<0,L10<0),"ERROR","OK")</f>
+<v>OK</v>
+</c>
+<c r="AH10" s="354" t="str">
+<f>IF(OR(AA10="ERROR",AB10="ERROR",AC10="ERROR",AD10="ERROR",AE10="ERROR",AF10="ERROR"),CONCATENATE("Error en el concepto ",C10," de la Hoja 3 Fila ",A10),"")</f>
+<v/>
+</c>
+</row>
+'''
 
-    regex_str = '(?#<c v.*="[0-9][0-9]+"=rng><c v.*="[0-9][0-9]+"=val r=adr f.*=fml>)'
+    regex_str = r'(?#<c r=adr <v *="\d{4,}"=val>*>)'
+    regex_str = r'(?#<c r="[A-Z]+\d+"=adr v.*="-*\d{4,}"=val f.*=_fml>)'
     regex_obj = compile(regex_str)
     for match in regex_obj.finditer(dmystr):
         print(match.groupdict())
@@ -2103,5 +2362,5 @@ def in_test():
         print(dmystr[match.span()[0]: match.span()[1]])
 
 if __name__ == '__main__':
-    # main()
-    in_test()
+    main()
+    # in_test()
