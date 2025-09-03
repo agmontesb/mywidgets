@@ -215,7 +215,32 @@ def mainOLD():
     top.mainloop()
 
 def main():
+    html_str = '''
+        <beg num="1">
+            <blk1 num="2" />
+            <span num="3">
+                <blk1 num="4">
+                    <span num="5"/>
+                    <blk1 num="5.5" />
+                    <span num="5.6"/>
+                </blk1>
+            </span>
+            <blk1></blk1>
+            <blk12></blk12>
+            <out num="6">
+                <blk1 num="7">
+                    <row num="8">
+                        <p num="9"/>
+                        <p num="10"/>
+                        <p num="11"/>
+                    </row>
+                </blk1>
+            </out>
+            <blk1 num="12" />
+        </beg>
+    '''
     top = RegexFinder()
+    top.setContent(html_str)
     top.mainloop()
 
 

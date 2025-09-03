@@ -11,9 +11,10 @@ from builtins import StopIteration, ValueError
 from collections import namedtuple, defaultdict, deque
 import re
 import itertools
-from typing import Tuple, Callable, Any
+from typing import Generator, Tuple, Callable, Any
 from html.parser import HTMLParser
 from enum import Enum
+import warnings
 
 import mywidgets.tokenizer as tokenizer
 
@@ -38,13 +39,14 @@ PSEUDO_ATTRS = set([TEXTO, PARAM_POS, TAG, N_CHILDREN, NCHILD, LCHILD, NTAG, LTA
 
 REGEX_SCANNER = re.compile(r'''
     (?P<SEPARATOR>(?:
-       (?:<\*<) |                       # Inicio Pattern
-         (?:><) |                       # Inicio Pattern
-       (?:>\*<) |                       # Inicio Pattern
-       (?:>\*>) |                       # Inicio Pattern
-         (?:>>) |                       # Inicio Pattern
-          (?:<) |                       # Inicio Pattern
-          (?:>)                         # Inicio Pattern
+        (?:<\*<) |                       # Inicio Pattern
+        (?:><)   |                       # Inicio Pattern
+        (?:>\*<) |                       # Inicio Pattern
+        (?:>\*>) |                       # Inicio Pattern
+        (?:>=<)  |                       # Inicio Pattern
+        (?:>>)   |                       # Inicio Pattern
+        (?:<)    |                       # Inicio Pattern
+        (?:>)                            # Inicio Pattern
     )) |
     (?P<WHITESPACE>\s+) |           # string
     (?P<SPECIAL_ATTR>(?:                            # Atributo del sistema
@@ -55,7 +57,8 @@ REGEX_SCANNER = re.compile(r'''
      )) |           
     (?P<TAG_PATTERN>(?:
         (?<=<)\s*?                   # Precedida por < y posiblemente espacios
-        \(*(?:__TAG__|[A-Za-z].*?)\)*   # Pattern tag
+        # \(*(?:__TAG__|[A-Za-z].*?)\)*   # Pattern tag
+        \(*(?:__TAG__|[A-Za-z][^= ]*?)\)*   # Pattern tag
         (?!=)
         (?=\s|>|<)                 # La sigue uno o mas espacios o >
      )) |           
@@ -160,11 +163,10 @@ class MarkupContent(str):
         beg_pos, end_pos = 0, len(value)
 
         it_span, _ = HTMLPointer.set_iterator_exczones(value, [(0, len(value))], f'^{special_zones}')
-        
         # Se almacena en sectors los sectores válidos (sectors[2k:2k + 2]) y sectores no válidos
         # (sectors[2k + 1:2k + 3]) para validar puntos de búsqueda.
         # obj.sectors = sectors = [beg_pos, *sum((tpl for tpl in hpointer.it_span), ()), end_pos]
-        obj.sectors = sectors = [beg_pos, *sum((tpl for tpl in it_span), ()), end_pos]
+        obj.sectors = sectors = [beg_pos, *sum([tpl for tpl in it_span], ()), end_pos]
 
         # # Si se tiene un posición x en  sectors[2k + 1:2k + 3] (sector no válido)
         # validate_pos mapea x a un sector[2k:2k + 2] (sector válido) según up:
@@ -457,7 +459,7 @@ class ExtRegexObject:
         )
 
         def match_gen(html_string, pointer_pos):
-            span_gen = pointer_pos()
+            span_gen = pointer_pos._span_generator()
             while self.isSearchFlagSet():
                 try:
                     beg_pos, end_pos = next(span_gen)
@@ -620,6 +622,12 @@ class CompoundRegexObject(ExtRegexObject):
                 pattern = f'(?#<{pattern1}<{pattern2}>*>)'
             case CPatterns.NXTTAG:
                 pattern = f'(?#<{pattern1}><{pattern2}>)'
+            case CPatterns.PRECEDES:
+                pattern = f'(?#<{pattern1}>*<{pattern2}>)'
+            case CPatterns.PARENT:
+                pattern = f'(?#<*<{pattern1}>{pattern2}>)'
+            case CPatterns.SIBLINGS:
+                pattern = f'(?#<{pattern1}>=<{pattern2}>)'
             case _:
                 pattern = ''
         return pattern
@@ -633,9 +641,47 @@ class CompoundRegexObject(ExtRegexObject):
         # del span que es lo que se quiere en caso de
         # '<<>*>'(children) y de '<><>' (nexttag)
         def match_gen(html_string):
-            for match_srchobj in self.spanRegexObj.finditer(
-                    html_string, pos, endpos, seek_to_end=False, parameters=parameters
-            ):
+            def span_it_factory(html_string, pos, endpos, parameters):
+                e_zones = self.srchRegexObj._e_zones
+                html_string = MarkupContent(html_string, special_zones=e_zones)
+                while True:
+                    span_it = self.spanRegexObj.finditer(
+                        html_string, pos, endpos, 
+                        seek_to_end=False, 
+                        parameters=parameters
+                    )
+                    if self.cpattern in (CPatterns.PARENT, CPatterns.SIBLINGS):
+                        try:
+                            match_srchobj = next(span_it)
+                        except StopIteration:
+                            return
+                        span_beg_pos, span_end_pos = match_srchobj.span()
+                        tuple_it = MarkupParser.parent_sibling_it(html_string, span_beg_pos, span_end_pos, special_zones=e_zones)
+                        try:
+                            _, (linf, lsup) = next(tuple_it)
+                        except StopIteration:
+                            return
+                        if self.cpattern == CPatterns.PARENT:
+                            it = [(match_srchobj, linf, lsup)]
+                        else:
+                            it = (
+                                    (match_srchobj, *span)
+                                    for _, span in tuple_it 
+                                    if span != (span_beg_pos, span_end_pos)
+                            )
+                        yield from it
+                        pos = lsup
+                    else:
+                        yield from span_it
+                        return
+            span_it = span_it_factory(html_string, pos, endpos, parameters)
+
+            for match_srchobj in span_it:
+                try:
+                    span_beg_pos, span_end_pos = match_srchobj.span()
+                except AttributeError:
+                    match_srchobj, span_beg_pos, span_end_pos = match_srchobj
+
                 params = match_srchobj.parameters
                 if match_srchobj.groupdict():
                     params = tuple(
@@ -646,8 +692,8 @@ class CompoundRegexObject(ExtRegexObject):
                             )
                         ]
                     )
-                    params = self.params_class(*params)
-                span_beg_pos, span_end_pos = match_srchobj.span()
+                params = self.params_class(*params)
+
                 match self.cpattern:
                     case CPatterns.ZIN | CPatterns.CHILDREN:
                         it = self.srchRegexObj.finditer(
@@ -660,20 +706,13 @@ class CompoundRegexObject(ExtRegexObject):
                             method_name = 'match' if self.cpattern == CPatterns.NXTTAG else 'search'
                             method = getattr(self.srchRegexObj, method_name)
                             beg_pos += span_end_pos
-                            # if self.cpattern == CPatterns.NXTTAG:
-                            #     tag = re.split('[\s>]', html_string[beg_pos:], 1)[0].strip('<')
-                            #     end_tag = f'</{tag}>'
-                            #     end_pos = html_string[beg_pos:].find(end_tag) + beg_pos + len(end_tag)
-                            # else:
-                            #     end_pos = len(html_string)
-                            # m = method(html_string, beg_pos, end_pos, parameters=params)
                             m = method(html_string, beg_pos, parameters=params)
                         else:
                             m = None
                         it = [m] if m else []
                     case CPatterns.PARENT | CPatterns.SIBLINGS:
-                        # No se ha implementado y se coloca la lista vacía
-                        it = []
+                        m = self.srchRegexObj.match(html_string, span_beg_pos, span_end_pos, parameters=params)
+                        it = [m] if m else []
                 yield from it
 
         return match_gen(html_string)
@@ -801,7 +840,15 @@ class HTMLPointer:
     def span(self, value):
         self._span = value
 
-    def __call__(self):
+    def __iter__(self):
+        return self
+    
+    def __next__(self):
+        if not hasattr(self, '_gen'):
+            self._gen = self._span_generator()
+        return next(self._gen)
+
+    def _span_generator(self):
         while True:
             html_str = self.html_str
             beg_pos = self.find(self.next_tag)
@@ -886,7 +933,7 @@ class HTMLPointer:
                 it_span=it_span,
                 next_pattern=cp_pattern,
                 special_zones=special_zones
-            )()
+            )
             it_span = sectors
         except Exception as e:
             pass
@@ -899,40 +946,6 @@ class HTMLPointer:
                 pattern = f'(?:<!--|-->)' if exc_tag == '!--' else f'<\\s*?/*{exc_tag}(?:\\s|>)'
                 exc_zones.append((re.compile(pattern, re.IGNORECASE), -1))
         self.exc_zones = exc_zones
-
-    # def get_special_zones(self, special_zones):
-    #     '''
-
-    #     :param special_zones:
-    #     :return:
-    #     '''
-    #     zones = special_zones.split('^')[:2]  # Solo se tiene en cuenta las dos primeras zonas.
-    #     try:
-    #         special_zones, inc_tags = zones
-    #         comment_pat = tag_pat = ''
-    #         if '!--' in inc_tags:
-    #             inc_tags = f'{inc_tags[1:-1]}'.replace('!--|', '')
-    #             inc_tags = f'[{inc_tags}]'
-    #             comment_pat = r'(?:<!--.+?-->)'
-    #         if inc_tags[1:-1]:
-    #             tag_pat = rf'(?:<(?:{inc_tags[1:-1]})(?:>|\s.+?(?<!/)>))'
-    #         full_pat = '|'.join([comment_pat, tag_pat]).strip('|')
-    #         cp_pattern = re.compile(full_pat, re.DOTALL | re.IGNORECASE)
-    #         sectors = self.__class__(
-    #             self.html_str,
-    #             it_span=self.it_span,
-    #             next_pattern=cp_pattern,
-    #             special_zones=special_zones
-    #         )()
-    #         self.it_span = sectors
-    #     except Exception as e:
-    #         pass
-    #     exc_zones = []
-    #     if special_zones:
-    #         for exc_tag in special_zones[1:-1].split('|'):
-    #             pattern = f'(?:<!--|-->)' if exc_tag == '!--' else f'<\\s*?/*{exc_tag}(?:\\s|>)'
-    #             exc_zones.append((re.compile(pattern, re.IGNORECASE), 0))
-    #     return exc_zones
 
     def confirm_position(self, pos):
         '''
@@ -1149,10 +1162,11 @@ class MarkupParser(HTMLParser):
         return x_dmy, y_dmy
 
     @staticmethod
-    def root_pseudo_params(html_str: MarkupContent, beg_pos:int=0, end_pos:int=None, special_zones:str='[!--|style|script]')-> dict[str, Any]:
+    def parent_sibling_it(html_str: MarkupContent, beg_pos:int=0, end_pos:int=None, special_zones:str='[!--|style|script]')-> Generator[tuple[str, tuple[int, int]], None, None]:
         if html_str[:beg_pos].strip() == '':
             # Se trata del tag que contiene todos los otros tags
-            return {}
+            return # iter([])
+        html_str = MarkupContent(html_str, special_zones=special_zones)
 
         srch_pattern = r'<([A-Za-z].*?)( .*?)*/*>'
         cpattern = re.compile(srch_pattern, re.DOTALL | re.IGNORECASE)
@@ -1180,20 +1194,31 @@ class MarkupParser(HTMLParser):
                 html_str, is_file=False, it_span=[(kopen, len(html_str))], 
                 next_pattern=cpattern, special_zones=special_zones
             )
-            it = hpointer()
+            it = hpointer._span_generator()
             linf, lsup= next(it)
             
             if linf < beg_pos and lsup > end_pos:
                 break
             kopen = find_tag(kopen, '<')
-        answ[PSPAN] = (linf, lsup)
-        hpointer.span = (linf, lsup)    # Acá reducimos el sector de búsqueda al interior del tag raíz.
-        dmy = it.send(False)                  # seek_to_end = False para establecer que la búsqueda se haga en el interior.
-        fnc = hpointer.next_tag.match
-        stag = fnc(html_str[beg_pos:]).group(1)
+        else:
+            return
+        hpointer.span = span = (linf, lsup)    # Acá reducimos el sector de búsqueda al interior del tag raíz.
+        it.send(False)                  # seek_to_end = False para establecer que la búsqueda se haga en el interior.
+        fnc = lambda span: cpattern.match(html_str[span[0]:span[1]]).group(1)
+        yield (fnc(span), span)
+        yield from [(fnc(span), span) for span in it]
+
+    @staticmethod
+    def root_pseudo_params(html_str: str|MarkupContent, stag: str, beg_pos:int=0, end_pos:int=None, special_zones:str='[!--|style|script]')-> dict[str, Any]:
+        end_pos = end_pos or len(html_str)
+        it = MarkupParser.parent_sibling_it(html_str, beg_pos, end_pos, special_zones)
+        try:
+            tag, (linf, lsup) = next(it)
+        except StopIteration:
+            return {PSPAN:(-1, -1), NCHILD: -1, LCHILD: -1, NTAG: -1, LTAG: -1}
+        answ = {PSPAN: (linf, lsup)}
         ntag = 0
-        for k, span in enumerate(it, start=1):
-            tag = fnc(html_str[span[0]:span[1]]).group(1)
+        for k, (tag, span) in enumerate(it, start=1):
             ntag += int(tag == stag)
             if span == (beg_pos, end_pos):
                 answ[NCHILD] = k
@@ -1228,7 +1253,8 @@ class MarkupParser(HTMLParser):
         if isinstance(data, MarkupContent):
             # Solo cuando se requiere que el tag raíz tenga los pseudo atributos, entonces data 
             # debe ser un objeto MarkupContent.
-            rpseudo_map = self.root_pseudo_params(data, *root.span)
+            stag = root.attrs[TAG]
+            rpseudo_map = self.root_pseudo_params(data, stag, *root.span)
             pspan = rpseudo_map.pop(PSPAN)
             root.attrs[PSPAN] = data[slice(*pspan)]
             root.attrs[PARAM_POS][PSPAN] = pspan
@@ -1607,7 +1633,7 @@ def compile(regex_str_in, flags=0, etags_str='[!--|style|script]'):
                 match compile_type:
                     case '':
                         separator_stack.append((token.value, pini))
-                    case '<>' | '<*<>' | '<><' | '<>*<' | '<<':
+                    case '<>' | '<*<>' | '<><' | '<>*<' | '<<' | '<>=<':
                         if compile_type != '<>':
                             separator_stack.append((compile_type, zini))
                         end = len(token.value)
@@ -1615,7 +1641,7 @@ def compile(regex_str_in, flags=0, etags_str='[!--|style|script]'):
                         spattern = f'(?#<{regex_str[pini: pfin - end]}>)'
                         regex_obj1 = ExtRegexObject(spattern, flags, tag_pattern, tags, list(varList), maskParam)
                         regexobj_stack.append(regex_obj1)
-                    case CPatterns.ZIN | CPatterns.CHILDREN | CPatterns.NXTTAG | CPatterns.PRECEDES:
+                    case CPatterns.ZIN | CPatterns.CHILDREN | CPatterns.NXTTAG | CPatterns.PRECEDES | CPatterns.PARENT | CPatterns.SIBLINGS:
                         cpattern = CPatterns(compile_type)
                         regex_obj1 = regexobj_stack.pop()
                         spattern = f'(?#<{regex_str[pini: pfin - end]}>)'
@@ -1637,8 +1663,8 @@ def compile(regex_str_in, flags=0, etags_str='[!--|style|script]'):
                             separator_stack.append((compile_type, zini))
                             pfin = tokens.pos
                         pass
-                    case CPatterns.PARENT | CPatterns.SIBLINGS:
-                        raise MarkupReError(f'{compile_type} not yet implemented')
+                    # case CPatterns.PARENT | CPatterns.SIBLINGS:
+                    #     raise MarkupReError(f'{compile_type} not yet implemented')
                     case _:
                         raise MarkupReError(f'{compile_type}: Unrecognizable compile type')
                 pini = pfin
@@ -1851,7 +1877,7 @@ def main():
 
     console = Console(color_system='truecolor')
     console.print('Inicio')
-    test = 'pseudo_params'
+    test = 'search_parent'
     if test == 'MarkupContent':
         regex_str = '(?#<body *=answ>)'
         cpatt = compile(regex_str)
@@ -1911,15 +1937,14 @@ def main():
     </bloque>
     <span class="independiente">span3</span>
     </body>"""
-        root = MarkupParser().parse(htmlStr1, 0, len(htmlStr1))
+        root = MarkupParser(ezones='[!--|style]').parse(htmlStr1, 0, len(htmlStr1))
         stack = [root]
         while stack:
             elem = stack.pop()
-            if PSPAN in elem.attrs:
-                linf, lsup = elem.span
-                pseudo_p = MarkupParser.root_pseudo_params(htmlStr1, linf, lsup, special_zones='[!--|style]')
-                assert all(pseudo_p[k] == elem.attrs[k] for k in pseudo_p), 'Error en search_parent'
-            stack.extend(elem.children[::-1])
+            linf, lsup = elem.span
+            pseudo_p = MarkupParser.root_pseudo_params(htmlStr1, elem.tag, linf, lsup, special_zones='[!--|style]')
+            assert pseudo_p[PSPAN] == (-1, -1) or all(pseudo_p[k] == elem.attrs[k] for k in pseudo_p), 'Error en search_parent'
+            stack.extend(elem.children[::1])
         pass
     elif test == 'ext_match':
         cmpobj = compile('(?#<__TAG__ __TAG__=mi_nametag_var id=id>)', etags_str='[<!--]')
@@ -2177,7 +2202,7 @@ def main():
         # console.print([html_str[b:e] for b, e in pointer()])
 
         pointer = HTMLPointer(html_str, next_pattern=cp_pattern, special_zones='[!--]^[out]', seek_to_end=False)
-        console.print([html_str[b:e] for b, e in pointer()])
+        console.print([html_str[b:e] for b, e in pointer._span_generator()])
     elif test == 'params':
         htmlStr = htmlStr1
         cases = {
@@ -2341,26 +2366,43 @@ def main():
     console.print('Final')
 
 def in_test():
-    dmystr = '''<row r="10" spans="1:34" ht="33" customHeight="1">
-<c r="AA10" s="236" t="str">
-<f>IF(OR(H10<0,L10<0),"ERROR","OK")</f>
-<v>OK</v>
-</c>
-<c r="AH10" s="354" t="str">
-<f>IF(OR(AA10="ERROR",AB10="ERROR",AC10="ERROR",AD10="ERROR",AE10="ERROR",AF10="ERROR"),CONCATENATE("Error en el concepto ",C10," de la Hoja 3 Fila ",A10),"")</f>
-<v/>
-</c>
-</row>
-'''
+    html_str = '''
+        <beg num="1">
+            <blk1 num="2" />
+            <span num="3">
+                <blk1 num="4">
+                    <span num="5"/>
+                    <blk1 num="5.5" />
+                    <span num="5.6"/>
+                </blk1>
+            </span>
+            <blk1></blk1>
+            <blk12></blk12>
+            <out num="6">
+                <blk1 num="7">
+                    <row num="8">
+                        <p num="9"/>
+                        <p num="10"/>
+                        <p num="11"/>
+                    </row>
+                </blk1>
+            </out>
+            <blk1 num="12" />
+        </beg>'''
 
-    regex_str = r'(?#<c r=adr <v *="\d{4,}"=val>*>)'
-    regex_str = r'(?#<c r="[A-Z]+\d+"=adr v.*="-*\d{4,}"=val f.*=_fml>)'
-    regex_obj = compile(regex_str)
-    for match in regex_obj.finditer(dmystr):
-        print(match.groupdict())
-        print(match.span())
-        print(dmystr[match.span()[0]: match.span()[1]])
+    check_equality = lambda a, b: (a.req_attrs, a.var_list) == (b.req_attrs, b.var_list)
+    regex_str1 = '(?#<span num="5">=<num=lbl>)'
+    cpat1 = compile(regex_str1)
+    regex_str2 = '(?#<blk1 num="5.5">=<num=lbl>)'
+    cpat2 = compile(regex_str2)
+    bflag = check_equality(cpat1, cpat2)
+
+    m = cpat1.search(html_str)
+    m = cpat2.search(html_str)
+
+    pass
+
 
 if __name__ == '__main__':
-    main()
-    # in_test()
+    # main()
+    in_test()

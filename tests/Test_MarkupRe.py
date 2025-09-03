@@ -86,7 +86,7 @@ class TestHTMLPointer:
         pointer = MarkupRe.HTMLPointer(
             self.html_str, next_pattern=cp_pattern, seek_to_end=seek_flag
         )
-        answer = [self.html_str[b:e].split('\n', 1)[0] for b, e in pointer()]
+        answer = [self.html_str[b:e].split('\n', 1)[0] for b, e in pointer]
         assert answer == required
 
     @pytest.mark.parametrize(
@@ -101,7 +101,7 @@ class TestHTMLPointer:
         pointer = MarkupRe.HTMLPointer(
             self.html_str, next_pattern=cp_pattern, special_zones=zones
         )
-        answer = [self.html_str[b:e].split('\n', 1)[0] for b, e in pointer()]
+        answer = [self.html_str[b:e].split('\n', 1)[0] for b, e in pointer]
         assert answer == required
 
     @pytest.mark.parametrize(
@@ -114,7 +114,7 @@ class TestHTMLPointer:
          (
             lambda x: MarkupRe.HTMLPointer(
                 x, next_pattern=re.compile(r'<out(?:\s.*?/*)*>')
-            )(),                    # span iterator = tuple generator
+            ),                    # span iterator = tuple generator
             ['<blk1 num="7">']
          ),
         ]
@@ -125,7 +125,7 @@ class TestHTMLPointer:
         pointer = MarkupRe.HTMLPointer(
             self.html_str, next_pattern=cp_pattern, it_span=it_span_gen
         )
-        answer = [self.html_str[b:e].split('\n', 1)[0] for b, e in pointer()]
+        answer = [self.html_str[b:e].split('\n', 1)[0] for b, e in pointer]
         required = ['<blk1 num="7">']
         assert answer == required, 'it_span: List error'
 
@@ -685,14 +685,14 @@ class TestCompoundPatterns:
         assert answer == required
 
     def test_parent(self):
-        with pytest.raises(MarkupRe.MarkupReError):
-            MarkupRe.findall('(?#<*<bloque >__TAG__=name>)', self.htmlStr)
-        pass
+        answer = MarkupRe.findall('(?#<*<h1>__TAG__=name id=id>)', self.htmlStr)
+        required = [('hijo', 'hijo2')]
+        assert answer == required
 
     def test_siblings(self):
-        with pytest.raises(MarkupRe.MarkupReError):
-            MarkupRe.findall('(?#<bloque >=<__TAG__=name>)', self.htmlStr)
-        pass
+        answer = MarkupRe.findall('(?#<h1 __NTAG__="2">=<*=lbl>)', self.htmlStr)
+        required = ['El primer comentario', 'El tercer comentario']
+        assert answer == required
 
 
 class TestNestedCPatterns:
