@@ -2,6 +2,7 @@ import tkinter as tk
 import tkinter.messagebox as tkMessageBox
 import urllib.parse
 import queue
+import platform
 
 import mywidgets.userinterface as userinterface
 from mywidgets.equations import equations_manager
@@ -20,16 +21,16 @@ class RegexFinder(tk.Tk):
         # self.project_path = '/mnt/c/Users/Alex Montes/PycharmProjects/mywidgets'
         self.dropDownFiler = None
         self.popUpMenu = None
-        self.state = None
         self.queue = queue.Queue(maxsize=0)
         self.activeCallBack = []
         self.threadFlag = 'stop'
         self.messageVar = tk.StringVar()
 
         self.setGui()
-
-        # self.attributes('-zoomed', True)
-        # self.state('zoomed')
+        if platform.system() == 'Windows':
+            self.attributes('-zoomed', True)
+        else:
+            self.state('zoomed')
         pass
 
     def onMenuClick(self, event):
