@@ -3,7 +3,7 @@
     <category label="Category uno">
         <var type="string" name="view_sel" value="xml"/>
         <frame side="top" fill="x">
-            <menubar lib="mywidgets.Widgets.Custom" name="main_menu" src="@data:menu/file_menu" side="left" />
+            <menubar lib="mywidgets.Widgets.Custom" name="main_menu" src="@data:menu/file_menu_with_states" side="left" />
             <frame side="right">
                 <label text="Views: " side="left" />
                 <radiobutton name="btn0" variable="view_sel" text="XML" value="xml" width="10" indicatoron="0" side="left"/>

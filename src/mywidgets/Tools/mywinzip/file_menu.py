@@ -57,7 +57,7 @@ class FileMenu:
         initial_path = os.path.abspath(self.default_path)
         name = name or tkFileDialog.askopenfilename(
             initialdir=initial_path,
-            filetypes=[self.default_file_type, ('All Files', '*.*')]
+            filetypes=[*self.default_file_type, ('All Files', '*.*')]
         )
         try:
             yield name
@@ -116,11 +116,11 @@ class FileMenu:
         filenames = filenames or self.fileHistory
         lstIndx = menu_name.index(tk.END)
         menu_name.delete(0, lstIndx)
-        for k, filename in enumerate(filenames, start=1):
+        for k, filename in enumerate(filenames):
             flabel = os.path.basename(filename)
             menu_name.insert_command(
                 k,
-                label='{} {:30s}'.format(k, flabel),
+                label='{} {:30s}'.format(k + 1, flabel),
                 command=userinterface.menuclick_closure(widget=menu_name, data=k)
             )
 

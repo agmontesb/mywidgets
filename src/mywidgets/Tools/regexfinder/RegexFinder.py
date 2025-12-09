@@ -27,10 +27,7 @@ class RegexFinder(tk.Tk):
         self.messageVar = tk.StringVar()
 
         self.setGui()
-        if platform.system() == 'Windows':
-            self.attributes('-zoomed', True)
-        else:
-            self.state('zoomed')
+        self.state('zoomed')
         pass
 
     def onMenuClick(self, event):

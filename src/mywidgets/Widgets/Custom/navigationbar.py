@@ -409,7 +409,7 @@ class BreadCumb(tk.Canvas):
         self.focus_set()
         x, y = event.x, event.y
         pfocus = self.identify_index(x, y)
-        if pfocus:
+        if pfocus is not None:
             self.set_active_index(pfocus)
             self.onCanvasDownArrowEvent(event)
 
@@ -812,10 +812,10 @@ def main():
     initial_dir = 'C:/Users/agmontesb/PycharmProjects/mywidgets/src/Widgets/Custom/navigationbar.py'
     path_obj = DirectoryObj(base_dir, initial_dir)
     nbar = BreadCumb(top, path_obj)
+    nbar.pack()
     top.mainloop()
 
-if __name__ == '__main__':
-    # main()
+def test_options():
     import zipfile
     import tkinter.ttk as ttk
 
@@ -950,8 +950,8 @@ if __name__ == '__main__':
         for path, d_names, f_names in path_obj.walk('/org'):
             print(path, d_names, f_names)
     elif case == 'directory':
-        base_dir = 'C:/Users/agmontesb/PycharmProjects/mywidgets/env/'
-        initial_dir = 'C:/Users/agmontesb/PycharmProjects/mywidgets/src/Widgets/Custom/navigationbar.py'
+        base_dir = 'C:/Users/agmontesb/Documents/GitHub/mywidgets'
+        initial_dir = 'C:/Users/agmontesb/Documents/GitHub/mywidgets/src/Widgets/Custom/navigationbar.py'
         top.base_dir = base_dir
         obj_name = 'base_dir'
     elif case == 'rolling_menu':
@@ -999,3 +999,7 @@ if __name__ == '__main__':
         print(str(e))
     finally:
         top.mainloop()
+
+
+if __name__ == '__main__':
+    main()

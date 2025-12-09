@@ -46,6 +46,28 @@ def htmlString():
     '''
     return html_str
 
+class TestKnownBugs:
+
+    @pytest.mark.xfail
+    def test_bug001(self):
+        htmlString = '<c r="I13" t="str"><f>+F12&amp;F15</f><v>Tabla 2:toal</v></c>'
+        rgx_str = '(?#<c r="I13"=adr t=_tv f.*=fml v.*=val>)'
+        calculated = MarkupRe.findall(rgx_str, htmlString)
+        # captura [('I13', None, '><v>Tabla 2:')] que es un error por posible 
+        # falla en el tratamiento de entities durante el parsing del .xml file: 
+        # <f>+F12&amp;F15</f> <=> <f>+F12&F15</f>
+        assert calculated == [('I13', 'str', '+F12&amp;F15' ,'Tabla 2:toal')]
+
+    # @pytest.mark.xfail
+    def test_bug002(self):
+        htmlString = '''<definedName name="tabla1">'Parameters and inner links'!$E$12:$H$17</definedName>'''
+        rgs_str = '(?#<definedName name=name *=val>)'
+        # La siguiente expresión arroja: "MarkupReError: MarkupParser: Incomplete parsing", al parecer
+        # los pares tag endtag solo aceptan minúsculas cuando se trata de capturar el parámetro *.
+        calculated = MarkupRe.findall(rgs_str, htmlString)
+        assert calculated == [('tabla1', "'Parameters and inner links'!$E$12:$H$17")]
+
+
 
 class TestHTMLPointer:
     html_str = '''

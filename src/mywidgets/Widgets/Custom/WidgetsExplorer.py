@@ -173,10 +173,10 @@ class WidgetExplorer(ttk.Treeview):
 
 if __name__ == '__main__':
     top = tk.Tk()
-    tree = WidgetExplorer(top)
+    tree = WidgetExplorer(top, show='tree')
     nodes = ['', 'uno', 'dos', 'tres', 'cuatro', 'cinco']
     for ndx in range(len(nodes) - 1):
-        tree.insert(nodes[ndx], 'end', nodes[ndx + 1])
+        tree.insert(nodes[ndx], 'end', nodes[ndx + 1], text=nodes[ndx + 1])
     print(tree.item('cinco', 'path'))
     tree.pack()
     top.mainloop()

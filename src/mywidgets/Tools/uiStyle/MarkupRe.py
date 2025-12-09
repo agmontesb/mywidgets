@@ -228,7 +228,7 @@ class MatchPattern:
 
     def span(self, str_to_match):
         try:
-            m = self.pattern[self._index].match(str_to_match)
+            m = self.patterns[self._index].match(str_to_match)
             answ = m.group(1)
         except IndexError:
             answ = m.group()
@@ -1061,7 +1061,7 @@ class MarkupParser(HTMLParser):
     CDATA_CONTENT_ELEMENTS: tuple[str, ...] = tuple()
 
     def __init__(self, var_list=None, req_attrs=None, opt_attrs=None, ezones='[!--|style|script]'):
-        super().__init__()
+        super().__init__(convert_charrefs=False)
         self.var_list = var_list = var_list or []
         self.req_attrs = req_attrs = req_attrs or {}
         self.opt_attrs = opt_attrs = opt_attrs or {}
@@ -1471,6 +1471,9 @@ class MarkupParser(HTMLParser):
         param_pos = self.get_attrs_pos(starttag_text, posini)
         param_pos.setdefault(TEXTO, [])
         attrs[PARAM_POS] = param_pos
+        linf, lsup = param_pos[TAG]
+        linf, lsup = linf - posini, lsup - posini
+        tag = starttag_text[linf:lsup]
         self.tagStack.append(TreeElement((posini, posfin), tag, attrs))
 
     def handle_endtag(self, tag):  # startswith("</")
@@ -1480,7 +1483,8 @@ class MarkupParser(HTMLParser):
             try:
                 stck_tag: TreeElement = self.tagStack.pop()
                 self.tagList.append(stck_tag)
-                bflag = stck_tag.tag == tag
+                # bflag = stck_tag.tag == tag
+                bflag = stck_tag.tag.lower() == tag
                 if bflag:
                     stck_tag.span = (stck_tag.span[0], posfin)
                     self.tagStack[-1].add(stck_tag, ezones=self._e_zones)

@@ -35,7 +35,7 @@ class WinzipUI(WinzipActions, tk.Tk):
         menu_file.default_file_name = 'newZip.zip'
         menu_file.default_path = 'C:/Users/agmontesb/Downloads/'
         menu_file.default_extension = '.zip'
-        menu_file.default_file_type = ('zip Files', '*.zip')
+        menu_file.default_file_type = [('zip Files', '*.zip')]
 
         self.winzip_ops = {
             'blower': False,

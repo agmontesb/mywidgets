@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <menu label="master" tearoff="false">
-    <cascade label="File" tearoff="false">
+    <cascade label="File" tearoff="false" src="./Tools/mypycharm/res/menu/file_menu.xml">
     </cascade>
     <cascade label="Edit" tearoff="false">
     </cascade>

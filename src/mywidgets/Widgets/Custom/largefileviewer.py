@@ -80,21 +80,47 @@ class TagManager:
         ndx2 = bisect.bisect_left(ltags, index2)
 
         answ = ltags[ndx1:ndx2]
+        prefix = []
         if len(ltags[:ndx1]) % 2 == 1:
             prefix = [index1]
-        else:
-            prefix = []
 
+        suffix = []
         if len(ltags[ndx2:]) % 2 == 1:
-            if ltags[ndx2] <= index2:
+            if ltags[ndx2] >= index2:
                 suffix = [index2]
-            else:
-                suffix = []
         answ = prefix + answ + suffix
         return answ
     
     def ranges(self, tagName):
         return self.tags.get(tagName, [])
+    
+    def nextrange(self, tagName, index1, index2=None):
+        index2 = index2 or self.tags[tagName][-1]
+        ltags = self.ranges_between(tagName, index1, index2)
+        if ltags:
+            ndx = 0 if ltags[0] != index1 else 2
+            try:
+                return [ltags[ndx], ltags[ndx + 1]]
+            except IndexError:
+                pass
+        return ''
+
+    def prevrange(self, tagName, index1, index2=None):
+        index2 = index2 or self.tags[tagName][0]
+        if index1 > index2:
+            index1, index2 = index2, index1
+        ltags = self.ranges_between(tagName, index1, index2)
+        # if set(ltags) != set(ltags).difference(self.tags[tagName]):
+        if ltags and ltags != [index1, index2]:
+            if ltags[-1] == index2:
+                ltags = ltags[:-1]
+                ndx = bisect.bisect_left(self.tags[tagName], index2)
+                ltags.append(self.tags[tagName][ndx])
+            try:
+                return [ltags[-2], ltags[-1]]
+            except IndexError:
+                pass
+        return ''
     
     def clear(self):
         self.tags.clear()
@@ -703,9 +729,32 @@ def devTagManager():
     assert all(tm.names(k) == [] for ndx1, ndx2 in zip(ltags[::2], ltags[1::2]) for k in range(ndx1, ndx2))
 
     tm.tags[tag] = ltags = [3, 12, 18, 20, 25, 55]
-    assert tm.ranges_between(tag, 3, 12) == [3, 12]
+    assert tm.ranges_between(tag, 15, 19) == [18, 19]
+    assert tm.ranges_between(tag,  3, 12) == [ 3, 12]
     assert tm.ranges_between(tag, 10, 16) == [10, 12]
     assert tm.ranges_between(tag, 10, 18) == [10, 12]
+    assert tm.ranges_between(tag, 30, 40) == [30, 40]
+    assert tm.ranges_between(tag, 10, 40) == [10, 12, 18, 20, 25, 40]
+    assert tm.ranges_between(tag, 15, 19) == [18, 19]
+    assert tm.ranges_between(tag, 15, 30) == [18, 20, 25, 30]
+
+    tm.tags[tag] = ltags = [3, 12, 18, 20, 25, 55]
+    assert tm.nextrange(tag, 1) == [3, 12]
+    assert tm.nextrange(tag, 10) == [18, 20]
+    assert tm.nextrange(tag, 30, 40) == ''
+    assert tm.nextrange(tag, 5) == [18, 20]
+    assert tm.nextrange(tag, 22) == [25, 55]
+
+    tm.tags[tag] = ltags = [3, 12, 18, 20, 25, 55]
+    assert tm.prevrange(tag, 5) == [3, 12]
+    assert tm.prevrange(tag, 5, 10) == ''
+    assert tm.prevrange(tag, 5, 1) == [3, 12]
+    assert tm.prevrange(tag, 19) == [18, 20]
+    assert tm.prevrange(tag, 30) == [25, 55]
+    assert tm.prevrange(tag, 21) == [18, 20]
+    assert tm.prevrange(tag, 15) == [3, 12]
+
+
     pass
 
 

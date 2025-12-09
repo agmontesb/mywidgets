@@ -102,13 +102,14 @@ class Equations:
         '''
         return var_name in self.dependent_vars
 
-    def add_equation(self, equation, callback):
+    def add_equation(self, equation, callback, var_type=None):
         '''
         Agrega una ecuación que determina el 'state' de una variable determinada.
         :param equation: str. Expresión con que se calcula el estado asociado.
         :param callback: callable. Callback function que recibe un parámetro bool.
         :return: None.
         '''
+        var_type = var_type or tk.BooleanVar
         self.seq += 1
         state_var = f'_STATE_VAR{self.seq}_'
         vars, python_equiv = self.pythonize(equation)
@@ -121,7 +122,7 @@ class Equations:
         self.state_equations[state_var] = python_equiv
         # init_state = self.eval_equation(python_equiv)
         # tk_state_var = tk.BooleanVar(name=state_var, value=init_state)
-        tk_state_var = tk.BooleanVar(name=state_var)
+        tk_state_var = var_type(name=state_var)
         self.register_variable(state_var, callback)
         # tk_state_var.set(init_state)
         self.var_values[state_var] = tk_state_var
@@ -247,7 +248,7 @@ class Equations:
             ]
         else:
             changed_states = list(changed_states)
-        changed_states.sort()
+        changed_states.sort(key=lambda x: bool(x[0]))
         [self.var_values[key].set(value) for value, key in changed_states]
 
     def old_set_widget_state(self, dependents):

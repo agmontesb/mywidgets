@@ -588,6 +588,8 @@ def menuFactory(
     master = parent.winfo_toplevel()
     menu_map = menu_map or {}
     options = selPane.attrib.copy()
+
+
     label = options.pop('label')
     src = options.pop('src', None)
     if src:
@@ -600,6 +602,10 @@ def menuFactory(
     for k, item in enumerate(selPane):
         menu_type = item.tag
         options = item.attrib.copy()
+        states_eq = {
+            key: options.pop(key) for key in options.keys() & cbwidgetstate.mnu_closure
+        }
+
         cb = None
         if menu_type not in ['separator', 'cascade']:
             try:
@@ -630,8 +636,15 @@ def menuFactory(
             options.pop('src', None)
         menu_master.add(menu_type, **options)
         labels.append(options.get('label', ''))
+        ndx = menu_master.index(tk.END)
         if cb is not None:
-            cbs.append((menu_master.index(tk.END), cb))
+            cbs.append((ndx, cb))
+        kwargs = {'mtype': menu_type, **options}
+        for state, eq in states_eq.items():
+            callback_closure = cbwidgetstate.STATES[state]
+            cb = callback_closure(menu_master, ndx, **kwargs)
+            var_type = cbwidgetstate.var_types.get(state)
+            equations_manager.add_equation(eq, cb, var_type)
     try:
         registerMenu(parent, selPane, menu_master, labels)
     except:
