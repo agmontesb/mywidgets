@@ -10,6 +10,7 @@ import os.path
 import re
 import sys
 import tkinter as tk
+import tkinter.ttk as ttk
 import xml.etree.ElementTree as ET
 import urllib.request
 import urllib.parse
@@ -28,7 +29,7 @@ from mywidgets.equations import equations_manager
 from mywidgets.Tools.uiStyle import uicss, cssgrid, cssflexbox
 import mywidgets.cbwidgetstate as cbwidgetstate
 
-MODULE_STACK = [(-1, tk), (-1, specialwidgets)]
+MODULE_STACK = [(-1, tk), (-1, ttk), (-1, specialwidgets)]
 
 getFontAwesomeIcon = imageprocessor.memoize(imageprocessor.getFontAwesomeIcon)
 
@@ -322,8 +323,11 @@ def getWidgetInstance(master: tk.Tk | tk.Widget,
     for indx in range(len(panelModule) - 1, -1, -1):
         _, module = panelModule[indx]
         getWdgClass = getattr(module, 'getWidgetClass', lambda x: getattr(module, x, None))
-        widgetname = widgetname if module.__name__ != 'tkinter' else (
-            widgetname.title() if widgetname != 'labelframe' else 'LabelFrame')
+        if module.__name__ == 'tkinter':
+            widgetname = widgetname.title() if widgetname != 'labelframe' else 'LabelFrame'
+        elif module.__name__ == 'tkinter.ttk':
+            camel_case = {'labelframe': 'LabelFrame', 'panedwindow': 'PanedWindow'}
+            widgetname = camel_case.get(widgetname, widgetname.title())
         widgetClass = getWdgClass(widgetname)
         if widgetClass:
             break
