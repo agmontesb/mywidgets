@@ -1,23 +1,25 @@
 # -*- coding: utf-8 -*-
 import collections
 import os
+import sys
 import tkinter as tk
 import tkinter.ttk as tkk
 import tkinter.font as tkFont
 from abc import ABC, abstractmethod
 
+from mywidgets.Widgets.Custom.bcpopupmenu import BCPopupMenu
 import mywidgets.userinterface as userinterface
 
-MENU_WINDOW = 20
+MENU_WINDOW = 5
 DOWN_ARROW = 'ᐁ'  #     '▼'    # 'ᐯ'
 UP_ARROW = 'ᐃ'    #     '▲'    # 'ᐱ'
 
 ActivePath = collections.namedtuple('ActivePath', ('index', 'path', 'isDir'))
-
+tk.Menu
 
 class RollingMenu:
 
-    def __init__(self, master=None, cnf={}, **kw):
+    def __init__(self, master=None, cnf={}, menu_class=None, **kw):
         self.menu_offset = 0
         self.menu_list = []
         self.fidle = None
@@ -28,9 +30,12 @@ class RollingMenu:
         self.postcommand = kw.pop('postcommand', None)
         kw['postcommand'] = self.inner_postcommand
         kw.setdefault('tearoff', 0)
-        kw.setdefault('font', tkFont.Font(family='Consolas', size=10))
-        self.menu = tk.Menu(master=master, **kw)
+        kw.setdefault('font', ('Consolas', 10))
+        menu_class = menu_class or tk.Menu
+        self.menu = menu_class(master=master, **kw)
         self.menu.bind('<<MenuSelect>>', self.onMenuSelect)
+        self.menu.bind('<Home>', self.onKeyboardHomeEndEvent)
+        self.menu.bind('<End>', self.onKeyboardHomeEndEvent)
 
     def __str__(self):
         # De esta forma es posible utilizar RollingMenu con cualquier widget que en su
@@ -48,19 +53,29 @@ class RollingMenu:
         [setattr(self, key, kw.pop(key)) for key in ('req_nitems', 'postcommand') if kw.get(key, None)]
         self.menu.config(cnf=cnf, **kw)
 
-    __setitem__ = configure = config
+    def __setitem__(self, key, value):
+        kw = {key: value}
+        self.config(**kw)
+
+    # __setitem__ = configure = config
+    configure = config
 
     def inner_postcommand(self):
         # En este callback debe ejecutarse al menos self.popup_menu.activate(x) para que el
         # menú muestre la opción activa.
         try:
             self.postcommand()
+            print([x[1]['label'] for x in self.menu_list])
         except:
             pass
         active_index = self.active_index
-        linf = max(0, active_index - self.req_nitems // 2)
-        lsup = min(len(self.menu_list), active_index + self.req_nitems // 2 + self.req_nitems % 2) - 1
+        linf = self.req_nitems * (active_index // self.req_nitems)
+        linf = max(0, min(linf, len(self.menu_list) - self.req_nitems))
+        lsup = linf + self.req_nitems - 1
         self.loadMenuOptions(linf, lsup)
+        ndx = active_index % self.req_nitems + self.has_down_arrow
+        self.menu.activate(ndx)
+        pass
 
     def activate(self, index):
         self.active_index = index
@@ -122,12 +137,37 @@ class RollingMenu:
     def onMenuSelect(self, event):
         # <<MenuSelect>> virtual event generado por el widget
         menu = event.widget
-        ndx = menu.index(tk.ACTIVE)
-        if len(self.menu_list) > self.req_nitems and ndx in (0, self.req_nitems + 1):
-            self.after_idle(self.rollMenu)
-        elif self.fidle is not None:
-            self.after_cancel(self.fidle)
-            self.fidle = None
+        print(f'onmenuselect: active ndx: {menu.index(tk.ACTIVE)}')
+        if isinstance(menu, str):
+            try:
+                ndx = self.menu.tk.call(menu, 'index', tk.ACTIVE)
+                if ndx == 'none':
+                    ndx = None
+                else:
+                    ndx = int(ndx)
+            except tk.TclError:
+                ndx = None
+        else:
+            ndx = menu.index(tk.ACTIVE)
+        if ndx == 0 or (ndx == self.req_nitems + self.has_down_arrow):
+            print(f'onMenuSelect: {"down_arrow" if ndx == 0 else "up_arrow="}')
+            if self.isMouseOver(ndx):
+                self.fidle = self.after(300, self.rollMenu)
+            else:
+                self.after_idle(self.rollMenu)
+        else:
+            if self.fidle is not None:
+                self.after_cancel(self.fidle)
+                self.fidle = None
+            self.active_index = self.menu.index(tk.ACTIVE) + self.menu_offset - self.has_down_arrow
+
+    @property
+    def has_down_arrow(self):
+        return len(self.menu_list) > self.req_nitems and self.menu_offset > 0
+    
+    @property
+    def has_up_arrow(self):
+        return len(self.menu_list) > self.req_nitems and (self.menu_offset + self.req_nitems) < len(self.menu_list)
 
     def loadMenuOptions(self, linf, lsup):
         if lsup - linf < self.req_nitems - 1:
@@ -144,54 +184,74 @@ class RollingMenu:
                 **x[1],
             ) for x in self.menu_list[linf:lsup + 1]
         ]
-        active_index = max(0, min(self.active_index - self.menu_offset, self.req_nitems - 1))
-        if len(self.menu_list) > self.req_nitems:
-            nlen = max(*[len(self.entrycget(x, 'label')) for x in range(len(self.menu_list))])
-            active_index += 1
+        nlen = max(*[len(self.entrycget(x, 'label')) for x in range(len(self.menu_list))])
+        if self.has_down_arrow:
             self.menu.insert_command(0, label=f"{DOWN_ARROW.center(nlen, ' ')}")
+        if self.has_up_arrow:
             self.menu.insert_command(tk.END, label=f"{UP_ARROW.center(nlen, ' ')}")
-        self.menu.activate(active_index)
+
+    def onKeyboardHomeEndEvent(self, event):
+        keysym = event.keysym
+        if keysym == 'Home':
+            self.show_item(0)
+        elif keysym == 'End':
+            self.show_item(tk.END)
+
+    def show_item(self, index):
+        if index == tk.END:
+            index = len(self.menu_list) - 1
+        index = max(0, min(index, len(self.menu_list) - 1))
+        if index < self.menu_offset:
+            linf, lsup = index, index +self.req_nitems - 1
+            self.loadMenuOptions(linf, lsup)
+        elif index > self.menu_offset + self.req_nitems - 1:
+            index += 1 # Se tiene arrow down
+            linf, lsup = index - self.req_nitems, index
+            self.loadMenuOptions(linf, lsup)
+        self.menu.activate(index - self.menu_offset)
 
     def rollMenu(self):
         ndx = self.menu.index(tk.ACTIVE)
-        bflag = ndx in (0, self.req_nitems + 1) and self.isMouseOver(ndx)
-        if ndx == self.req_nitems + 1:
-            ndx += self.menu_offset - 1
-            if ndx < len(self.menu_list):
-                next_item = self.menu_offset + self.req_nitems
+        bflag = False
+        if ndx == self.req_nitems + self.has_down_arrow:
+            if self.active_index == 0 and not bflag:           
+                self.show_item(tk.END)
+            elif self.has_up_arrow:
+                # Se debe correr el menu hacia arriba
+                next_item = ndx - self.has_down_arrow + self.menu_offset
                 itemType, kw = self.menu_list[next_item]
-                self.menu.insert(self.req_nitems + 1, itemType, **kw)
-                self.menu.delete(1)
+                self.menu.insert(ndx, itemType, **kw)
+                self.menu.delete(self.has_down_arrow)
+                if next_item == len(self.menu_list) - 1:
+                    self.menu.delete(self.req_nitems + self.has_down_arrow)
+                if self.menu_offset == 0:
+                    self.menu.insert_command(0, label=f"{DOWN_ARROW.center(12, ' ')}")
+                self.menu.activate(self.req_nitems)
                 self.menu_offset += 1
-                self.menu.activate(self.req_nitems + 1)
-                if not bflag:
-                    self.menu.event_generate('<Up>')
-            else:           # ndx == len(self.menu_list):
-                linf, lsup = 0, self.req_nitems - 1
-                self.loadMenuOptions(linf, lsup)
-                ndx = (self.req_nitems + 1) if bflag else 1
-                self.menu.activate(ndx)
-            pass
+            bflag = self.has_up_arrow
         elif ndx == 0:
-            if self.menu_offset > 0:
+            if self.active_index == len(self.menu_list) - 1 and not bflag:           # self.menu_offset == 0:
+                self.show_item(0)
+            elif self.has_down_arrow:
                 self.menu.delete(self.req_nitems)
                 next_item = self.menu_offset - 1
                 itemType, kw = self.menu_list[next_item]
                 self.menu.insert(1, itemType, **kw)
+                if not self.has_up_arrow:
+                    self.menu.insert_command(tk.END, label=f"{UP_ARROW.center(12, ' ')}")
                 self.menu_offset -= 1
-                self.menu.activate(0)
-                if not bflag:
-                    self.menu.event_generate('<Down>')
-            else:           # self.menu_offset == 0:
-                linf, lsup = len(self.menu_list) - self.req_nitems, len(self.menu_list)
-                self.loadMenuOptions(linf, lsup)
-                if not bflag:
-                    self.menu.activate(self.req_nitems)
-                else:
-                    self.menu.activate(0)
+                if self.menu_offset == 0:
+                    self.menu.delete(0)
+                self.menu.activate(self.has_down_arrow)
+            bflag = self.has_down_arrow
+        self.active_index = self.menu.index(tk.ACTIVE) + self.menu_offset - self.has_down_arrow
         self.update_idletasks()
-        if bflag:
-            self.fidle = self.after(800, self.rollMenu)
+        if bflag and self.isMouseOver(ndx):
+            print('setting fidle')
+            self.fidle = self.after(300, self.rollMenu)
+        elif self.fidle is not None:
+            self.after_cancel(self.fidle)
+            self.fidle = None
 
     def __getattr__(self, item):
         return getattr(self.menu, item)
@@ -249,10 +309,22 @@ class BreadCumb(tk.Canvas):
         canvas.bind("<Down>", self.onCanvasDownArrowEvent)
         canvas.focus_set()
 
-        self.popup_menu = RollingMenu(self, name="breadcumb", tearoff=0, postcommand=self.build_popup, relief=tk.FLAT)
-        self.popup_menu.bind('<<HRZ_ARROWS>>', self.onMenuKeyboardEvent)
-        self.popup_menu.bind('<Return>', self.onMenuKeyboardEvent)
+
+        menu_class = tk.Menu if sys.platform == 'linux' else BCPopupMenu
+        self.popup_menu = RollingMenu(self, name="breadcumb", menu_class=menu_class, tearoff=0, postcommand=self.build_popup, relief=tk.FLAT)
+        # Se intersectan los eventos de teclado para la navegación del Breadcumb
+        menu_widget = self.popup_menu.menu
+        new_bind_tag = f"CustomBreadCumbMenu-{id(menu_widget)}"
+        menu_widget.bindtags((new_bind_tag,) + menu_widget.bindtags())
+        self.bind_class(new_bind_tag, '<Return>', self.onMenuKeyboardEvent)
+        self.bind_class(new_bind_tag, '<<HRZ_ARROWS>>', self.onMenuKeyboardEvent)
         pass
+
+    def onKeyPress(self, event):
+        wdg = event.widget
+        keysym = event.keysym
+        print(f'{wdg=}, {keysym=}')
+
 
     def setupCanvas(self, *labels):
         deltax = 4
@@ -334,17 +406,17 @@ class BreadCumb(tk.Canvas):
         return pfocus
 
     def getActivePath(self):
-        path = os.path.join(self.base_dir, *self.labels[1:self.pfocus + 1])
+        path = os.path.join(self.base_dir, *self.labels[1:self.pfocus + 1]).replace('\\', self.path_obj.SEP)
         isdir = (self.pfocus < len(self.labels) - 1) or self.path_obj.isdir(path)
         return ActivePath(self.pfocus, path, isdir)
 
     def setActivePath(self, apath, draw_focus=True):
         path = self.path_obj.validate_path(apath)
-        rel_path = os.path.relpath(path, self.path_obj.root)
+        rel_path = self.path_obj.relpath(path, self.path_obj.root)
         # Se asegura que el camino relativo siempre empiece con ./ porque
         # os.path.abspath('/la/raiz/./uno/dos') = '/la/raiz/uno/dos'
         if rel_path != '.':
-            rel_path = './' + rel_path.rstrip('./')
+            rel_path = ('./' + rel_path.rstrip('./')).replace('//', '/')
         self.actual_dir = rel_path
         self.labels = rel_path.split(self.path_obj.SEP)
         self.set_active_index(len(self.labels) - 1, draw_focus=draw_focus)
@@ -359,9 +431,10 @@ class BreadCumb(tk.Canvas):
 
     def build_popup(self):
         aPath = self.getActivePath()
+        print(f'build_popup: {aPath=}')
         if aPath.isDir:
             wdir = self.path_obj.walk(aPath.path)
-            adir, dirs, files = next(wdir)
+            _, dirs, files = next(wdir)
             # dirs = list(f'{item}/' for item in dirs if not item.startswith('__'))
             dirs = list(item for item in dirs if not item.startswith('__'))
             next_index = aPath.index + 1
@@ -373,11 +446,14 @@ class BreadCumb(tk.Canvas):
             except:
                 next_index = 0
             self.popup_menu.delete(0, tk.END)
+
             [
                 self.popup_menu.add(
                     'cascade' if x in dirs else 'command',
                     label=x.rstrip('/'),
-                    menu=None
+                    # command=lambda lbl=x.strip('/'): self.onMenuKeyboardEvent(keysym='Return', label=lbl),
+                    # menu=self.dummy_menu if x in dirs else None,
+                    menu=None,
                 ) for x in menu_list
             ]
             self.popup_menu.activate(next_index)
@@ -397,13 +473,7 @@ class BreadCumb(tk.Canvas):
         bbox = self.bbox(pfocus)
         x, y = bbox[0] + self.winfo_rootx() + 1, bbox[3] + self.winfo_rooty() + 1
         self.popup_menu.focus_set()
-        try:
-            self.popup_menu.tk_popup(x, y)
-        except Exception as e:
-            print(e)
-        finally:
-            self.popup_menu.grab_release()
-            pass
+        self.popup_menu.tk_popup(x, y)
 
     def onCanvasClickEvent(self, event):
         self.focus_set()
@@ -426,7 +496,7 @@ class BreadCumb(tk.Canvas):
         return pfocus
 
     def onMenuKeyboardEvent(self, event):
-        self.event_generate('<Escape>')     # Este evento retira el menu de la ventana
+        self.popup_menu.unpost()     # Este evento retira el menu de la ventana
         keysym = event.keysym
         if keysym in ('Left', 'Right'):
             inc = 1 if event.keysym == 'Right' else -1
@@ -435,7 +505,7 @@ class BreadCumb(tk.Canvas):
             indx = self.popup_menu.index(tk.ACTIVE)
             label = self.popup_menu.entrycget(indx, 'label')
             prev_pfocus, path, _ = self.getActivePath()
-            path = os.path.join(path, label)
+            path = self.path_obj.join(path, label)
             self.setActivePath(path)
         aPath = self.getActivePath()
         if aPath.isDir:
@@ -445,7 +515,7 @@ class BreadCumb(tk.Canvas):
 
 
 class PathObj(ABC):
-    SEP = os.sep
+    SEP = '/'
 
     @abstractmethod
     def isdir(self, path):
@@ -455,19 +525,23 @@ class PathObj(ABC):
     def listdir(self, path):
         pass
 
+    def join(self, *args):
+        return os.path.join(*args).replace('\\', self.SEP)
+
     @abstractmethod
     def walk(self, path):
         pass
 
-    @abstractmethod
     def relpath(self, path, base_path):
-        pass
+        return os.path.relpath(path, base_path).replace('\\', self.SEP)
 
     def set_master(self, master):
         pass
 
     def validate_path(self, apath):
-        path = os.path.abspath(apath)
+        path = os.path.abspath(apath).replace('\\', self.SEP)
+        if sys.platform == 'win32' and ':' not in self.root:
+            path = path.split(':')[1]
         # Solo se permiten los path que se derivan del directorio raiz. Cuando se tiene un path
         # que se deriva de otro directorio, se entrega el directorio raiz.
         if not path.startswith(self.root):
@@ -482,7 +556,7 @@ class PathObj(ABC):
                 break   # Directorio vacío
             if len(listLabelsDir):
                 break
-            path = os.path.join(path, label)
+            path = os.path.join(path, label).replace('\\', self.SEP)
         return path
 
 
@@ -490,8 +564,9 @@ class DirectoryObj(PathObj):
 
     def __init__(self, root_dir, actual_dir):
         assert actual_dir.startswith(root_dir)
-        self.root = root_dir.rstrip(self.SEP)
-        self.actual_dir = actual_dir
+        self.root = root_dir.replace('\\', self.SEP).rstrip(self.SEP)
+        self.actual_dir = actual_dir.replace('\\', self.SEP)
+
 
     def isdir(self, path):
         return os.path.isdir(path)
@@ -501,9 +576,6 @@ class DirectoryObj(PathObj):
 
     def walk(self, path):
         return os.walk(path)
-
-    def relpath(self, path, base_path):
-        return os.path.relpath(path, base_path)
 
 
 class TkkTreeObj(PathObj):
@@ -563,8 +635,8 @@ class TkkTreeObj(PathObj):
                 break
             path.append(parent_id)
             child_id = parent_id
-        path = os.path.join(*map(lambda x: self.tkkTree.item(x, 'text'), path[::-1]))
-        return os.path.join(self.root, path)
+        path = self.join(*map(lambda x: self.tkkTree.item(x, 'text'), path[::-1]))
+        return self.join(self.root, path)
 
     def _iid_for_path(self, path):
         if path not in self._iid_map:
@@ -609,9 +681,6 @@ class TkkTreeObj(PathObj):
             stack.extendleft(d_iids[::-1])
         pass
 
-    def relpath(self, path, base_path):
-        return os.path.dirname(path, base_path)
-
     def isdir(self, path):
         iid = self._iid_for_path(path)
         children = self.tkkTree.get_children(iid)
@@ -625,7 +694,7 @@ class TkMenuObj(PathObj):
 
     @property
     def root(self):
-        return self.tkMenu.cget('title')
+        return self.SEP + self.tkMenu.cget('title')
 
     @property
     def actual_dir(self):
@@ -645,7 +714,7 @@ class TkMenuObj(PathObj):
         return self.root + self.SEP + path
 
     def _iid_for_path(self, path):
-        assert path.startswith(self.root + self.SEP)
+        assert path.startswith(self.root)
         root_pattern = '.' + self.SEP
         path = path[len(self.root):].replace(root_pattern, '').split(self.SEP)
         path.pop(0)
@@ -695,7 +764,7 @@ class TkMenuObj(PathObj):
         pass
 
     def relpath(self, path, base_path):
-        b_path = base_path.rstrip('/') + '/'
+        b_path = base_path.rstrip('/') # + '/'
         if path.startswith(b_path):
             npos = len(b_path)
             return path[npos:] if path != b_path else '.'
@@ -760,9 +829,6 @@ class StrListObj(PathObj):
             if len(dirs) > 1:
                 dirs.insert(1, len(path))
             stack = dirs + stack
-
-    def relpath(self, path, base_path):
-        return os.path.relpath(path, base_path)
 
 
 def navigationFactory(master, path_obj, **kwargs):
@@ -854,12 +920,12 @@ def test_options():
 
 
     top = tk.Tk()
-    top.state('zoomed')
+    # top.state('zoomed')
 
     # options: strlistobj, tkktree, tkmenu, tkktree_methods, directory, rolling_menu
     case = 'directory'
     if case == 'strlistobj':
-        apkname = '/mnt/c/Users/Alex Montes/PycharmProjects/TestFiles/TeaTV-v9.9.6r_build_111-Mod_v2.apk'
+        apkname = r'C:\Users\agmontesb\Documents\GitHub\excel\tests\files\excel_module_test.xlsx'
         zf = zipfile.ZipFile(apkname)
         root_dir = '/zf'
         strlist = [f'{root_dir}/{x}' for x in zf.namelist()]
@@ -875,7 +941,7 @@ def test_options():
             nodeid = treeview.focus()
             treeview.item(nodeid, tags='selected')
 
-        apkname = '/mnt/c/Users/Alex Montes/PycharmProjects/TestFiles/TeaTV-v9.9.6r_build_111-Mod_v2.apk'
+        apkname = r'C:\Users\agmontesb\Documents\GitHub\excel\tests\files\excel_module_test.xlsx'
         zf = zipfile.ZipFile(apkname)
         tree = ttk.Treeview(top)
         parent_id_map = {'': ''}
@@ -904,8 +970,7 @@ def test_options():
         tree.event_add('<<ActiveSelection>>', '<Double-1>', '<Return>')
         tree.bind('<<ActiveSelection>>', onActiveSelection)
         top.treeview = tree
-
-        obj_name = 'treeview'
+        obj_name = 'treeview' # TkkTreeObj(tree)
     elif case == 'tkmenu':
         menufile = 'C:/Users/agmontesb/PycharmProjects/mywidgets/src/Data/menu/file_menu.xml'
         menuPanel = userinterface.getLayout(menufile)
@@ -914,7 +979,7 @@ def test_options():
         # for path, d_names, f_names in path_obj.walk('master/'):
         #     print(path, d_names, f_names)
     elif case == 'tkktree_methods':
-        apkname = '/mnt/c/Users/Alex Montes/PycharmProjects/TestFiles/TeaTV-v9.9.6r_build_111-Mod_v2.apk'
+        apkname = r'C:\Users\agmontesb\Documents\GitHub\excel\tests\files\teatv_v11.1.4.apk'
         zf = zipfile.ZipFile(apkname)
         tree = ttk.Treeview(top)
         tree.pack(side=tk.LEFT, fill=tk.Y, anchor=tk.NW)
@@ -960,46 +1025,58 @@ def test_options():
             menu.delete(0, tk.END)
             for k in range(30):
                 menu.add('command', label=f'comm{k}')
-            menu.activate(5)
+            menu.activate(0)
+            pass
 
         btn = tk.Menubutton(top, text='MenuButton')
-        menu = RollingMenu(btn, postcommand=post_cb)
+        # menu = RollingMenu(btn, postcommand=post_cb)
+        # menu = RollingMenu(btn, menu_class=BCPopupMenu)
+        menu = RollingMenu(btn, menu_class=tk.Menu)
+        post_cb()
         btn.config(menu=menu)
         btn.pack(side=tk.LEFT, anchor='n')
 
-        def dir_menu(menu, path):
-            menu.delete(0, tk.END)
-            apath, dirs, files = next(os.walk(path))
-            for dir in dirs:
-                smenu = RollingMenu(top, title=dir, tearoff=0)
-                smenu['postcommand'] = lambda x=smenu, y=os.path.join(apath, dir): dir_menu(x, y)
-                menu.insert(tk.END, 'cascade', label=dir, menu=smenu)
+        # def dir_menu(menu, path):
+        #     menu.delete(0, tk.END)
+        #     apath, dirs, files = next(os.walk(path))
+        #     for dir in dirs:
+        #         smenu = RollingMenu(
+        #             top, title=dir, tearoff=0, req_nitems=4,
+        #         )
+        #         smenu['postcommand'] = lambda x=smenu, y=os.path.join(apath, dir): dir_menu(x, y)
+        #         menu.insert(tk.END, 'cascade', label=dir, menu=smenu)
 
-            for file in files:
-                menu.insert(tk.END, 'command', label=file)
+        #     for file in files:
+        #         menu.insert(tk.END, 'command', label=file)
 
-        def cb():
-            fmenu.focus_set()
-            fmenu.tk_popup(10, 10)
+        # def cb():
+        #     fmenu.focus_set()
+        #     fmenu.tk_popup(10, 10)
 
-
-        base_dir = 'C:/Users/agmontesb/PycharmProjects/mywidgets/env/'
-        fmenu = RollingMenu(top, title='main', tearoff=0, req_nitems=4)
-        fmenu['postcommand'] = lambda x=fmenu, y=base_dir: dir_menu(x, y)
-
-        # btn1 = tk.Button(top, text='dir_menu', command=cb)
+        # btn1 = tk.Menubutton(top, text='dir_menu')
         # btn1.pack(side=tk.LEFT, anchor='n')
-        top['menu'] = fmenu
 
-    try:
-        # nbar = navigationFactory(top, obj_name)
-        nbar = BreadCumb(top, path_obj=obj_name)
-        nbar.pack(side=tk.LEFT, fill=tk.X, expand=tk.YES, anchor=tk.NW)
-    except Exception as e:
-        print(str(e))
-    finally:
-        top.mainloop()
+        # base_dir = 'C:/Users/agmontesb/PycharmProjects/mywidgets/src/Widgets/'
+        # fmenu = RollingMenu(btn1, title='main', tearoff=0, req_nitems=4)
+        # fmenu['postcommand'] = lambda x=fmenu, y=base_dir: dir_menu(x, y)
+        # btn1.config(menu=fmenu)
+        # top['menu'] = fmenu
+        obj_name = None
 
+    if obj_name is not None:
+        try:
+            nbar = BreadCumb(top, path_obj=obj_name)
+            nbar.pack(side=tk.LEFT, fill=tk.X, expand=tk.YES, anchor=tk.NW)
+        except Exception as e:
+            print(str(e))
+    top.mainloop()
+
+def probe_of_concepts():
+    pass
+    
 
 if __name__ == '__main__':
-    main()
+    # main()
+    test_options()
+    # probe_of_concepts()
+    pass

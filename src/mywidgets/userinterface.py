@@ -29,7 +29,7 @@ from mywidgets.equations import equations_manager
 from mywidgets.Tools.uiStyle import uicss, cssgrid, cssflexbox
 import mywidgets.cbwidgetstate as cbwidgetstate
 
-MODULE_STACK = [(-1, tk), (-1, ttk), (-1, specialwidgets)]
+MODULE_STACK = [(-1, ttk), (-1, tk), (-1, specialwidgets)]
 
 getFontAwesomeIcon = imageprocessor.memoize(imageprocessor.getFontAwesomeIcon)
 

@@ -1386,10 +1386,7 @@ class RegexpFrame(tk.Frame):
     def do_popup(self, event):
         if not self.popUpMenu: return
         popup = self.popUpMenu()
-        try:
-            popup.post(event.x_root, event.y_root)
-        finally:
-            popup.grab_release()
+        popup.post(event.x_root, event.y_root)
 
     def setPopUpMenu(self, popUpMenu):
         self.popUpMenu = popUpMenu
