@@ -19,7 +19,7 @@
                         show="headings"
                         displaycolumns="#all"
         />
-        <frame class="row">
+        <frame class="row" name="chk_btns_frm">
             <checkbutton text="Select all" name="selectall" side="left"/>
             <checkbutton text="Group by folder" name="groupby" side="right"/>
         </frame>

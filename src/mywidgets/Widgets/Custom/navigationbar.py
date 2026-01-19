@@ -110,8 +110,7 @@ class RollingMenu:
                 return len(self.menu_list)
             if index == tk.ACTIVE:
                 npos = (self.menu.index(tk.ACTIVE) or 0) + self.menu_offset
-                if len(self.menu_list) > self.req_nitems:
-                    npos -= 1
+                npos -= self.has_down_arrow
                 return npos
 
     def invoke(self, index):
